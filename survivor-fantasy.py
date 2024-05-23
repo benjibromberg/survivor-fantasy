@@ -12,8 +12,8 @@ class SurvivorFantasy:
         self.num_tribals = max(self.survivors.voted_out)
         self.left_at_merge = left_at_merge
         self.merge_val = 1
-        self.first_val = 3
-        self.second_val = 2
+        self.first_val = 7
+        self.second_val = 3
         self.third_val = 1
         self.tribal_val = 1
         self.players_remaining = 18 - self.num_tribals
