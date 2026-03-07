@@ -1,0 +1,31 @@
+services:
+  survivor-fantasy-ts:
+    image: tailscale/tailscale:latest
+    hostname: survivor-fantasy
+    security_opt:
+      - apparmor=unconfined
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_SERVE_CONFIG=/config/serve.json
+      - TS_USERSPACE=true
+    volumes:
+      - ${APPDATA_DIR:-.}/ts-config:/config
+      - ${APPDATA_DIR:-.}/ts-state:/var/lib/tailscale
+    dns:
+      - 9.9.9.9
+      - 149.112.112.112
+    restart: unless-stopped
+
+  survivor-fantasy:
+    build: .
+    network_mode: service:survivor-fantasy-ts
+    env_file:
+      - .env
+    volumes:
+      - ${APPDATA_DIR:-.}/data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:////app/data/survivor_fantasy.db
+    depends_on:
+      - survivor-fantasy-ts
+    restart: unless-stopped

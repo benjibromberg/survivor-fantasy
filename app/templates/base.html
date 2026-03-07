@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Survivor Fantasy{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><strong><a href="{{ url_for('main.index') }}">Survivor Fantasy</a></strong></li>
+        </ul>
+        <ul>
+            {% if all_seasons|length > 1 %}
+            <li>
+                <details class="dropdown">
+                    <summary>Seasons</summary>
+                    <ul dir="rtl">
+                        {% for s in all_seasons %}
+                        <li><a href="{{ url_for('main.leaderboard', season_id=s.id) }}">
+                            {{ s.name or 'Season ' ~ s.number }}{{ ' *' if s.is_active else '' }}
+                        </a></li>
+                        {% endfor %}
+                    </ul>
+                </details>
+            </li>
+            {% endif %}
+            <li><a href="{{ url_for('main.rules') }}">Rules</a></li>
+            <li><a href="{{ url_for('main.scoring_analysis') }}">Analysis</a></li>
+            {% if current_user.is_authenticated and current_user.is_admin %}
+                <li><a href="{{ url_for('main.admin_seasons') }}">Admin</a></li>
+                <li><a href="{{ url_for('main.settings') }}">{{ current_user.display_name or current_user.username }}</a></li>
+                <li><a href="{{ url_for('auth.logout') }}">Logout</a></li>
+            {% else %}
+                {% if config.DEV_LOGIN %}
+                <li><a href="{{ url_for('auth.dev_login') }}">Dev Login</a></li>
+                {% else %}
+                <li><a href="{{ url_for('auth.login') }}">Admin Login</a></li>
+                {% endif %}
+            {% endif %}
+        </ul>
+    </nav>
+
+    <main class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <p class="flash-{{ category }}"><small>{{ message }}</small></p>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

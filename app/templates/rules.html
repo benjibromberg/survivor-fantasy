@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Rules - Survivor Fantasy{% endblock %}
+{% block content %}
+<h1>Fantasy League Rules</h1>
+{% if season %}
+<p>Scoring for <strong>{{ season.name or 'Season ' ~ season.number }}</strong>
+({{ season.num_players }} players, jury starts at {{ season.left_at_jury }})</p>
+{% endif %}
+
+<!-- Draft & Pick Types -->
+<article>
+    <header><h2>Pick Types</h2></header>
+    <p>Each fantasy player has a roster of Survivor castaways. How your picks score depends on their type:</p>
+    <table>
+        <thead><tr><th>Type</th><th>How It Scores</th></tr></thead>
+        <tbody>
+            <tr>
+                <td><strong>Draft</strong></td>
+                <td>Full points. Your core picks selected during the draft.</td>
+            </tr>
+            <tr>
+                <td><strong>Wildcard (½ pts)</strong></td>
+                <td>Earns <strong>half</strong> of whatever points the castaway accumulates. Chosen <strong>after the first episode</strong> (after the first elimination) from any remaining castaway. A bonus pick on top of your draft.</td>
+            </tr>
+            <tr>
+                <td><strong>Replacement (½ pts)</strong></td>
+                <td>Post-merge replacement for an eliminated wildcard pick. Earns half points <strong>minus pre-merge tribal count</strong> ({{ season.num_players - season.left_at_jury if season else '?' }} tribals before merge).</td>
+            </tr>
+            <tr>
+                <td><strong>Replacement</strong></td>
+                <td>Post-merge replacement for an eliminated draft pick. Earns full points <strong>minus pre-merge tribal count</strong>.</td>
+            </tr>
+        </tbody>
+    </table>
+</article>
+
+<!-- Active Scoring Components -->
+<article>
+    <header><h2>Scoring Components</h2></header>
+    <p>Points are calculated per castaway, then modified by pick type. The following components are <strong>active</strong> this season:</p>
+
+    {% if active_rules %}
+    <table>
+        <thead><tr><th>Component</th><th>Points</th><th>How It Works</th></tr></thead>
+        <tbody>
+            {% for rule in active_rules %}
+            <tr>
+                <td><strong>{{ rule.label }}</strong></td>
+                <td>{{ rule.value }}</td>
+                <td>{{ rule.desc }}
+                    {% if rule.key == 'tribal_val' %}
+                    <br><small>A castaway eliminated at the 10th tribal earns {{ (9 * rule.value)|round(1) }} tribal points (9 tribals survived).
+                    A castaway still in the game earns points for every tribal that has occurred so far.</small>
+                    {% elif rule.key == 'first_val' %}
+                    <br><small>The Sole Survivor earns this bonus on top of all other points.</small>
+                    {% elif rule.key == 'immunity_win_val' %}
+                    <br><small>Only individual immunity wins count (not tribal immunity).</small>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if inactive_rules %}
+    <details>
+        <summary>Inactive components ({{ inactive_rules|length }})</summary>
+        <p><small>These scoring components are available but currently set to 0 for this season. The admin can enable them.</small></p>
+        <ul>
+            {% for rule in inactive_rules %}
+            <li><strong>{{ rule.label }}</strong> — {{ rule.desc }}</li>
+            {% endfor %}
+        </ul>
+    </details>
+    {% endif %}
+</article>
+
+<!-- Example Calculation -->
+<article>
+    <header><h2>Example Calculation</h2></header>
+    {% if season %}
+    {% set c = config %}
+    <p>In a {{ season.num_players }}-player season with these rules:</p>
+    <p><strong>Sole Survivor</strong> (picked as a Draft):
+        {% set winner_pts = (season.num_players - 1) * c.tribal_val + c.jury_val + c.first_val + c.final_tribal_val + c.merge_val %}
+        ~{{ winner_pts|round(1) }} pts
+        <small>({{ season.num_players - 1 }} tribals × {{ c.tribal_val }}{% if c.jury_val %} + {{ c.jury_val }} jury{% endif %}{% if c.merge_val %} + {{ c.merge_val }} merge{% endif %}{% if c.final_tribal_val %} + {{ c.final_tribal_val }} FTC{% endif %} + {{ c.first_val }} winner)</small>
+    </p>
+    <p><strong>First boot</strong> (picked as a Draft):
+        {{ 0 }} pts
+        <small>(survived 0 tribals)</small>
+    </p>
+    <p><strong>Sole Survivor</strong> (picked as a Wildcard):
+        ~{{ (winner_pts / 2)|round(1) }} pts
+        <small>(half of {{ winner_pts|round(1) }})</small>
+    </p>
+    {% endif %}
+</article>
+
+<!-- Win Probabilities -->
+<article>
+    <header><h2>Win Probabilities</h2></header>
+    <p>The leaderboard shows each fantasy player's estimated chance of winning the season.</p>
+    <p>This is calculated by simulating all possible elimination orders for the remaining castaways:</p>
+    <ul>
+        <li><strong>8 or fewer remaining</strong> — all permutations are checked (exhaustive)</li>
+        <li><strong>More than 8 remaining</strong> — 50,000 random orderings are sampled</li>
+    </ul>
+    <p>For each simulated outcome, the full leaderboard is recalculated, and the fantasy player who would win is tallied.
+    The win percentage is how often each player comes out on top.</p>
+</article>
+
+<!-- Data Sources -->
+<article>
+    <header><h2>Data Sources</h2></header>
+    <p>All game data (boot order, tribe assignments, challenge results, advantages, confessionals) comes from the
+    <a href="https://github.com/doehm/survivoR" target="_blank" rel="noopener">survivoR</a> open-source dataset,
+    maintained by the community. Player profiles link to
+    <a href="https://survivorstatsdb.com" target="_blank" rel="noopener">survivorstatsdb.com</a>.</p>
+    <p>Data is automatically refreshed daily at 8am EST.</p>
+</article>
+
+{% if season %}
+<p><a href="{{ url_for('main.leaderboard', season_id=season.id) }}">&larr; Back to Leaderboard</a></p>
+{% endif %}
+{% endblock %}

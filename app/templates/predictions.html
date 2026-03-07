@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Win Probabilities - {{ season.name or 'Season ' ~ season.number }}{% endblock %}
+{% block content %}
+<hgroup>
+    <h1>Win Probabilities</h1>
+    <p>{{ season.name or 'Season ' ~ season.number }} &mdash;
+    {{ remaining }} survivors remaining &mdash;
+    {% if exhaustive %}
+        all {{ "{:,}".format(total_scenarios) }} possible outcomes analyzed
+    {% else %}
+        {{ "{:,}".format(total_scenarios) }} random scenarios sampled
+    {% endif %}
+    </p>
+</hgroup>
+
+{% if results %}
+<table>
+    <thead>
+        <tr>
+            <th>Player</th>
+            <th>Win %</th>
+            <th>Scenarios Won</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for user_id, data in results.items() %}
+        <tr>
+            <td><strong>{{ data.user.display_name or data.user.username }}</strong></td>
+            <td>
+                <strong>{{ "%.1f"|format(data.win_pct) }}%</strong>
+                <progress value="{{ data.win_pct }}" max="100" style="margin-left: 0.5rem; width: 120px;"></progress>
+            </td>
+            <td>{{ "{:,}".format(data.scenarios_won) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if not exhaustive %}
+<p><small>With {{ remaining }} survivors remaining, exhaustive analysis isn't feasible.
+Results are based on random sampling and may vary slightly between runs.</small></p>
+{% endif %}
+
+{% else %}
+<p>No picks submitted yet.</p>
+{% endif %}
+
+<p><a href="{{ url_for('main.leaderboard', season_id=season.id) }}">&larr; Back to Leaderboard</a></p>
+{% endblock %}

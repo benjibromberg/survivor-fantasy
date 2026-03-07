@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Welcome - Survivor Fantasy{% endblock %}
+{% block content %}
+<h1>Welcome to Survivor Fantasy</h1>
+<p>No active season right now.
+{% if current_user.is_authenticated and current_user.is_admin %}
+    <a href="{{ url_for('main.admin_seasons') }}">Create one in the admin panel.</a>
+{% else %}
+    Check back later!
+{% endif %}
+</p>
+{% endblock %}

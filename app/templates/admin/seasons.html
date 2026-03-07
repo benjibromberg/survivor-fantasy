@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Admin - Seasons{% endblock %}
+{% block content %}
+<h1>Manage Seasons</h1>
+
+<p><a href="{{ url_for('main.admin_players') }}" role="button" class="outline">Manage Players</a></p>
+
+<section>
+    <h2>Create New Season</h2>
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="grid">
+            <label>
+                Season Number
+                <input type="number" name="number" required placeholder="50">
+            </label>
+            <label>
+                Name (optional)
+                <input type="text" name="name" placeholder="Season 50">
+            </label>
+        </div>
+        <button type="submit">Create Season</button>
+    </form>
+</section>
+
+{% if seasons %}
+<section>
+    <h2>Existing Seasons</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Active</th>
+                <th>Scoring</th>
+                <th>Survivors</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for season in seasons %}
+            <tr>
+                <td>{{ season.number }}</td>
+                <td>{{ season.name or '-' }}</td>
+                <td>{{ 'Yes' if season.is_active else 'No' }}</td>
+                <td>{{ season.scoring_system }}</td>
+                <td>{{ season.survivors|length }}</td>
+                <td><a href="{{ url_for('main.admin_season_detail', season_id=season.id) }}" role="button" class="outline">Manage</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+{% endblock %}

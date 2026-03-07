@@ -1,0 +1,670 @@
+/* Survivor Fantasy — Tribal Council / Fiji Night theme */
+
+:root {
+    --night-sky: #0d1b2a;
+    --deep-ocean: #1b2d3e;
+    --ocean-surface: #274060;
+    --fire-bright: #e85d26;
+    --fire-glow: #f4a261;
+    --ember: #d4602e;
+    --torch-gold: #fca311;
+    --sand-warm: #e8d5b7;
+    --sand-light: #f0e6d3;
+    --palm-green: #2d6a4f;
+    --text-light: #e8e0d6;
+    --text-dim: #9aa5b1;
+    --card-bg: #162535;
+    --card-border: #2a4055;
+
+    --pico-primary: var(--fire-bright);
+    --pico-primary-hover: var(--ember);
+    --pico-primary-focus: rgba(232, 93, 38, 0.2);
+}
+
+/* Override Pico dark theme with our palette */
+[data-theme="dark"] {
+    --pico-background-color: var(--night-sky);
+    --pico-color: var(--text-light);
+    --pico-card-background-color: var(--card-bg);
+    --pico-card-border-color: var(--card-border);
+    --pico-card-sectioning-background-color: var(--card-bg);
+    --pico-muted-color: var(--text-dim);
+    --pico-muted-border-color: var(--card-border);
+    --pico-h1-color: var(--sand-warm);
+    --pico-h2-color: var(--sand-warm);
+    --pico-h3-color: var(--fire-glow);
+    --pico-dropdown-background-color: var(--deep-ocean);
+    --pico-dropdown-border-color: var(--card-border);
+    --pico-dropdown-color: var(--text-light);
+    --pico-dropdown-hover-background-color: var(--ocean-surface);
+    color-scheme: dark;
+}
+
+body {
+    background: var(--night-sky);
+    color: var(--text-light);
+    margin: 0;
+}
+
+a { color: var(--fire-glow); }
+a:hover { color: var(--torch-gold); }
+
+/* Nav bar */
+nav {
+    background: var(--deep-ocean);
+    border-bottom: 2px solid var(--fire-bright);
+    padding: 0.75rem 1rem;
+    margin: 0 0 1.5rem 0;
+}
+
+@media (min-width: 768px) {
+    nav { padding: 0.75rem 2rem; }
+}
+
+nav a, nav strong a {
+    color: var(--sand-warm) !important;
+}
+
+nav a:hover {
+    color: var(--torch-gold) !important;
+}
+
+nav details summary {
+    color: var(--sand-warm);
+}
+
+/* Season dropdown menu */
+nav details[class*="dropdown"] ul {
+    background: var(--deep-ocean);
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+}
+
+nav details[class*="dropdown"] ul li a {
+    padding: 0.5rem 1rem;
+}
+
+nav details[class*="dropdown"] ul li a:hover {
+    background: var(--ocean-surface);
+}
+
+/* Flash messages */
+.flash-success { color: var(--palm-green); }
+.flash-error { color: var(--fire-bright); }
+.flash-warning { color: var(--fire-glow); }
+
+/* --- Leaderboard --- */
+
+/* Elimination slider */
+.elimination-slider {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.elimination-slider label {
+    margin-bottom: 0;
+}
+
+.elimination-slider input[type="range"] {
+    margin-top: 0.25rem;
+    accent-color: var(--fire-bright);
+}
+
+.leaderboard-entry {
+    margin-bottom: 1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-left: 4px solid var(--fire-glow);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.lb-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin-bottom: 0;
+    padding-bottom: 0.25rem;
+}
+
+.lb-rank {
+    font-size: 1.8em;
+    font-weight: 800;
+    color: var(--fire-bright);
+    opacity: 0.6;
+    min-width: 2.2rem;
+    text-align: center;
+}
+
+.lb-name {
+    font-size: 1.25em;
+    font-weight: 700;
+    color: var(--sand-warm);
+}
+
+.lb-win-pct {
+    margin-left: auto;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--fire-glow);
+    opacity: 0.8;
+}
+
+.lb-points {
+    font-size: 1.25em;
+    font-weight: 700;
+    color: var(--torch-gold);
+}
+
+/* If no win-pct, points should push right */
+.lb-header:not(:has(.lb-win-pct)) .lb-points {
+    margin-left: auto;
+}
+
+.lb-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.lb-pick {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.7rem 0.35rem 0.35rem;
+    border: 2px solid var(--card-border);
+    border-radius: 2rem;
+    font-size: 0.85em;
+    background: var(--deep-ocean);
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.lb-pick:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.lb-pick.eliminated {
+    opacity: 0.3;
+}
+
+.lb-pick-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 2px solid var(--card-border);
+}
+
+.lb-pick-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ocean-surface);
+    color: var(--text-dim);
+    font-weight: 700;
+    font-size: 1em;
+}
+
+.lb-pick-info {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.lb-pick-name {
+    font-weight: 600;
+    color: var(--sand-light);
+}
+
+.lb-pick-meta {
+    font-size: 0.78em;
+    color: var(--text-dim);
+}
+
+.lb-pick-result {
+    font-size: 0.72em;
+    color: var(--text-dim);
+    font-style: italic;
+}
+
+/* Special pick types — visual separation */
+.lb-special-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px dashed var(--card-border);
+}
+
+.lb-pick-badge {
+    font-size: 0.7em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.05rem 0.3rem;
+    border-radius: 3px;
+}
+
+.lb-pick-wildcard .lb-pick-badge {
+    background: rgba(252, 163, 17, 0.2);
+    color: var(--torch-gold);
+}
+
+.lb-pick-sole_survivor .lb-pick-badge {
+    background: rgba(232, 93, 38, 0.25);
+    color: var(--fire-bright);
+}
+
+.lb-pick-pmr_w .lb-pick-badge,
+.lb-pick-pmr_d .lb-pick-badge {
+    background: rgba(154, 165, 177, 0.2);
+    color: var(--text-dim);
+}
+
+.lb-pick-sole_survivor {
+    border-style: dashed;
+}
+
+/* Make pick links not look like typical links */
+a.lb-pick {
+    text-decoration: none;
+    color: inherit;
+}
+
+a.lb-pick:hover {
+    text-decoration: none;
+    color: inherit;
+    border-color: var(--fire-glow);
+}
+
+a.lb-pick:hover .lb-pick-name {
+    color: var(--torch-gold);
+}
+
+/* --- Stats page --- */
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1rem;
+}
+
+.stat-board {
+    margin-bottom: 0;
+}
+
+.stat-board header {
+    padding: 0.5rem 1rem;
+    margin: 0;
+}
+
+.stat-board header h3 {
+    margin: 0;
+    font-size: 1em;
+}
+
+.stat-rows {
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.stat-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 6px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.1s;
+}
+
+a.stat-row:hover {
+    background: var(--ocean-surface);
+    color: inherit;
+    text-decoration: none;
+}
+
+.stat-row.eliminated {
+    opacity: 0.4;
+}
+
+.stat-rank {
+    font-weight: 700;
+    color: var(--fire-bright);
+    opacity: 0.5;
+    min-width: 1.5rem;
+    text-align: center;
+    font-size: 0.9em;
+}
+
+.stat-img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--card-border);
+    flex-shrink: 0;
+}
+
+.stat-name {
+    font-weight: 600;
+    color: var(--sand-light);
+    flex: 1;
+}
+
+.stat-tribe {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    opacity: 0.6;
+}
+
+.stat-value {
+    font-weight: 700;
+    color: var(--torch-gold);
+    font-size: 1.1em;
+    min-width: 2rem;
+    text-align: right;
+}
+
+/* --- Predictions page --- */
+
+progress {
+    accent-color: var(--fire-bright);
+}
+
+/* Main content area */
+main.container {
+    background: transparent;
+}
+
+/* --- Articles / cards --- */
+
+article {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+}
+
+article header {
+    background: var(--deep-ocean);
+}
+
+/* Section elements (Pico sometimes adds bg to these) */
+section {
+    background: transparent;
+}
+
+/* --- Tables (admin) --- */
+
+table {
+    --pico-table-border-color: var(--card-border);
+}
+
+thead {
+    --pico-table-row-stripped-background-color: var(--deep-ocean);
+}
+
+/* --- Form inputs --- */
+
+input, select, textarea {
+    --pico-form-element-background-color: var(--deep-ocean);
+    --pico-form-element-border-color: var(--card-border);
+    --pico-form-element-color: var(--text-light);
+    --pico-form-element-focus-color: var(--fire-glow);
+}
+
+/* --- Buttons --- */
+
+button, a[role="button"] {
+    --pico-primary-background: var(--fire-bright);
+    --pico-primary-border: var(--fire-bright);
+}
+
+a[role="button"].outline {
+    color: var(--fire-glow);
+    border-color: var(--fire-glow);
+    background: transparent;
+}
+
+a[role="button"].outline:hover {
+    color: var(--torch-gold);
+    border-color: var(--torch-gold);
+}
+
+/* --- Survivor card grid for admin picks page --- */
+
+.survivor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.survivor-card {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem;
+    border: 2px solid var(--card-border);
+    border-radius: var(--pico-border-radius);
+    cursor: pointer;
+    transition: border-color 0.15s;
+    background: var(--deep-ocean);
+}
+
+.survivor-card:hover {
+    border-color: var(--fire-bright);
+}
+
+.survivor-card:has(input:checked) {
+    border-color: var(--fire-bright);
+    background: var(--pico-primary-focus);
+}
+
+.survivor-card input[type="checkbox"] {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.survivor-headshot {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.survivor-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.survivor-name {
+    font-weight: 600;
+    font-size: 0.9em;
+    line-height: 1.2;
+    color: var(--sand-light);
+}
+
+.survivor-tribe {
+    font-size: 0.75em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.eliminated {
+    opacity: 0.35;
+}
+
+.eliminated .survivor-name {
+    text-decoration: line-through;
+}
+
+/* hgroup subtitle */
+hgroup p {
+    color: var(--text-dim);
+}
+
+/* small text */
+small {
+    color: var(--text-dim);
+}
+
+/* --- Scoring config grid (admin) --- */
+
+.scoring-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.scoring-toggle {
+    padding: 0.5rem;
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+}
+
+.scoring-toggle label {
+    margin-bottom: 0;
+    font-size: 0.9em;
+}
+
+.scoring-toggle small {
+    font-size: 0.75em;
+}
+
+/* --- Scoring comparison page --- */
+
+.compare-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.compare-card {
+    margin-bottom: 0;
+}
+
+.compare-card header {
+    padding: 0.5rem 0.75rem;
+}
+
+.compare-card header h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1em;
+}
+
+.compare-config {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.config-tag {
+    font-size: 0.7em;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    background: var(--ocean-surface);
+    color: var(--text-dim);
+}
+
+.compare-rankings {
+    padding: 0.5rem;
+}
+
+.compare-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+}
+
+.compare-row:nth-child(1) { background: rgba(252, 163, 17, 0.15); }
+.compare-row:nth-child(2) { background: rgba(252, 163, 17, 0.08); }
+.compare-row:nth-child(3) { background: rgba(252, 163, 17, 0.04); }
+
+.compare-rank {
+    font-weight: 700;
+    color: var(--fire-bright);
+    opacity: 0.6;
+    min-width: 1.5rem;
+}
+
+.compare-name {
+    flex: 1;
+    font-weight: 600;
+    color: var(--sand-light);
+}
+
+.compare-pts {
+    font-weight: 700;
+    color: var(--torch-gold);
+}
+
+/* --- Mobile responsive --- */
+
+@media (max-width: 576px) {
+    /* Stack header: rank + name on top, points below */
+    .lb-header {
+        flex-wrap: wrap;
+    }
+
+    .lb-points {
+        margin-left: 0;
+        width: 100%;
+        padding-left: 3rem;
+        font-size: 1.1em;
+    }
+
+    .lb-rank {
+        font-size: 1.4em;
+        min-width: 1.8rem;
+    }
+
+    .lb-name {
+        font-size: 1.1em;
+    }
+
+    /* Pick pills: show image only on very small screens, full info on tap */
+    .lb-pick {
+        padding: 0.25rem 0.5rem 0.25rem 0.25rem;
+        gap: 0.35rem;
+        font-size: 0.8em;
+    }
+
+    .lb-pick-img {
+        width: 32px;
+        height: 32px;
+    }
+
+    .lb-pick-name {
+        font-size: 0.85em;
+    }
+
+    .lb-pick-meta {
+        font-size: 0.7em;
+    }
+
+    /* Leaderboard card padding */
+    .leaderboard-entry {
+        padding: 0.75rem;
+    }
+
+    /* Survivor grid: single column */
+    .survivor-grid {
+        grid-template-columns: 1fr;
+    }
+}

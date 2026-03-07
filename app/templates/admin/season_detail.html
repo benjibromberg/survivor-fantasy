@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Admin - {{ season.name or 'Season ' ~ season.number }}{% endblock %}
+{% block content %}
+<h1>{{ season.name or 'Season ' ~ season.number }} &mdash; Admin</h1>
+
+<p>
+    <a href="{{ url_for('main.admin_picks', season_id=season.id) }}" role="button">Manage Picks</a>
+    <a href="{{ url_for('main.scoring_compare', season_id=season.id) }}" role="button" class="outline">Compare Scoring</a>
+</p>
+
+<!-- Settings -->
+<section>
+    <h2>Settings</h2>
+    <form method="POST" action="{{ url_for('main.admin_season_settings', season_id=season.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="grid">
+            <label>
+                Players in Season
+                <input type="number" name="num_players" value="{{ season.num_players }}">
+            </label>
+            <label>
+                Players Left at Jury Start
+                <input type="number" name="left_at_jury" value="{{ season.left_at_jury }}">
+            </label>
+        </div>
+        <label>
+            <input type="checkbox" name="is_active" {% if season.is_active %}checked{% endif %}>
+            Active Season (only one season can be active)
+        </label>
+
+        <h3>Scoring Components</h3>
+        <p><small>Set a value to 0 to disable a component. Changes apply immediately to the leaderboard.</small></p>
+        <p>
+            <button type="button" class="outline" onclick="loadRecommended()">Load Recommended Config</button>
+            <button type="button" class="outline secondary" onclick="loadDefaults()">Reset to Defaults</button>
+        </p>
+        <div class="scoring-grid">
+            {% for key, (label, desc) in config_labels.items() %}
+            <div class="scoring-toggle">
+                <label>
+                    {{ label }}
+                    <input type="number" name="scoring_{{ key }}" id="scoring_{{ key }}" value="{{ current_config.get(key, 0) }}" step="0.25" style="width: 80px;">
+                </label>
+                <small>{{ desc }}</small>
+            </div>
+            {% endfor %}
+        </div>
+
+        <button type="submit">Save Settings</button>
+
+        <script>
+        const RECOMMENDED = {{ recommended_config | tojson }};
+        const DEFAULTS = {{ default_config | tojson }};
+        function loadConfig(cfg) {
+            for (const [key, val] of Object.entries(cfg)) {
+                const el = document.getElementById('scoring_' + key);
+                if (el) el.value = val;
+            }
+        }
+        function loadRecommended() { loadConfig(RECOMMENDED); }
+        function loadDefaults() { loadConfig(DEFAULTS); }
+        </script>
+    </form>
+</section>
+
+<!-- Refresh -->
+<section>
+    <h2>Refresh Data</h2>
+    <p><small>Downloads the latest survivoR dataset from GitHub and updates boot order,
+    stats, confessionals, advantages, and challenge results.</small></p>
+    <form method="POST" action="{{ url_for('main.admin_refresh', season_id=season.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit">Refresh from survivoR</button>
+    </form>
+</section>
+
+<!-- Survivors -->
+<section>
+    <h2>Survivors ({{ survivors|length }})</h2>
+    {% if survivors %}
+    <form method="POST" action="{{ url_for('main.admin_update_survivors', season_id=season.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Tribe</th>
+                    <th>Voted Out Order</th>
+                    <th>Jury</th>
+                    <th>Placement</th>
+                    <th>Imm Wins</th>
+                    <th>Confessionals</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in survivors %}
+                <tr class="{{ 'eliminated' if s.voted_out_order > 0 else '' }}">
+                    <td>
+                        {{ s.name }}
+                        <input type="hidden" name="survivor_id" value="{{ s.id }}">
+                    </td>
+                    <td><input type="text" name="tribe_{{ s.id }}" value="{{ s.tribe or '' }}" style="width:80px"></td>
+                    <td><input type="number" name="voted_out_{{ s.id }}" value="{{ s.voted_out_order }}" style="width:80px"></td>
+                    <td><input type="checkbox" name="jury_{{ s.id }}" {% if s.made_jury %}checked{% endif %}></td>
+                    <td><input type="number" name="placement_{{ s.id }}" value="{{ s.placement or '' }}" style="width:80px"></td>
+                    <td>{{ s.individual_immunity_wins }}</td>
+                    <td>{{ s.confessional_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        <button type="submit">Update Survivors</button>
+    </form>
+    {% else %}
+    <p>No survivors yet. Use the refresh button above to fetch data.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard - {{ season.name or 'Season ' ~ season.number }}{% endblock %}
+{% block content %}
+<hgroup>
+    <h1>{{ season.name or 'Season ' ~ season.number }}</h1>
+    <p>Scoring: {{ scoring_system_name }} | Players remaining: {{ active_count }}</p>
+</hgroup>
+
+{% if max_eliminations > 0 %}
+<div class="elimination-slider">
+    <label>
+        <span>After elimination: <strong id="slider-label">{{ effective_as_of }} of {{ max_eliminations }}</strong></span>
+        <input type="range" id="as-of-slider" min="0" max="{{ max_eliminations }}"
+               value="{{ effective_as_of }}"
+               oninput="document.getElementById('slider-label').textContent = this.value + ' of {{ max_eliminations }}'">
+    </label>
+</div>
+<script>
+    const slider = document.getElementById('as-of-slider');
+    let debounce;
+    slider.addEventListener('change', function() {
+        clearTimeout(debounce);
+        const val = this.value;
+        debounce = setTimeout(() => {
+            const url = new URL(window.location);
+            if (val == {{ max_eliminations }}) {
+                url.searchParams.delete('as_of');
+            } else {
+                url.searchParams.set('as_of', val);
+            }
+            window.location = url;
+        }, 200);
+    });
+</script>
+{% endif %}
+
+{% if leaderboard %}
+<p>
+    <a href="{{ url_for('main.season_stats', season_id=season.id) }}">Season stats &rarr;</a>
+    &nbsp;&middot;&nbsp;
+    <a href="{{ url_for('main.scoring_compare', season_id=season.id) }}">Compare scoring &rarr;</a>
+    {% if active_count > 0 %}
+    &nbsp;&middot;&nbsp;
+    <a href="{{ url_for('main.predictions', season_id=season.id) }}">Detailed predictions &rarr;</a>
+    {% endif %}
+</p>
+
+{% for entry in leaderboard %}
+<article class="leaderboard-entry">
+    <header class="lb-header">
+        <span class="lb-rank">{{ loop.index }}</span>
+        <span class="lb-name">{{ entry.user.display_name or entry.user.username }}</span>
+        {% if win_pcts.get(entry.user.id) is not none and active_count > 0 %}
+        <span class="lb-win-pct">{{ "%.0f"|format(win_pcts[entry.user.id]) }}% win</span>
+        {% endif %}
+        <span class="lb-points">{{ "%.1f"|format(entry.total_points) }} pts</span>
+    </header>
+
+    {# Group picks by type for visual separation #}
+    {% set draft_picks = entry.picks|selectattr('pick_type_raw', 'eq', 'draft')|list %}
+    {% set special_picks = entry.picks|rejectattr('pick_type_raw', 'eq', 'draft')|list %}
+
+    {% if draft_picks %}
+    <div class="lb-picks">
+        {% for pick in draft_picks %}
+        <{% if pick.stats_url %}a href="{{ pick.stats_url }}" target="_blank" rel="noopener"{% else %}div{% endif %}
+            class="lb-pick {{ 'eliminated' if pick.eliminated else '' }}"
+            {% if pick.tribe_color %}style="border-color: {{ pick.tribe_color }};"{% endif %}
+            title="{{ pick.full_name or pick.survivor }}{% if pick.result %} — {{ pick.result }}{% endif %}">
+            {% if pick.survivor_image %}
+            <img src="{{ pick.survivor_image }}" alt="{{ pick.survivor }}" class="lb-pick-img"
+                 {% if pick.tribe_color %}style="border: 2px solid {{ pick.tribe_color }};"{% endif %}>
+            {% else %}
+            <div class="lb-pick-img lb-pick-placeholder">{{ pick.survivor[:1] }}</div>
+            {% endif %}
+            <div class="lb-pick-info">
+                <span class="lb-pick-name">{{ pick.survivor }}</span>
+                <span class="lb-pick-meta">{{ "%.1f"|format(pick.modified_points) }} pts</span>
+                {% if pick.result %}
+                <span class="lb-pick-result">{{ pick.result }}</span>
+                {% elif pick.tribe %}
+                <span class="lb-pick-result" {% if pick.tribe_color %}style="color: {{ pick.tribe_color }};"{% endif %}>{{ pick.tribe }}</span>
+                {% endif %}
+            </div>
+        </{% if pick.stats_url %}a{% else %}div{% endif %}>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if special_picks %}
+    <div class="lb-special-picks">
+        {% for pick in special_picks %}
+        <{% if pick.stats_url %}a href="{{ pick.stats_url }}" target="_blank" rel="noopener"{% else %}div{% endif %}
+            class="lb-pick lb-pick-special lb-pick-{{ pick.pick_type_raw }} {{ 'eliminated' if pick.eliminated else '' }}"
+            {% if pick.tribe_color %}style="border-color: {{ pick.tribe_color }};"{% endif %}
+            title="{{ pick.full_name or pick.survivor }} — {{ pick.pick_type }}{% if pick.result %} — {{ pick.result }}{% endif %}">
+            {% if pick.survivor_image %}
+            <img src="{{ pick.survivor_image }}" alt="{{ pick.survivor }}" class="lb-pick-img"
+                 {% if pick.tribe_color %}style="border: 2px solid {{ pick.tribe_color }};"{% endif %}>
+            {% else %}
+            <div class="lb-pick-img lb-pick-placeholder">{{ pick.survivor[:1] }}</div>
+            {% endif %}
+            <div class="lb-pick-info">
+                <span class="lb-pick-name">{{ pick.survivor }}</span>
+                <span class="lb-pick-meta">
+                    <span class="lb-pick-badge">{{ pick.pick_type }}</span>
+                    &middot; {{ "%.1f"|format(pick.modified_points) }} pts
+                </span>
+                {% if pick.result %}
+                <span class="lb-pick-result">{{ pick.result }}</span>
+                {% endif %}
+            </div>
+        </{% if pick.stats_url %}a{% else %}div{% endif %}>
+        {% endfor %}
+    </div>
+    {% endif %}
+</article>
+{% endfor %}
+{% else %}
+<p>No picks submitted yet.</p>
+{% endif %}
+{% endblock %}

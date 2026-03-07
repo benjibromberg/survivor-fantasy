@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Compare Scoring - {{ season.name or 'Season ' ~ season.number }}{% endblock %}
+{% block content %}
+<hgroup>
+    <h1>Compare Scoring Configs</h1>
+    <p>{{ season.name or 'Season ' ~ season.number }} &mdash; see how different scoring rules change the standings</p>
+</hgroup>
+
+<p><a href="{{ url_for('main.leaderboard', season_id=season.id) }}">&larr; Back to Leaderboard</a></p>
+
+<div class="compare-grid">
+    {% for comp in comparisons %}
+    <article class="compare-card">
+        <header>
+            <h3>{{ comp.name }}</h3>
+            <div class="compare-config">
+                {% for key, val in comp.config.items() %}
+                {% if val %}
+                <span class="config-tag" title="{{ config_labels.get(key, ('',''))[1] }}">
+                    {{ config_labels.get(key, (key,''))[0] }}: {{ val }}
+                </span>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </header>
+        <div class="compare-rankings">
+            {% for entry in comp.entries %}
+            <div class="compare-row">
+                <span class="compare-rank">{{ loop.index }}</span>
+                <span class="compare-name">{{ entry.user.display_name or entry.user.username }}</span>
+                <span class="compare-pts">{{ "%.1f"|format(entry.total_points) }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </article>
+    {% endfor %}
+</div>
+{% endblock %}

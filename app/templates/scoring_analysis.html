@@ -1,0 +1,465 @@
+{% extends "base.html" %}
+{% block title %}Scoring Analysis - Survivor Fantasy{% endblock %}
+{% block content %}
+<hgroup>
+    <h1>Scoring Analysis</h1>
+    <p>We tested <strong id="total-configs">3,000+</strong> scoring configurations across
+    9 modern US Survivor seasons (41–49) with 3,150 simulated random drafts (4–10 players each)
+    to find settings that are fun, fair, and competitive.</p>
+</hgroup>
+
+<!-- Methodology -->
+<article>
+    <header><h2>How We Tested</h2></header>
+    <p>For each scoring configuration, we simulated <strong>3,150 random snake drafts</strong>
+    (50 drafts × 7 player counts × 9 seasons) and tracked full leaderboard trajectories
+    episode-by-episode. Wildcards are picked after the first elimination and can overlap other
+    players' draft picks. Sub-drafts ensure every player gets at least 4 picks.</p>
+
+    <p>Each configuration was scored on eight metrics, combined into a single
+    <strong>composite fun/fairness score</strong> (higher = better). Drama and volatility
+    metrics are weighted most heavily:</p>
+
+    <table>
+        <thead><tr><th>Metric</th><th>What It Measures</th><th>Goal</th><th>Weight</th></tr></thead>
+        <tbody>
+            <tr><td><strong>Rank Volatility</strong></td>
+                <td>Average rank positions each player moves per elimination step</td>
+                <td>Higher = more shuffling</td><td>3.0</td></tr>
+            <tr><td><strong>Comeback Rate</strong></td>
+                <td>How often the leader at 50% does NOT end up winning</td>
+                <td>Higher = comebacks happen</td><td>2.5</td></tr>
+            <tr><td><strong>Suspense</strong></td>
+                <td>% of steps where the eventual winner is NOT in 1st place</td>
+                <td>Higher = late takeover</td><td>2.0</td></tr>
+            <tr><td><strong>Late-Game Drama</strong></td>
+                <td>Gap between 1st and 2nd place at 75% through the season</td>
+                <td>Smaller = more suspense</td><td>1.5</td></tr>
+            <tr><td><strong>Midpoint Competitiveness</strong></td>
+                <td>% of players within 20% of the leader at the halfway mark</td>
+                <td>Higher = more engaged</td><td>1.0</td></tr>
+            <tr><td><strong>Recovery</strong></td>
+                <td>Average final rank of players who lose a pick in the first 3 boots</td>
+                <td>Lower = easier comeback</td><td>0.5</td></tr>
+            <tr><td><strong>Final Spread</strong></td>
+                <td>Gap between 1st and last place at the end</td>
+                <td>Smaller = fairer</td><td>0.5</td></tr>
+            <tr><td><strong>Non-Draft Impact</strong></td>
+                <td>% of total points from wildcards and Sole Survivor picks</td>
+                <td>Moderate (15–25%)</td><td>0.5</td></tr>
+        </tbody>
+    </table>
+
+    <p><small>Parameter space was covered using stratified random sampling (Latin hypercube)
+    with all point values snapped to 0.25 increments.</small></p>
+</article>
+
+<!-- Score Distribution -->
+<article>
+    <header><h2>Score Distribution</h2></header>
+    <p>How all tested configurations scored. The current default is marked.</p>
+    <canvas id="histogram-chart" style="max-height: 300px;"></canvas>
+</article>
+
+<!-- Season Leaderboard Timelines -->
+<article>
+    <header><h2>Example Leaderboards</h2></header>
+    <p>Simulated 6-player snake drafts on select modern seasons, scored with the recommended config.
+    Each player's last pick is a wildcard.</p>
+    <div id="timeline-charts"></div>
+</article>
+
+<!-- Parameter Impact -->
+<article>
+    <header><h2>Parameter Impact</h2></header>
+    <p>For each scoring parameter, this shows the average fun/fairness score when that parameter
+    is set to each value (with all other parameters randomized). Taller bars = that value
+    tends to produce better games.</p>
+
+    <div class="param-chart-grid">
+        <div class="param-group">
+            <h3>Survival Points</h3>
+            <canvas id="chart-tribal_val"></canvas>
+            <canvas id="chart-post_merge_tribal_val"></canvas>
+        </div>
+        <div class="param-group">
+            <h3>Milestones</h3>
+            <canvas id="chart-jury_val"></canvas>
+            <canvas id="chart-merge_val"></canvas>
+            <canvas id="chart-final_tribal_val"></canvas>
+        </div>
+        <div class="param-group">
+            <h3>Placement</h3>
+            <canvas id="chart-first_val"></canvas>
+            <canvas id="chart-placement_ratio"></canvas>
+        </div>
+        <div class="param-group">
+            <h3>Performance</h3>
+            <canvas id="chart-individual_immunity_val"></canvas>
+            <canvas id="chart-tribal_immunity_val"></canvas>
+            <canvas id="chart-idol_found_val"></canvas>
+            <canvas id="chart-idol_play_val"></canvas>
+            <canvas id="chart-advantage_found_val"></canvas>
+            <canvas id="chart-advantage_play_val"></canvas>
+        </div>
+        <div class="param-group">
+            <h3>Pick Type Modifiers</h3>
+            <canvas id="chart-wildcard_multiplier"></canvas>
+            <canvas id="chart-replacement_multiplier"></canvas>
+            <canvas id="chart-replacement_deduction"></canvas>
+            <canvas id="chart-sole_survivor_val"></canvas>
+        </div>
+    </div>
+</article>
+
+<!-- Key Findings -->
+<article>
+    <header><h2>Key Findings</h2></header>
+    <table>
+        <thead><tr><th>Finding</th><th>Detail</th></tr></thead>
+        <tbody id="findings-table">
+        </tbody>
+    </table>
+</article>
+
+<!-- Top Configurations -->
+<article>
+    <header><h2>Top Configurations</h2></header>
+    <p>The highest-scoring configs found. Only parameters that differ from the default are shown.</p>
+    <div id="top-configs"></div>
+</article>
+
+<!-- Recommended Config -->
+<article>
+    <header><h2>Recommended Configuration</h2></header>
+    <p>The full recommended config (highest composite score):</p>
+    <pre id="recommended-config" style="font-size: 0.85em;"></pre>
+    <div id="recommended-metrics"></div>
+</article>
+
+<p><a href="{{ url_for('main.rules') }}">&larr; Back to Rules</a></p>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+const PARAM_LABELS = {
+    'tribal_val': 'Pre-Merge Tribal',
+    'post_merge_tribal_val': 'Post-Merge Tribal',
+    'jury_val': 'Jury Bonus',
+    'merge_val': 'Merge Bonus',
+    'final_tribal_val': 'Final Tribal Bonus',
+    'first_val': '1st Place (Winner Bonus)',
+    'placement_ratio': '2nd:3rd as % of 1st',
+    'individual_immunity_val': 'Individual Immunity',
+    'tribal_immunity_val': 'Tribal Immunity',
+    'idol_found_val': 'Idol Found',
+    'advantage_found_val': 'Advantage Found',
+    'idol_play_val': 'Idol Played',
+    'advantage_play_val': 'Advantage Played',
+    'wildcard_multiplier': 'Wildcard Multiplier',
+    'replacement_multiplier': 'Replacement Multiplier',
+    'replacement_deduction': 'Replacement Deduction',
+    'sole_survivor_val': 'Sole Survivor (per ep)',
+};
+
+const chartDefaults = {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+        legend: { display: false },
+    },
+    scales: {
+        y: {
+            grid: { color: 'rgba(255,255,255,0.08)' },
+            ticks: { color: '#9aa5b1' },
+        },
+        x: {
+            grid: { display: false },
+            ticks: { color: '#9aa5b1' },
+        },
+    },
+};
+
+fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
+.then(r => r.json())
+.then(data => {
+    document.getElementById('total-configs').textContent = data.total_configs.toLocaleString();
+
+    // ── Histogram ──────────────────────────────────────────────────
+    new Chart(document.getElementById('histogram-chart'), {
+        type: 'bar',
+        data: {
+            labels: data.histogram.labels.map(v => v.toFixed(2)),
+            datasets: [{
+                data: data.histogram.counts,
+                backgroundColor: 'rgba(232, 93, 38, 0.6)',
+                borderColor: '#e85d26',
+                borderWidth: 1,
+            }],
+        },
+        options: {
+            ...chartDefaults,
+            plugins: {
+                ...chartDefaults.plugins,
+                annotation: data.default_rank ? {} : undefined,
+                tooltip: {
+                    callbacks: {
+                        title: (items) => `Score: ${items[0].label}`,
+                        label: (item) => `${item.raw} configurations`,
+                    },
+                },
+            },
+            scales: {
+                ...chartDefaults.scales,
+                x: { ...chartDefaults.scales.x, title: { display: true, text: 'Composite Score', color: '#9aa5b1' } },
+                y: { ...chartDefaults.scales.y, title: { display: true, text: 'Configurations', color: '#9aa5b1' } },
+            },
+        },
+    });
+
+    // ── Season Timeline Line Charts ──────────────────────────────────
+    const timelineColors = [
+        '#e85d26', '#f4a261', '#fca311', '#2d6a4f',
+        '#4ea8de', '#a78bfa', '#ef4444', '#10b981',
+    ];
+    const container = document.getElementById('timeline-charts');
+
+    if (data.timelines && data.timelines.length > 0) {
+        data.timelines.forEach((timeline, ti) => {
+            const wrapper = document.createElement('div');
+            wrapper.style.marginBottom = '2rem';
+            wrapper.innerHTML = `<h3 style="color: var(--fire-glow); margin-bottom: 0.5rem;">${timeline.season}</h3>`;
+            const canvas = document.createElement('canvas');
+            canvas.style.maxHeight = '350px';
+            wrapper.appendChild(canvas);
+            container.appendChild(wrapper);
+
+            const datasets = timeline.datasets.map((ds, i) => ({
+                label: ds.name,
+                data: ds.points,
+                borderColor: timelineColors[i % timelineColors.length],
+                backgroundColor: timelineColors[i % timelineColors.length] + '22',
+                tension: 0.3,
+                pointRadius: 3,
+                pointHoverRadius: 6,
+                borderWidth: 2,
+            }));
+
+            new Chart(canvas, {
+                type: 'line',
+                data: { labels: timeline.labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: { color: '#e8d5b7', usePointStyle: true, padding: 12 },
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (item) => `${item.dataset.label}: ${item.raw} pts`,
+                            },
+                        },
+                    },
+                    scales: {
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.08)' },
+                            ticks: { color: '#9aa5b1' },
+                            title: { display: true, text: 'Points', color: '#9aa5b1' },
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#9aa5b1', maxRotation: 45 },
+                        },
+                    },
+                },
+            });
+        });
+    }
+
+    // ── Per-Parameter Bar Charts ────────────────────────────────────
+    for (const [param, info] of Object.entries(data.param_impact)) {
+        const el = document.getElementById('chart-' + param);
+        if (!el) continue;
+
+        const bestIdx = info.avg.indexOf(Math.max(...info.avg));
+        const colors = info.avg.map((_, i) =>
+            i === bestIdx ? '#e85d26' : 'rgba(232, 93, 38, 0.35)');
+
+        new Chart(el, {
+            type: 'bar',
+            data: {
+                labels: info.values,
+                datasets: [{
+                    data: info.avg,
+                    backgroundColor: colors,
+                    borderColor: colors.map(c => c === '#e85d26' ? '#fca311' : 'transparent'),
+                    borderWidth: 1,
+                }],
+            },
+            options: {
+                ...chartDefaults,
+                aspectRatio: 2,
+                plugins: {
+                    ...chartDefaults.plugins,
+                    title: {
+                        display: true,
+                        text: PARAM_LABELS[param] || param,
+                        color: '#e8d5b7',
+                        font: { size: 13 },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (item) => {
+                                const idx = item.dataIndex;
+                                return `Score: ${item.raw.toFixed(3)} +/- ${info.std[idx].toFixed(3)} (n=${info.n[idx]})`;
+                            },
+                        },
+                    },
+                },
+                scales: {
+                    y: {
+                        ...chartDefaults.scales.y,
+                        min: Math.min(...info.avg) - 0.05,
+                        max: Math.max(...info.avg) + 0.05,
+                    },
+                    x: chartDefaults.scales.x,
+                },
+            },
+        });
+    }
+
+    // ── Key Findings ────────────────────────────────────────────────
+    const findings = [];
+
+    // Best config drama metrics
+    if (data.top10 && data.top10[0]) {
+        const bm = data.top10[0].metrics;
+        if (bm.comeback_rate !== undefined) {
+            findings.push(['Comebacks', `Best config: ${((bm.comeback_rate || 0) * 100).toFixed(0)}% of the time, the midpoint leader does NOT win.`]);
+        }
+        if (bm.suspense !== undefined) {
+            findings.push(['Suspense', `The eventual winner is NOT in 1st place for ${((bm.suspense || 0) * 100).toFixed(0)}% of the season.`]);
+        }
+    }
+    // Wildcard
+    const wc = data.param_impact.wildcard_multiplier;
+    if (wc) {
+        const best = wc.values[wc.avg.indexOf(Math.max(...wc.avg))];
+        findings.push(['Wildcards', `Best at ${best}x. Wildcards create late-game volatility as they can overlap other players' picks.`]);
+    }
+    // Replacement
+    const rep = data.param_impact.replacement_multiplier;
+    if (rep) {
+        const best = rep.values[rep.avg.indexOf(Math.max(...rep.avg))];
+        findings.push(['Replacements', `${best === '0' ? 'Disabled (0x)' : best + 'x'} works best for drama.`]);
+    }
+    // Individual immunity
+    const ii = data.param_impact.individual_immunity_val;
+    if (ii) {
+        const best = ii.values[ii.avg.indexOf(Math.max(...ii.avg))];
+        findings.push(['Individual Immunity', `Best at ${best} pts. High immunity rewards create exciting late-game swings.`]);
+    }
+    // Default rank
+    if (data.default_rank) {
+        findings.push(['Current Default', `Ranked #${data.default_rank} of ${data.total_configs} configs tested.`]);
+    }
+
+    const tbody = document.getElementById('findings-table');
+    for (const [finding, detail] of findings) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><strong>${finding}</strong></td><td>${detail}</td>`;
+        tbody.appendChild(tr);
+    }
+
+    // ── Top Configurations ───────────────────────────────────────────
+    if (data.top10 && data.top10.length > 0) {
+        const topDiv = document.getElementById('top-configs');
+        const table = document.createElement('table');
+        table.innerHTML = `<thead><tr>
+            <th>#</th><th>Score</th><th>Volatility</th><th>Comeback</th>
+            <th>Suspense</th><th>Late Gap</th><th>Mid Comp</th>
+            <th>Key Differences</th>
+        </tr></thead>`;
+        const tbody = document.createElement('tbody');
+        data.top10.slice(0, 5).forEach((cfg, i) => {
+            const m = cfg.metrics;
+            const diffs = Object.entries(cfg.diffs || {})
+                .map(([k, v]) => `${PARAM_LABELS[k] || k}: ${v}`)
+                .join(', ');
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${i + 1}</strong></td>
+                <td><strong>${cfg.composite.toFixed(3)}</strong></td>
+                <td>${(m.rank_volatility || 0).toFixed(3)}</td>
+                <td>${((m.comeback_rate || 0) * 100).toFixed(0)}%</td>
+                <td>${((m.suspense || 0) * 100).toFixed(0)}%</td>
+                <td>${((m.late_game_gap || 0) * 100).toFixed(0)}%</td>
+                <td>${((m.midpoint_competitive_pct || 0) * 100).toFixed(0)}%</td>
+                <td><small>${diffs}</small></td>
+            `;
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        topDiv.appendChild(table);
+    }
+
+    // ── Recommended Config ──────────────────────────────────────────
+    document.getElementById('recommended-config').textContent = JSON.stringify(data.recommended, null, 2);
+
+    const best = data.top10[0];
+    if (best) {
+        const metricsDiv = document.getElementById('recommended-metrics');
+        const m = best.metrics;
+        metricsDiv.innerHTML = `
+            <p>
+            <strong>Composite: ${best.composite.toFixed(3)}</strong><br>
+            Rank volatility: ${(m.rank_volatility || 0).toFixed(3)} &middot;
+            Comeback rate: ${((m.comeback_rate || 0) * 100).toFixed(0)}% &middot;
+            Suspense: ${((m.suspense || 0) * 100).toFixed(0)}% &middot;
+            Late-game gap: ${((m.late_game_gap || 0) * 100).toFixed(0)}% &middot;
+            Midpoint competitive: ${((m.midpoint_competitive_pct || 0) * 100).toFixed(0)}% &middot;
+            Recovery: ${(m.early_loser_avg_rank || 0).toFixed(2)} &middot;
+            Non-draft impact: ${((m.non_draft_pct || 0) * 100).toFixed(0)}%
+            </p>
+        `;
+    }
+});
+</script>
+
+<style>
+.param-chart-grid {
+    display: grid;
+    gap: 2rem;
+}
+.param-group {
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 1rem;
+    background: var(--card-bg);
+}
+.param-group h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: var(--fire-glow);
+    font-size: 1rem;
+}
+.param-group canvas {
+    margin-bottom: 1rem;
+    max-height: 200px;
+}
+#recommended-config {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 1rem;
+    color: var(--fire-glow);
+    overflow-x: auto;
+}
+</style>
+{% endblock %}

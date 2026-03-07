@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Admin - Players{% endblock %}
+{% block content %}
+<h1>Manage Players</h1>
+
+<section>
+    <h2>Add Player</h2>
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <fieldset role="group">
+            <input type="text" name="name" required placeholder="Friend's name">
+            <button type="submit">Add Player</button>
+        </fieldset>
+    </form>
+</section>
+
+{% if players %}
+<section>
+    <h2>Current Players</h2>
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Display Name</th><th>Role</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for player in players %}
+            <tr>
+                <td>{{ player.username }}</td>
+                <td>{{ player.display_name or '—' }}</td>
+                <td>{{ 'Admin' if player.is_admin else 'Player' }}</td>
+                <td>
+                    {% if not player.is_admin %}
+                    <form method="POST" action="{{ url_for('main.admin_delete_player', user_id=player.id) }}"
+                          style="margin:0" onsubmit="return confirm('Delete this player and all their picks?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="outline secondary" style="padding: 0.25rem 0.5rem; font-size: 0.8em;">Delete</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+{% endblock %}
