@@ -1,0 +1,11 @@
+flask>=3.0
+flask-sqlalchemy>=3.1
+flask-login>=0.6
+flask-wtf>=1.2
+requests>=2.31
+beautifulsoup4>=4.12
+apscheduler>=3.10
+python-dotenv>=1.0
+pandas>=2.0
+openpyxl>=3.1
+tzdata

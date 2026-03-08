@@ -1,0 +1,1568 @@
+{
+  "total_configs": 3001,
+  "param_impact": {
+    "tribal_val": {
+      "values": [
+        "0.25",
+        "0.5",
+        "0.75",
+        "1.0",
+        "1.5"
+      ],
+      "avg": [
+        2.757,
+        2.719,
+        2.702,
+        2.674,
+        2.641
+      ],
+      "std": [
+        0.222,
+        0.21,
+        0.215,
+        0.221,
+        0.209
+      ],
+      "n": [
+        600,
+        601,
+        600,
+        600,
+        600
+      ]
+    },
+    "post_merge_tribal_val": {
+      "values": [
+        "0.5",
+        "1",
+        "1.5",
+        "2",
+        "3"
+      ],
+      "avg": [
+        2.713,
+        2.698,
+        2.697,
+        2.705,
+        2.681
+      ],
+      "std": [
+        0.266,
+        0.236,
+        0.214,
+        0.196,
+        0.168
+      ],
+      "n": [
+        600,
+        601,
+        600,
+        600,
+        600
+      ]
+    },
+    "jury_val": {
+      "values": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "avg": [
+        2.692,
+        2.697,
+        2.696,
+        2.701,
+        2.707
+      ],
+      "std": [
+        0.212,
+        0.219,
+        0.221,
+        0.224,
+        0.217
+      ],
+      "n": [
+        600,
+        601,
+        600,
+        600,
+        600
+      ]
+    },
+    "merge_val": {
+      "values": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "avg": [
+        2.748,
+        2.721,
+        2.694,
+        2.671,
+        2.659
+      ],
+      "std": [
+        0.221,
+        0.214,
+        0.212,
+        0.213,
+        0.221
+      ],
+      "n": [
+        600,
+        601,
+        600,
+        600,
+        600
+      ]
+    },
+    "final_tribal_val": {
+      "values": [
+        "1",
+        "2",
+        "3",
+        "5",
+        "8"
+      ],
+      "avg": [
+        2.651,
+        2.663,
+        2.681,
+        2.738,
+        2.76
+      ],
+      "std": [
+        0.224,
+        0.226,
+        0.219,
+        0.213,
+        0.189
+      ],
+      "n": [
+        600,
+        600,
+        601,
+        600,
+        600
+      ]
+    },
+    "first_val": {
+      "values": [
+        "5",
+        "8",
+        "10",
+        "15",
+        "20"
+      ],
+      "avg": [
+        2.625,
+        2.657,
+        2.684,
+        2.736,
+        2.791
+      ],
+      "std": [
+        0.229,
+        0.223,
+        0.216,
+        0.195,
+        0.187
+      ],
+      "n": [
+        600,
+        600,
+        600,
+        601,
+        600
+      ]
+    },
+    "placement_ratio": {
+      "values": [
+        "33%:17%",
+        "40%:20%",
+        "50%:25%",
+        "60%:30%",
+        "70%:40%",
+        "None"
+      ],
+      "avg": [
+        2.697,
+        2.69,
+        2.702,
+        2.706,
+        2.698,
+        2.929
+      ],
+      "std": [
+        0.236,
+        0.221,
+        0.215,
+        0.217,
+        0.203,
+        0.0
+      ],
+      "n": [
+        600,
+        600,
+        600,
+        600,
+        600,
+        1
+      ]
+    },
+    "individual_immunity_val": {
+      "values": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "avg": [
+        2.77,
+        2.738,
+        2.698,
+        2.673,
+        2.615
+      ],
+      "std": [
+        0.233,
+        0.225,
+        0.21,
+        0.195,
+        0.196
+      ],
+      "n": [
+        600,
+        600,
+        601,
+        600,
+        600
+      ]
+    },
+    "tribal_immunity_val": {
+      "values": [
+        "0.5",
+        "1",
+        "1.5",
+        "2",
+        "3"
+      ],
+      "avg": [
+        2.666,
+        2.688,
+        2.689,
+        2.722,
+        2.728
+      ],
+      "std": [
+        0.225,
+        0.227,
+        0.211,
+        0.216,
+        0.209
+      ],
+      "n": [
+        600,
+        601,
+        600,
+        600,
+        600
+      ]
+    },
+    "idol_found_val": {
+      "values": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "avg": [
+        2.727,
+        2.724,
+        2.699,
+        2.682,
+        2.661
+      ],
+      "std": [
+        0.223,
+        0.229,
+        0.213,
+        0.217,
+        0.204
+      ],
+      "n": [
+        600,
+        601,
+        600,
+        600,
+        600
+      ]
+    },
+    "advantage_found_val": {
+      "values": [
+        "0.5",
+        "1",
+        "1.5",
+        "2",
+        "3"
+      ],
+      "avg": [
+        2.692,
+        2.678,
+        2.703,
+        2.722,
+        2.699
+      ],
+      "std": [
+        0.219,
+        0.22,
+        0.211,
+        0.225,
+        0.217
+      ],
+      "n": [
+        600,
+        601,
+        600,
+        600,
+        600
+      ]
+    },
+    "idol_play_val": {
+      "values": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "avg": [
+        2.732,
+        2.721,
+        2.698,
+        2.681,
+        2.661
+      ],
+      "std": [
+        0.221,
+        0.219,
+        0.211,
+        0.218,
+        0.219
+      ],
+      "n": [
+        600,
+        600,
+        601,
+        600,
+        600
+      ]
+    },
+    "advantage_play_val": {
+      "values": [
+        "0.5",
+        "1",
+        "1.5",
+        "2",
+        "3"
+      ],
+      "avg": [
+        2.677,
+        2.699,
+        2.696,
+        2.714,
+        2.707
+      ],
+      "std": [
+        0.218,
+        0.214,
+        0.216,
+        0.219,
+        0.226
+      ],
+      "n": [
+        600,
+        600,
+        600,
+        601,
+        600
+      ]
+    },
+    "wildcard_multiplier": {
+      "values": [
+        "0",
+        "0.25",
+        "0.5",
+        "0.75",
+        "1.0"
+      ],
+      "avg": [
+        2.626,
+        2.654,
+        2.707,
+        2.747,
+        2.76
+      ],
+      "std": [
+        0.206,
+        0.211,
+        0.22,
+        0.215,
+        0.211
+      ],
+      "n": [
+        600,
+        600,
+        601,
+        600,
+        600
+      ]
+    },
+    "replacement_multiplier": {
+      "values": [
+        "0",
+        "0.25",
+        "0.5",
+        "0.75",
+        "1.0"
+      ],
+      "avg": [
+        2.697,
+        2.686,
+        2.714,
+        2.691,
+        2.706
+      ],
+      "std": [
+        0.213,
+        0.215,
+        0.219,
+        0.216,
+        0.23
+      ],
+      "n": [
+        600,
+        600,
+        601,
+        600,
+        600
+      ]
+    },
+    "replacement_deduction": {
+      "values": [
+        "False",
+        "True"
+      ],
+      "avg": [
+        2.698,
+        2.699
+      ],
+      "std": [
+        0.214,
+        0.223
+      ],
+      "n": [
+        1500,
+        1501
+      ]
+    },
+    "sole_survivor_val": {
+      "values": [
+        "0",
+        "0.25",
+        "0.5",
+        "1",
+        "2"
+      ],
+      "avg": [
+        2.515,
+        2.576,
+        2.652,
+        2.755,
+        2.996
+      ],
+      "std": [
+        0.144,
+        0.146,
+        0.139,
+        0.136,
+        0.133
+      ],
+      "n": [
+        600,
+        600,
+        600,
+        601,
+        600
+      ]
+    }
+  },
+  "histogram": {
+    "labels": [
+      2.12,
+      2.19,
+      2.26,
+      2.33,
+      2.39,
+      2.46,
+      2.53,
+      2.6,
+      2.67,
+      2.73,
+      2.8,
+      2.87,
+      2.94,
+      3.0,
+      3.07,
+      3.14,
+      3.21,
+      3.27,
+      3.34,
+      3.41
+    ],
+    "counts": [
+      9,
+      16,
+      52,
+      135,
+      196,
+      294,
+      346,
+      389,
+      357,
+      302,
+      227,
+      208,
+      172,
+      132,
+      70,
+      56,
+      24,
+      13,
+      2,
+      1
+    ]
+  },
+  "top10": [
+    {
+      "diffs": {
+        "tribal_val": 0.25,
+        "jury_val": 4,
+        "merge_val": 1,
+        "final_tribal_val": 2,
+        "first_val": 20,
+        "individual_immunity_val": 1,
+        "idol_play_val": 2,
+        "advantage_play_val": 3,
+        "wildcard_multiplier": 0.75,
+        "replacement_multiplier": 1.0,
+        "sole_survivor_val": 2,
+        "second_val": 10.0,
+        "third_val": 5.0
+      },
+      "composite": 3.478,
+      "metrics": {
+        "early_loser_avg_rank": 0.588,
+        "lead_changes": 0.054,
+        "rank_volatility": 0.182,
+        "comeback_rate": 0.433,
+        "suspense": 0.411,
+        "midpoint_competitive_pct": 0.289,
+        "late_game_gap": 0.282,
+        "final_spread": 0.761,
+        "non_draft_pct": 0.213,
+        "composite": 3.478
+      }
+    },
+    {
+      "diffs": {
+        "tribal_val": 1.5,
+        "post_merge_tribal_val": 0.5,
+        "jury_val": 4,
+        "merge_val": 1,
+        "first_val": 20,
+        "individual_immunity_val": 1,
+        "tribal_immunity_val": 0.5,
+        "advantage_found_val": 2,
+        "idol_play_val": 2,
+        "advantage_play_val": 1,
+        "wildcard_multiplier": 1.0,
+        "replacement_multiplier": 1.0,
+        "sole_survivor_val": 2,
+        "second_val": 10.0,
+        "third_val": 5.0
+      },
+      "composite": 3.394,
+      "metrics": {
+        "early_loser_avg_rank": 0.592,
+        "lead_changes": 0.053,
+        "rank_volatility": 0.172,
+        "comeback_rate": 0.392,
+        "suspense": 0.383,
+        "midpoint_competitive_pct": 0.317,
+        "late_game_gap": 0.266,
+        "final_spread": 0.697,
+        "non_draft_pct": 0.233,
+        "composite": 3.394
+      }
+    },
+    {
+      "diffs": {
+        "post_merge_tribal_val": 0.5,
+        "individual_immunity_val": 1,
+        "idol_found_val": 1,
+        "advantage_found_val": 2,
+        "idol_play_val": 5,
+        "advantage_play_val": 0.5,
+        "wildcard_multiplier": 1.0,
+        "replacement_multiplier": 0.75,
+        "sole_survivor_val": 2,
+        "second_val": 6.0,
+        "third_val": 3.0
+      },
+      "composite": 3.38,
+      "metrics": {
+        "early_loser_avg_rank": 0.59,
+        "lead_changes": 0.044,
+        "rank_volatility": 0.153,
+        "comeback_rate": 0.405,
+        "suspense": 0.395,
+        "midpoint_competitive_pct": 0.292,
+        "late_game_gap": 0.275,
+        "final_spread": 0.72,
+        "non_draft_pct": 0.24,
+        "composite": 3.38
+      }
+    },
+    {
+      "diffs": {
+        "tribal_val": 0.75,
+        "post_merge_tribal_val": 1.5,
+        "jury_val": 3,
+        "merge_val": 3,
+        "final_tribal_val": 5,
+        "first_val": 20,
+        "individual_immunity_val": 2,
+        "tribal_immunity_val": 1.5,
+        "idol_found_val": 1,
+        "advantage_found_val": 3,
+        "idol_play_val": 1,
+        "advantage_play_val": 1.5,
+        "wildcard_multiplier": 1.0,
+        "replacement_multiplier": 0.75,
+        "sole_survivor_val": 2,
+        "second_val": 6.5,
+        "third_val": 3.5
+      },
+      "composite": 3.337,
+      "metrics": {
+        "early_loser_avg_rank": 0.592,
+        "lead_changes": 0.056,
+        "rank_volatility": 0.185,
+        "comeback_rate": 0.381,
+        "suspense": 0.369,
+        "midpoint_competitive_pct": 0.312,
+        "late_game_gap": 0.269,
+        "final_spread": 0.713,
+        "non_draft_pct": 0.227,
+        "composite": 3.337
+      }
+    },
+    {
+      "diffs": {
+        "post_merge_tribal_val": 0.5,
+        "merge_val": 3,
+        "final_tribal_val": 8,
+        "individual_immunity_val": 2,
+        "tribal_immunity_val": 2,
+        "advantage_found_val": 0.5,
+        "idol_play_val": 2,
+        "advantage_play_val": 1,
+        "replacement_multiplier": 0,
+        "replacement_deduction": false,
+        "sole_survivor_val": 2,
+        "second_val": 6.0,
+        "third_val": 3.0
+      },
+      "composite": 3.333,
+      "metrics": {
+        "early_loser_avg_rank": 0.592,
+        "lead_changes": 0.055,
+        "rank_volatility": 0.176,
+        "comeback_rate": 0.399,
+        "suspense": 0.388,
+        "midpoint_competitive_pct": 0.298,
+        "late_game_gap": 0.283,
+        "final_spread": 0.726,
+        "non_draft_pct": 0.163,
+        "composite": 3.333
+      }
+    },
+    {
+      "diffs": {
+        "tribal_val": 0.75,
+        "post_merge_tribal_val": 1.5,
+        "jury_val": 3,
+        "merge_val": 4,
+        "final_tribal_val": 2,
+        "first_val": 20,
+        "individual_immunity_val": 1,
+        "tribal_immunity_val": 3,
+        "advantage_found_val": 0.5,
+        "idol_play_val": 1,
+        "advantage_play_val": 1,
+        "wildcard_multiplier": 1.0,
+        "replacement_multiplier": 0,
+        "sole_survivor_val": 2,
+        "second_val": 6.5,
+        "third_val": 3.5
+      },
+      "composite": 3.331,
+      "metrics": {
+        "early_loser_avg_rank": 0.597,
+        "lead_changes": 0.051,
+        "rank_volatility": 0.169,
+        "comeback_rate": 0.378,
+        "suspense": 0.37,
+        "midpoint_competitive_pct": 0.315,
+        "late_game_gap": 0.266,
+        "final_spread": 0.675,
+        "non_draft_pct": 0.219,
+        "composite": 3.331
+      }
+    },
+    {
+      "diffs": {
+        "tribal_val": 0.25,
+        "post_merge_tribal_val": 0.5,
+        "jury_val": 3,
+        "merge_val": 5,
+        "final_tribal_val": 1,
+        "first_val": 20,
+        "individual_immunity_val": 1,
+        "tribal_immunity_val": 0.5,
+        "idol_found_val": 4,
+        "idol_play_val": 1,
+        "advantage_play_val": 1,
+        "replacement_multiplier": 0.75,
+        "sole_survivor_val": 2,
+        "second_val": 10.0,
+        "third_val": 5.0
+      },
+      "composite": 3.329,
+      "metrics": {
+        "early_loser_avg_rank": 0.588,
+        "lead_changes": 0.05,
+        "rank_volatility": 0.166,
+        "comeback_rate": 0.408,
+        "suspense": 0.407,
+        "midpoint_competitive_pct": 0.276,
+        "late_game_gap": 0.294,
+        "final_spread": 0.769,
+        "non_draft_pct": 0.179,
+        "composite": 3.329
+      }
+    },
+    {
+      "diffs": {
+        "tribal_val": 0.25,
+        "post_merge_tribal_val": 1.5,
+        "jury_val": 3,
+        "final_tribal_val": 1,
+        "individual_immunity_val": 1,
+        "tribal_immunity_val": 1.5,
+        "idol_play_val": 2,
+        "advantage_play_val": 0.5,
+        "wildcard_multiplier": 0.75,
+        "replacement_multiplier": 0,
+        "replacement_deduction": false,
+        "sole_survivor_val": 2,
+        "second_val": 9.0,
+        "third_val": 4.5
+      },
+      "composite": 3.328,
+      "metrics": {
+        "early_loser_avg_rank": 0.591,
+        "lead_changes": 0.05,
+        "rank_volatility": 0.172,
+        "comeback_rate": 0.395,
+        "suspense": 0.384,
+        "midpoint_competitive_pct": 0.295,
+        "late_game_gap": 0.28,
+        "final_spread": 0.732,
+        "non_draft_pct": 0.204,
+        "composite": 3.328
+      }
+    },
+    {
+      "diffs": {
+        "tribal_val": 1.5,
+        "post_merge_tribal_val": 0.5,
+        "jury_val": 4,
+        "merge_val": 1,
+        "first_val": 20,
+        "individual_immunity_val": 1,
+        "tribal_immunity_val": 0.5,
+        "idol_found_val": 5,
+        "idol_play_val": 1,
+        "advantage_play_val": 3,
+        "wildcard_multiplier": 1.0,
+        "sole_survivor_val": 2,
+        "second_val": 6.5,
+        "third_val": 3.5
+      },
+      "composite": 3.323,
+      "metrics": {
+        "early_loser_avg_rank": 0.592,
+        "lead_changes": 0.047,
+        "rank_volatility": 0.156,
+        "comeback_rate": 0.384,
+        "suspense": 0.376,
+        "midpoint_competitive_pct": 0.307,
+        "late_game_gap": 0.269,
+        "final_spread": 0.693,
+        "non_draft_pct": 0.23,
+        "composite": 3.323
+      }
+    },
+    {
+      "diffs": {
+        "tribal_val": 0.25,
+        "post_merge_tribal_val": 0.5,
+        "merge_val": 1,
+        "final_tribal_val": 8,
+        "tribal_immunity_val": 3,
+        "idol_found_val": 3,
+        "advantage_found_val": 1.5,
+        "advantage_play_val": 0.5,
+        "wildcard_multiplier": 1.0,
+        "replacement_multiplier": 1.0,
+        "sole_survivor_val": 2,
+        "third_val": 2.5
+      },
+      "composite": 3.319,
+      "metrics": {
+        "early_loser_avg_rank": 0.593,
+        "lead_changes": 0.047,
+        "rank_volatility": 0.161,
+        "comeback_rate": 0.387,
+        "suspense": 0.374,
+        "midpoint_competitive_pct": 0.3,
+        "late_game_gap": 0.271,
+        "final_spread": 0.694,
+        "non_draft_pct": 0.226,
+        "composite": 3.319
+      }
+    }
+  ],
+  "default_rank": null,
+  "recommended": {
+    "tribal_val": 0.25,
+    "post_merge_tribal_val": 1,
+    "jury_val": 4,
+    "merge_val": 1,
+    "final_tribal_val": 2,
+    "first_val": 20,
+    "individual_immunity_val": 1,
+    "tribal_immunity_val": 1,
+    "idol_found_val": 2,
+    "advantage_found_val": 1,
+    "idol_play_val": 2,
+    "advantage_play_val": 3,
+    "wildcard_multiplier": 0.75,
+    "replacement_multiplier": 1.0,
+    "replacement_deduction": true,
+    "sole_survivor_val": 2,
+    "second_val": 10.0,
+    "third_val": 5.0
+  },
+  "timelines": [
+    {
+      "season": "Season 42",
+      "labels": [
+        "Start",
+        "Elim 1",
+        "Elim 2",
+        "Elim 3",
+        "Elim 4",
+        "Elim 5",
+        "Elim 6",
+        "Elim 7",
+        "Elim 8",
+        "Elim 9",
+        "Elim 10",
+        "Elim 11",
+        "Elim 12",
+        "Elim 13",
+        "Elim 14",
+        "Elim 15",
+        "Elim 16",
+        "Elim 17",
+        "Elim 18"
+      ],
+      "datasets": [
+        {
+          "name": "Player 6",
+          "points": [
+            0.0,
+            8.4,
+            16.6,
+            24.5,
+            32.1,
+            39.4,
+            46.1,
+            52.3,
+            68.0,
+            76.4,
+            84.4,
+            92.4,
+            99.3,
+            104.4,
+            108.5,
+            111.9,
+            121.2,
+            123.3,
+            184.4
+          ]
+        },
+        {
+          "name": "Player 2",
+          "points": [
+            0.0,
+            5.6,
+            11.2,
+            16.8,
+            22.4,
+            27.8,
+            32.7,
+            37.7,
+            48.4,
+            55.2,
+            61.9,
+            68.6,
+            74.4,
+            78.2,
+            82.0,
+            85.8,
+            89.6,
+            104.5,
+            165.6
+          ]
+        },
+        {
+          "name": "Player 5",
+          "points": [
+            0.0,
+            6.3,
+            12.4,
+            18.4,
+            24.3,
+            29.6,
+            34.9,
+            40.0,
+            54.7,
+            62.8,
+            69.8,
+            75.2,
+            80.0,
+            83.7,
+            86.8,
+            88.9,
+            90.6,
+            103.3,
+            103.3
+          ]
+        },
+        {
+          "name": "Player 1",
+          "points": [
+            0.0,
+            4.3,
+            8.3,
+            12.3,
+            16.3,
+            20.3,
+            24.4,
+            28.4,
+            40.7,
+            48.3,
+            55.1,
+            60.6,
+            65.3,
+            69.0,
+            71.2,
+            71.6,
+            71.6,
+            71.6,
+            71.6
+          ]
+        },
+        {
+          "name": "Player 3",
+          "points": [
+            0.0,
+            3.3,
+            6.6,
+            9.9,
+            12.9,
+            15.4,
+            18.0,
+            20.3,
+            25.9,
+            28.5,
+            31.0,
+            32.8,
+            34.1,
+            35.3,
+            36.6,
+            37.8,
+            45.1,
+            45.1,
+            45.1
+          ]
+        },
+        {
+          "name": "Player 4",
+          "points": [
+            0.0,
+            2.9,
+            5.5,
+            7.9,
+            10.0,
+            12.1,
+            13.9,
+            15.3,
+            20.1,
+            21.9,
+            22.4,
+            22.4,
+            22.4,
+            22.4,
+            22.4,
+            22.4,
+            22.4,
+            22.4,
+            22.4
+          ]
+        }
+      ]
+    },
+    {
+      "season": "Season 45",
+      "labels": [
+        "Start",
+        "Elim 1",
+        "Elim 2",
+        "Elim 3",
+        "Elim 4",
+        "Elim 5",
+        "Elim 6",
+        "Elim 7",
+        "Elim 8",
+        "Elim 9",
+        "Elim 10",
+        "Elim 11",
+        "Elim 12",
+        "Elim 13",
+        "Elim 14",
+        "Elim 15",
+        "Elim 16",
+        "Elim 17",
+        "Elim 18"
+      ],
+      "datasets": [
+        {
+          "name": "Player 6",
+          "points": [
+            0.0,
+            10.2,
+            20.4,
+            30.4,
+            37.7,
+            44.7,
+            50.9,
+            57.0,
+            74.9,
+            84.8,
+            92.5,
+            99.9,
+            106.2,
+            112.5,
+            117.8,
+            121.6,
+            125.0,
+            139.5,
+            199.9
+          ]
+        },
+        {
+          "name": "Player 1",
+          "points": [
+            0.0,
+            4.6,
+            9.2,
+            13.9,
+            18.2,
+            22.6,
+            27.0,
+            31.3,
+            44.0,
+            51.2,
+            56.5,
+            61.5,
+            66.4,
+            71.4,
+            75.3,
+            78.8,
+            82.2,
+            96.7,
+            157.1
+          ]
+        },
+        {
+          "name": "Player 5",
+          "points": [
+            0.0,
+            8.0,
+            15.7,
+            23.4,
+            30.8,
+            38.3,
+            45.5,
+            51.1,
+            63.5,
+            70.4,
+            77.2,
+            83.1,
+            87.6,
+            91.1,
+            93.9,
+            96.0,
+            103.8,
+            103.8,
+            103.8
+          ]
+        },
+        {
+          "name": "Player 2",
+          "points": [
+            0.0,
+            6.0,
+            12.1,
+            18.1,
+            24.1,
+            29.9,
+            34.9,
+            39.6,
+            49.4,
+            54.6,
+            59.1,
+            62.2,
+            64.1,
+            65.9,
+            67.7,
+            69.5,
+            77.3,
+            77.3,
+            77.3
+          ]
+        },
+        {
+          "name": "Player 4",
+          "points": [
+            0.0,
+            6.1,
+            12.1,
+            17.9,
+            21.0,
+            24.2,
+            27.3,
+            30.5,
+            40.2,
+            45.1,
+            48.9,
+            52.8,
+            55.9,
+            57.9,
+            59.2,
+            59.6,
+            59.6,
+            59.6,
+            59.6
+          ]
+        },
+        {
+          "name": "Player 3",
+          "points": [
+            0.0,
+            3.0,
+            5.7,
+            8.4,
+            11.1,
+            13.6,
+            15.2,
+            15.6,
+            17.7,
+            18.8,
+            19.8,
+            20.9,
+            21.0,
+            21.0,
+            21.0,
+            21.0,
+            21.0,
+            21.0,
+            21.0
+          ]
+        }
+      ]
+    },
+    {
+      "season": "Season 47",
+      "labels": [
+        "Start",
+        "Elim 1",
+        "Elim 2",
+        "Elim 3",
+        "Elim 4",
+        "Elim 5",
+        "Elim 6",
+        "Elim 7",
+        "Elim 8",
+        "Elim 9",
+        "Elim 10",
+        "Elim 11",
+        "Elim 12",
+        "Elim 13",
+        "Elim 14",
+        "Elim 15",
+        "Elim 16",
+        "Elim 17",
+        "Elim 18"
+      ],
+      "datasets": [
+        {
+          "name": "Player 6",
+          "points": [
+            0.0,
+            10.7,
+            21.1,
+            30.8,
+            40.0,
+            49.2,
+            58.2,
+            64.7,
+            82.4,
+            92.8,
+            102.1,
+            110.2,
+            118.2,
+            125.2,
+            131.8,
+            137.3,
+            148.3,
+            162.8,
+            223.6
+          ]
+        },
+        {
+          "name": "Player 2",
+          "points": [
+            0.0,
+            4.2,
+            8.4,
+            12.3,
+            15.6,
+            18.8,
+            22.1,
+            25.1,
+            32.4,
+            36.9,
+            41.4,
+            45.9,
+            50.4,
+            54.9,
+            58.4,
+            60.6,
+            62.4,
+            64.2,
+            125.1
+          ]
+        },
+        {
+          "name": "Player 3",
+          "points": [
+            0.0,
+            4.0,
+            8.1,
+            11.9,
+            15.2,
+            18.6,
+            21.9,
+            25.3,
+            35.6,
+            42.0,
+            48.3,
+            54.6,
+            60.0,
+            64.7,
+            69.3,
+            73.0,
+            82.2,
+            94.9,
+            94.9
+          ]
+        },
+        {
+          "name": "Player 5",
+          "points": [
+            0.0,
+            7.7,
+            15.3,
+            22.8,
+            29.3,
+            35.0,
+            40.2,
+            45.1,
+            57.7,
+            64.6,
+            70.8,
+            75.9,
+            79.3,
+            81.2,
+            81.8,
+            81.8,
+            81.8,
+            81.8,
+            81.8
+          ]
+        },
+        {
+          "name": "Player 4",
+          "points": [
+            0.0,
+            4.3,
+            8.5,
+            12.8,
+            17.0,
+            21.0,
+            24.5,
+            27.9,
+            37.8,
+            43.1,
+            47.5,
+            50.9,
+            53.7,
+            55.4,
+            55.8,
+            55.8,
+            55.8,
+            55.8,
+            55.8
+          ]
+        },
+        {
+          "name": "Player 1",
+          "points": [
+            0.0,
+            7.0,
+            13.8,
+            20.1,
+            26.2,
+            31.7,
+            37.0,
+            39.6,
+            44.3,
+            46.6,
+            47.9,
+            47.9,
+            47.9,
+            47.9,
+            47.9,
+            47.9,
+            47.9,
+            47.9,
+            47.9
+          ]
+        }
+      ]
+    },
+    {
+      "season": "Season 49",
+      "labels": [
+        "Start",
+        "Elim 1",
+        "Elim 2",
+        "Elim 3",
+        "Elim 4",
+        "Elim 5",
+        "Elim 6",
+        "Elim 7",
+        "Elim 8",
+        "Elim 9",
+        "Elim 10",
+        "Elim 11",
+        "Elim 12",
+        "Elim 13",
+        "Elim 14",
+        "Elim 15",
+        "Elim 16",
+        "Elim 17",
+        "Elim 18"
+      ],
+      "datasets": [
+        {
+          "name": "Player 6",
+          "points": [
+            0.0,
+            7.9,
+            15.8,
+            23.7,
+            31.6,
+            39.3,
+            46.3,
+            53.1,
+            70.0,
+            79.7,
+            89.3,
+            98.0,
+            105.0,
+            110.3,
+            114.9,
+            118.8,
+            128.0,
+            129.6,
+            190.3
+          ]
+        },
+        {
+          "name": "Player 5",
+          "points": [
+            0.0,
+            8.3,
+            16.3,
+            24.1,
+            31.6,
+            39.1,
+            46.4,
+            53.2,
+            70.0,
+            80.1,
+            87.6,
+            94.0,
+            100.5,
+            106.1,
+            110.2,
+            112.6,
+            114.2,
+            126.8,
+            126.8
+          ]
+        },
+        {
+          "name": "Player 3",
+          "points": [
+            0.0,
+            4.2,
+            8.5,
+            12.5,
+            16.4,
+            20.4,
+            24.2,
+            27.1,
+            32.5,
+            35.3,
+            37.0,
+            38.6,
+            40.3,
+            42.0,
+            43.6,
+            45.3,
+            47.0,
+            48.6,
+            109.3
+          ]
+        },
+        {
+          "name": "Player 1",
+          "points": [
+            0.0,
+            5.3,
+            10.4,
+            15.5,
+            20.5,
+            25.4,
+            30.3,
+            35.2,
+            47.1,
+            54.0,
+            58.4,
+            61.6,
+            63.9,
+            65.5,
+            67.0,
+            68.6,
+            70.2,
+            82.8,
+            82.8
+          ]
+        },
+        {
+          "name": "Player 2",
+          "points": [
+            0.0,
+            4.8,
+            9.5,
+            14.3,
+            18.8,
+            23.0,
+            26.7,
+            30.4,
+            40.6,
+            47.0,
+            53.5,
+            59.0,
+            63.8,
+            67.6,
+            69.7,
+            70.3,
+            70.3,
+            70.3,
+            70.3
+          ]
+        },
+        {
+          "name": "Player 4",
+          "points": [
+            0.0,
+            3.4,
+            6.8,
+            10.1,
+            13.5,
+            16.9,
+            20.3,
+            23.6,
+            32.6,
+            37.3,
+            42.0,
+            46.6,
+            51.3,
+            55.3,
+            58.6,
+            61.0,
+            68.6,
+            68.6,
+            68.6
+          ]
+        }
+      ]
+    }
+  ]
+}

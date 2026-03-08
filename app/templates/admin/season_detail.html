@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Admin - {{ season.name or 'Season ' ~ season.number }}{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('main.admin_seasons') }}">&larr; All Seasons</a></p>
+<h1>{{ season.name or 'Season ' ~ season.number }} &mdash; Admin</h1>
+
+<div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem;">
+    <a href="{{ url_for('main.admin_picks', season_id=season.id) }}" role="button" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;">Manage Picks</a>
+    <a href="{{ url_for('main.scoring_compare', season_id=season.id) }}" role="button" class="outline" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;">Compare Scoring</a>
+    <form method="POST" action="{{ url_for('main.admin_refresh', season_id=season.id) }}" style="margin:0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="outline" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;">Refresh from survivoR</button>
+    </form>
+</div>
+
+<!-- Season Info -->
+<p style="font-size:0.9rem;color:var(--text-dim);">
+    <strong>{{ season.num_players }}</strong> players &middot;
+    <strong>{{ season.num_episodes }}</strong> episodes &middot;
+    Jury at <strong>{{ season.left_at_jury }}</strong> left &middot;
+    <strong>{{ season.survivors|length }}</strong> survivors loaded &middot;
+    {{ 'Active' if season.is_active else 'Inactive' }}
+</p>
+
+<!-- Scoring -->
+<section>
+    <h2>Scoring Components</h2>
+    <form method="POST" action="{{ url_for('main.admin_season_settings', season_id=season.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <p><small>Set a value to 0 to disable a component. Changes apply immediately to the leaderboard.</small></p>
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.75rem;">
+            <button type="submit" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;width:auto;">Save Settings</button>
+            <button type="button" class="outline" onclick="loadDefaults()" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;width:auto;">Load Default</button>
+            <button type="button" class="outline secondary" onclick="loadLegacy()" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;width:auto;">Load Legacy</button>
+        </div>
+        <table class="scoring-table">
+            <thead><tr><th>Component</th><th>Value</th><th>Description</th></tr></thead>
+            <tbody>
+                {% for key, (label, desc) in config_labels.items() %}
+                <tr>
+                    <td><strong>{{ label }}</strong></td>
+                    <td><input type="number" name="scoring_{{ key }}" id="scoring_{{ key }}" value="{{ current_config.get(key, 0) }}" step="0.25" style="width:5rem;margin:0;padding:0.25rem 0.4rem;font-size:0.85rem;"></td>
+                    <td><small>{{ desc }}</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <script>
+        const DEFAULTS = {{ default_config | tojson }};
+        const LEGACY = {{ legacy_config | tojson }};
+        function loadConfig(cfg) {
+            for (const [key, val] of Object.entries(cfg)) {
+                const el = document.getElementById('scoring_' + key);
+                if (el) el.value = val;
+            }
+        }
+        function loadDefaults() { loadConfig(DEFAULTS); }
+        function loadLegacy() { loadConfig(LEGACY); }
+        </script>
+    </form>
+</section>
+
+<!-- Survivors (read-only) -->
+<section>
+    <h2>Survivors ({{ survivors|length }})</h2>
+    {% if survivors %}
+    <div style="overflow-x: auto;">
+    <table style="font-size:0.85rem;">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Tribe</th>
+                <th>Order</th>
+                <th>Result</th>
+                <th>Jury</th>
+                <th>Imm</th>
+                <th>Idols</th>
+                <th>Conf</th>
+                <th>Fire</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in survivors %}
+            <tr style="{{ 'opacity:0.5;' if s.voted_out_order > 0 else '' }}">
+                <td>{{ s.name }}</td>
+                <td>{% if s.tribe_color %}<span style="color:{{ s.tribe_color }};">{{ s.tribe or '-' }}</span>{% else %}{{ s.tribe or '-' }}{% endif %}</td>
+                <td>{{ s.voted_out_order or '-' }}</td>
+                <td>{{ s.result or '-' }}</td>
+                <td>{{ 'Yes' if s.made_jury else '' }}</td>
+                <td>{{ s.individual_immunity_wins or '' }}</td>
+                <td>{{ s.idols_found or '' }}</td>
+                <td>{{ s.confessional_count or '' }}</td>
+                <td>{{ 'Yes' if s.won_fire else '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p>No survivors yet. Use the Refresh button above to fetch data from survivoR.</p>
+    {% endif %}
+</section>
+
+<!-- Delete -->
+<section>
+    <h2>Danger Zone</h2>
+    <form method="POST" action="{{ url_for('main.admin_delete_season', season_id=season.id) }}"
+          onsubmit="var c = prompt('This will permanently delete {{ season.name or 'Season ' ~ season.number }} and all its survivors and picks.\n\nType \'delete season\' to confirm:'); return c &amp;&amp; c.trim().toLowerCase() === 'delete season';">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="secondary" style="padding:0.3rem 0.75rem;font-size:0.85rem;width:auto;">Delete Season</button>
+    </form>
+</section>
+{% endblock %}

@@ -1,2 +1,39 @@
-# Personal Spreadsheets
-season46.xlsx
+# Downloaded data (auto-fetched by seed.py)
+survivoR.xlsx
+
+# Personal league picks (see picks/README.md)
+picks/*.json
+picks/*.xlsx
+
+# Environment
+.env
+
+# Database
+survivor_fantasy.db
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Flask
+instance/
+
+# Claude Code
+CLAUDE.md
+
+# Local notes
+TODO.md
+
+# macOS
+.DS_Store
+
+# Scoring analysis checkpoints and results
+scoring_results.json
+results/
+
+# Temp files
+tmp/
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.cursor/rules/snyk_rules.mdc

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Season Stats - {{ season.name or 'Season ' ~ season.number }}{% endblock %}
+{% block content %}
+<hgroup>
+    <h1>{{ season.name or 'Season ' ~ season.number }} &mdash; Stats</h1>
+    <p>Castaway statistics from the survivoR database</p>
+</hgroup>
+
+<p><a href="{{ url_for('main.leaderboard', season_id=season.id) }}" class="nav-link-back">&larr; Leaderboard</a></p>
+
+{% if stat_boards %}
+<div class="stats-grid">
+    {% for board in stat_boards %}
+    <article class="stat-board">
+        <header>
+            <h3>{{ board.label }}</h3>
+        </header>
+        <div class="stat-rows">
+            {% for row in board.rows %}
+            {% set surv = row.survivor %}
+            <{% if surv.stats_url %}a href="{{ surv.stats_url }}" target="_blank" rel="noopener"{% else %}div{% endif %}
+                class="stat-row {{ 'eliminated' if surv.voted_out_order > 0 else '' }}">
+                <span class="stat-rank">{{ loop.index }}</span>
+                {% if surv.image_url %}
+                <img src="{{ surv.image_url }}" alt="{{ surv.name }}" class="stat-img"
+                     {% if surv.tribe_color %}style="border-color: {{ surv.tribe_color }};"{% endif %}>
+                {% endif %}
+                <span class="stat-name">{{ surv.name }}</span>
+                {% if surv.tribe %}
+                <span class="stat-tribe" {% if surv.tribe_color %}style="color: {{ surv.tribe_color }};"{% endif %}>{{ surv.tribe }}</span>
+                {% endif %}
+                <span class="stat-value">{{ row.value }}</span>
+            </{% if surv.stats_url %}a{% else %}div{% endif %}>
+            {% endfor %}
+        </div>
+    </article>
+    {% endfor %}
+</div>
+{% else %}
+<p>No stats available for this season yet.</p>
+{% endif %}
+{% endblock %}

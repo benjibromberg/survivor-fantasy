@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Admin - Seasons{% endblock %}
+{% block content %}
+<h1>Manage Seasons</h1>
+
+<section>
+    <h3>Create New Season</h3>
+    <form method="POST" style="max-width: 28rem;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <label style="margin: 0; font-size: 0.85rem;">
+                Season #
+                <input type="number" name="number" required placeholder="50" style="margin: 0; width: 5rem; padding: 0.3rem 0.4rem; font-size: 0.85rem;">
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.3rem; margin: 0; font-size: 0.85rem; white-space: nowrap;">
+                <input type="checkbox" name="fetch_images" checked style="margin: 0;">
+                Fetch images
+            </label>
+            <button type="submit" style="margin: 0; padding: 0.3rem 0.75rem; font-size: 0.85rem; width: auto; white-space: nowrap;">Create</button>
+        </div>
+    </form>
+</section>
+
+{% if seasons %}
+<section>
+    <h3>Existing Seasons</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Survivors</th>
+                <th>Scoring</th>
+                <th>Active</th>
+                <th></th>
+                <th></th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for season in seasons %}
+            <tr>
+                <td>{{ season.number }}</td>
+                <td>{{ season.name or '-' }}</td>
+                <td>{{ season.survivors|length }}</td>
+                <td>{{ scoring_labels.get(season.id, 'Default') }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('main.admin_toggle_active', season_id=season.id) }}" style="margin:0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="checkbox" {% if season.is_active %}checked{% endif %}
+                            onchange="this.form.submit()" style="margin:0">
+                    </form>
+                </td>
+                <td><a href="{{ url_for('main.admin_season_detail', season_id=season.id) }}" role="button" class="outline" style="padding:0.25rem 0.75rem;font-size:0.85rem;">Manage</a></td>
+                <td><a href="{{ url_for('main.admin_players', season_id=season.id) }}" role="button" class="outline" style="padding:0.25rem 0.75rem;font-size:0.85rem;">Players</a></td>
+                <td>
+                    <form method="POST" action="{{ url_for('main.admin_delete_season', season_id=season.id) }}" style="margin:0"
+                          onsubmit="var c = prompt('This will permanently delete {{ season.name or 'Season ' ~ season.number }} and all its survivors and picks.\n\nType \'delete season\' to confirm:'); return c &amp;&amp; c.trim().toLowerCase() === 'delete season';">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="outline secondary" style="padding:0.25rem 0.75rem;font-size:0.85rem;">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+{% endblock %}

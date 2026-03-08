@@ -1,0 +1,7 @@
+__pycache__
+*.pyc
+.git
+.env
+survivor_fantasy.db
+*.xlsx
+.DS_Store

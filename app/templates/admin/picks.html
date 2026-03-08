@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Admin - Manage Picks{% endblock %}
+{% block content %}
+<h1>Manage Picks &mdash; {{ season.name or 'Season ' ~ season.number }}</h1>
+
+{% if not survivors %}
+<p>No survivors loaded yet. <a href="{{ url_for('main.admin_season_detail', season_id=season.id) }}">Scrape data first.</a></p>
+{% elif not users %}
+<p>No users registered yet.</p>
+{% else %}
+
+<!-- Pick summary per user -->
+<section>
+    <h2>Current Picks</h2>
+    <table>
+        <thead>
+            <tr><th>Player</th><th>Draft</th><th>Wildcard</th><th>Repl (½)</th><th>Repl</th><th>Sole Survivor</th></tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            {% set up = picks_by_user[user.id] %}
+            {% set ss = ss_picks_by_user[user.id] %}
+            <tr>
+                <td><strong>{{ user.display_name or user.username }}</strong></td>
+                <td>{{ up.draft|length }} picks</td>
+                <td>{{ survivors|selectattr('id', 'eq', up.wildcard)|map(attribute='name')|first or '—' }}</td>
+                <td>{{ survivors|selectattr('id', 'eq', up.pmr_w)|map(attribute='name')|first or '—' }}</td>
+                <td>{{ survivors|selectattr('id', 'eq', up.pmr_d)|map(attribute='name')|first or '—' }}</td>
+                <td>{{ ss[-1].survivor_name if ss else '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<!-- Edit picks for a user -->
+<section>
+    <h2>Set Picks for Player</h2>
+    <form method="POST" id="picks-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <label>
+            Player
+            <select name="user_id" id="user-select">
+                {% for user in users %}
+                <option value="{{ user.id }}"
+                    data-draft="{{ picks_by_user[user.id].draft | tojson }}"
+                    data-wildcard="{{ picks_by_user[user.id].wildcard or '' }}"
+                    data-pmr_w="{{ picks_by_user[user.id].pmr_w or '' }}"
+                    data-pmr_d="{{ picks_by_user[user.id].pmr_d or '' }}">
+                    {{ user.display_name or user.username }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <h3>Draft Picks</h3>
+        <div class="survivor-grid">
+            {% for survivor in survivors %}
+            <label class="survivor-card {{ 'eliminated' if survivor.voted_out_order > 0 else '' }}">
+                <input type="checkbox" name="draft" value="{{ survivor.id }}" class="draft-check">
+                {% if survivor.image_url %}
+                <img src="{{ survivor.image_url }}" alt="{{ survivor.name }}" class="survivor-headshot">
+                {% endif %}
+                <div class="survivor-info">
+                    <span class="survivor-name">{{ survivor.name }}</span>
+                    {% if survivor.tribe %}
+                    <span class="survivor-tribe">{{ survivor.tribe }}</span>
+                    {% endif %}
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+
+        <h3>Wildcard Pick</h3>
+        <select name="wildcard" class="pick-select" data-type="wildcard">
+            <option value="">-- None --</option>
+            {% for survivor in survivors %}
+            <option value="{{ survivor.id }}">
+                {{ survivor.name }}{% if survivor.tribe %} ({{ survivor.tribe }}){% endif %}
+            </option>
+            {% endfor %}
+        </select>
+
+        <h3>Post-Merge Replacement (½ pts)</h3>
+        <p><small>Replaces an eliminated pick. Earns half points minus pre-jury tribals.</small></p>
+        <select name="pmr_w" class="pick-select" data-type="pmr_w">
+            <option value="">-- None --</option>
+            {% for survivor in survivors %}
+            <option value="{{ survivor.id }}">
+                {{ survivor.name }}{% if survivor.tribe %} ({{ survivor.tribe }}){% endif %}
+            </option>
+            {% endfor %}
+        </select>
+
+        <h3>Post-Merge Replacement (full pts)</h3>
+        <p><small>Replaces an eliminated pick. Earns full points minus pre-jury tribals.</small></p>
+        <select name="pmr_d" class="pick-select" data-type="pmr_d">
+            <option value="">-- None --</option>
+            {% for survivor in survivors %}
+            <option value="{{ survivor.id }}">
+                {{ survivor.name }}{% if survivor.tribe %} ({{ survivor.tribe }}){% endif %}
+            </option>
+            {% endfor %}
+        </select>
+
+        <h3>Sole Survivor Pick</h3>
+        <p><small>Who will win? Players earn 1 pt per consecutive episode they had the winner picked (streak must include finale). Add a new entry each time the player changes their pick.</small></p>
+
+        <div id="ss-history"></div>
+
+        <div class="grid">
+            <label>
+                Castaway
+                <select name="sole_survivor">
+                    <option value="">-- None --</option>
+                    {% for survivor in survivors %}
+                    <option value="{{ survivor.id }}">
+                        {{ survivor.name }}{% if survivor.tribe %} ({{ survivor.tribe }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Starting at episode
+                <input type="number" name="ss_episode" min="1" max="{{ season.num_episodes or 13 }}" placeholder="e.g. 1">
+            </label>
+        </div>
+        <p><small>This adds/updates a pick for the given episode. Previous picks at other episodes are preserved.</small></p>
+
+        <br>
+        <button type="submit">Save Picks</button>
+    </form>
+</section>
+
+<script>
+const userSelect = document.getElementById('user-select');
+const ssPicks = {{ ss_picks_by_user | tojson }};
+
+function loadUserPicks() {
+    const opt = userSelect.selectedOptions[0];
+    const uid = opt.value;
+    const draft = JSON.parse(opt.dataset.draft);
+    const wildcard = opt.dataset.wildcard;
+    const pmrW = opt.dataset.pmr_w;
+    const pmrD = opt.dataset.pmr_d;
+
+    document.querySelectorAll('.draft-check').forEach(cb => {
+        cb.checked = draft.includes(parseInt(cb.value));
+    });
+    document.querySelector('select[name="wildcard"]').value = wildcard;
+    document.querySelector('select[name="pmr_w"]').value = pmrW;
+    document.querySelector('select[name="pmr_d"]').value = pmrD;
+
+    // Show SS pick history
+    const ssDiv = document.getElementById('ss-history');
+    const picks = ssPicks[uid] || [];
+    if (picks.length === 0) {
+        ssDiv.innerHTML = '<p><small>No sole survivor picks yet.</small></p>';
+    } else {
+        let html = '<table><thead><tr><th>Episode</th><th>Pick</th><th></th></tr></thead><tbody>';
+        picks.forEach(p => {
+            html += `<tr><td>Ep ${p.episode}+</td><td>${p.survivor_name}</td><td>
+                <form method="POST" action="/admin/picks/{{ season.id }}/ss/${p.id}/delete" style="margin:0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="outline secondary" style="padding:0.15rem 0.4rem;font-size:0.75em"
+                            onclick="return confirm('Delete this SS pick?')">×</button>
+                </form></td></tr>`;
+        });
+        html += '</tbody></table>';
+        ssDiv.innerHTML = html;
+    }
+
+    // Default the SS select to current pick and clear episode
+    document.querySelector('select[name="sole_survivor"]').value = picks.length ? picks[picks.length - 1].survivor_id : '';
+    document.querySelector('input[name="ss_episode"]').value = '';
+}
+
+userSelect.addEventListener('change', loadUserPicks);
+loadUserPicks();
+</script>
+{% endif %}
+{% endblock %}

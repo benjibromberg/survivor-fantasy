@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Compare Scoring - {{ season.name or 'Season ' ~ season.number }}{% endblock %}
+{% block content %}
+<hgroup>
+    <h1>Compare Scoring Configs</h1>
+    <p>{{ season.name or 'Season ' ~ season.number }} &mdash; see how different scoring rules change the standings</p>
+</hgroup>
+
+<p><a href="{{ url_for('main.leaderboard', season_id=season.id) }}" class="nav-link-back">&larr; Leaderboard</a></p>
+
+{% for comp in comparisons %}
+<article>
+    <header>
+        <h2>{{ comp.name }}</h2>
+        <div class="compare-config">
+            {% for key, val in comp.config.items() %}
+            {% if val %}
+            <span class="config-tag" title="{{ config_labels.get(key, ('',''))[1] }}">
+                {{ config_labels.get(key, (key,''))[0] }}: {{ val }}
+            </span>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </header>
+
+    <div>
+        <h3>Final Standings</h3>
+        {% for entry in comp.entries %}
+        <div class="compare-row">
+            <span class="compare-rank">{{ loop.index }}</span>
+            <span class="compare-name">{{ entry.user.display_name or entry.user.username }}</span>
+            <span class="compare-pts">{{ "%.1f"|format(entry.total_points) }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="charts-row" style="margin-top: 1rem;">
+        <div class="chart-card">
+            <h3>Season Progression</h3>
+            <div class="chart-wrap"><canvas id="chart-{{ loop.index0 }}"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <h3>Point Breakdown</h3>
+            <div class="chart-wrap"><canvas id="breakdown-{{ loop.index0 }}"></canvas></div>
+        </div>
+    </div>
+</article>
+{% endfor %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+const labels = {{ labels | tojson }};
+const progressionData = {{ comparisons | map(attribute='datasets') | list | tojson }};
+const breakdownData = {{ comparisons | map(attribute='breakdown') | list | tojson }};
+const breakdownLabels = {{ breakdown_labels | tojson }};
+const colors = [
+    '#e85d26', '#f4a261', '#fca311', '#2d6a4f',
+    '#4ea8de', '#a78bfa', '#ef4444', '#10b981',
+];
+const categoryColors = [
+    '#4ea8de', '#2d6a4f', '#e85d26', '#f4a261',
+    '#fca311', '#a78bfa', '#ef4444', '#10b981',
+    '#818cf8', '#fb923c', '#34d399', '#f87171',
+    '#60a5fa', '#c084fc',
+];
+const categories = Object.keys(breakdownLabels);
+const catLabels = Object.values(breakdownLabels);
+
+progressionData.forEach((datasets, ci) => {
+    const canvas = document.getElementById('chart-' + ci);
+    if (!canvas) return;
+
+    new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: datasets.map((ds, i) => ({
+                label: ds.name,
+                data: ds.points,
+                borderColor: colors[i % colors.length],
+                backgroundColor: colors[i % colors.length] + '22',
+                tension: 0.3,
+                pointRadius: 2,
+                pointHoverRadius: 5,
+                borderWidth: 2,
+            })),
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                    labels: { color: '#e8d5b7', usePointStyle: true, padding: 10, font: { size: 11 } },
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (item) => `${item.dataset.label}: ${item.raw} pts`,
+                    },
+                },
+            },
+            scales: {
+                y: {
+                    grid: { color: 'rgba(255,255,255,0.08)' },
+                    ticks: { color: '#9aa5b1' },
+                    title: { display: true, text: 'Points', color: '#9aa5b1' },
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#9aa5b1', maxRotation: 45 },
+                },
+            },
+        },
+    });
+
+    // Breakdown stacked bar
+    const bdCanvas = document.getElementById('breakdown-' + ci);
+    if (!bdCanvas || !breakdownData[ci]) return;
+    const bd = breakdownData[ci];
+
+    new Chart(bdCanvas, {
+        type: 'bar',
+        data: {
+            labels: bd.map(d => d.name),
+            datasets: categories.map((key, i) => ({
+                label: catLabels[i],
+                data: bd.map(d => Math.round((d.breakdown[key] || 0) * 10) / 10),
+                backgroundColor: categoryColors[i % categoryColors.length],
+            })),
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true, position: 'bottom', labels: {
+                    color: '#9aa5b1', boxWidth: 12, font: { size: 11 },
+                    filter: (item, data) => data.datasets[item.datasetIndex].data.some(v => v > 0),
+                }},
+                tooltip: {
+                    callbacks: {
+                        label: (item) => `${item.dataset.label}: ${item.raw} pts`,
+                    },
+                },
+            },
+            scales: {
+                x: { stacked: true, grid: { display: false }, ticks: { color: '#9aa5b1' } },
+                y: { stacked: true, grid: { color: 'rgba(255,255,255,0.08)' }, ticks: { color: '#9aa5b1' },
+                     title: { display: true, text: 'Points', color: '#9aa5b1' } },
+            },
+        },
+    });
+});
+</script>
+{% endblock %}

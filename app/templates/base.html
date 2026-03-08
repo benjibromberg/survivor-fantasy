@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Survivor Fantasy{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;700;900&display=swap">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav>
+        <ul>
+            <li>
+                <a href="{{ url_for('main.index') }}" class="site-logo">
+                    <svg class="logo-torch" viewBox="0 0 24 44" width="18" height="33" aria-hidden="true">
+                        <path d="M12 0C12 0 4 9 4 16c0 4.5 3.6 7.5 8 7.5s8-3 8-7.5C20 9 12 0 12 0z" fill="var(--fire-bright)"/>
+                        <path d="M12 5C12 5 8 11 8 15c0 2.2 1.8 4 4 4s4-1.8 4-4C16 11 12 5 12 5z" fill="var(--torch-gold)"/>
+                        <path d="M6 22h12l-1.5 5h-9z" fill="var(--sand-warm)" opacity="0.85"/>
+                        <rect x="5.5" y="21" width="13" height="2" rx="1" fill="var(--sand-warm)"/>
+                        <rect x="10" y="27" width="4" height="16" rx="1.5" fill="var(--sand-warm)" opacity="0.65"/>
+                        <rect x="9.5" y="31" width="5" height="1.2" rx="0.5" fill="var(--sand-warm)" opacity="0.4"/>
+                        <rect x="9.5" y="35" width="5" height="1.2" rx="0.5" fill="var(--sand-warm)" opacity="0.4"/>
+                    </svg>
+                    <span class="logo-text">Survivor Fantasy</span>
+                    <span class="logo-motto">Outwit · Outplay · Outlast</span>
+                </a>
+            </li>
+        </ul>
+        <ul class="nav-links">
+            {% if all_seasons|length > 1 %}
+            <li class="nav-dropdown-wrap">
+                <button class="nav-btn nav-dropdown-trigger" id="seasons-trigger">Season <span class="caret">▾</span></button>
+                <div class="nav-dropdown" id="seasons-dropdown">
+                    {% for s in all_seasons %}
+                    <a href="{{ url_for('main.leaderboard', season_id=s.id) }}" class="nav-dropdown-item">
+                        {{ s.name or 'Season ' ~ s.number }}{% if s.is_active %} <span class="nav-dropdown-badge">Active</span>{% endif %}
+                    </a>
+                    {% endfor %}
+                </div>
+            </li>
+            {% endif %}
+            <li><a href="{{ url_for('main.rules') }}" class="nav-btn">Rules</a></li>
+            <li><a href="{{ url_for('main.scoring_analysis') }}" class="nav-btn">Analysis</a></li>
+            {% if current_user.is_authenticated and current_user.is_admin %}
+                <li><a href="{{ url_for('main.admin_seasons') }}" class="nav-btn">Admin</a></li>
+                <li><a href="{{ url_for('main.settings') }}" class="nav-btn nav-btn-user">{{ current_user.display_name or current_user.username }}</a></li>
+                <li><a href="{{ url_for('auth.logout') }}" class="nav-btn nav-btn-dim">Logout</a></li>
+            {% else %}
+                {% if config.DEV_LOGIN %}
+                <li><a href="{{ url_for('auth.dev_login') }}" class="nav-btn">Dev Login</a></li>
+                {% else %}
+                <li><a href="{{ url_for('auth.login') }}" class="nav-btn">Login</a></li>
+                {% endif %}
+            {% endif %}
+        </ul>
+    </nav>
+
+    <aside class="page-toc" id="page-toc">
+        <div class="toc-header">
+            <span class="toc-title">Contents</span>
+            <button class="toc-close" id="toc-close" aria-label="Close navigation">&times;</button>
+        </div>
+        <nav class="toc-nav" id="toc-nav"></nav>
+    </aside>
+    <button class="toc-toggle" id="toc-toggle" aria-label="Toggle contents" title="Contents">
+        <svg viewBox="0 0 20 16" width="18" height="14" fill="currentColor"><rect y="0" width="20" height="2" rx="1"/><rect y="7" width="14" height="2" rx="1"/><rect y="14" width="18" height="2" rx="1"/></svg>
+    </button>
+
+    <main class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <p class="flash-{{ category }}"><small>{{ message }}</small></p>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+    /* Seasons dropdown */
+    (function() {
+        var trigger = document.getElementById('seasons-trigger');
+        var dropdown = document.getElementById('seasons-dropdown');
+        if (!trigger || !dropdown) return;
+        trigger.addEventListener('click', function(e) {
+            e.stopPropagation();
+            dropdown.classList.toggle('open');
+        });
+        document.addEventListener('click', function() {
+            dropdown.classList.remove('open');
+        });
+        dropdown.addEventListener('click', function(e) { e.stopPropagation(); });
+    })();
+    </script>
+
+    <script>
+    (function() {
+        const toc = document.getElementById('page-toc');
+        const tocNav = document.getElementById('toc-nav');
+        const toggle = document.getElementById('toc-toggle');
+        const close = document.getElementById('toc-close');
+        const headings = document.querySelectorAll('main h2');
+
+        // Only show TOC if there are headings
+        if (headings.length < 2) {
+            toggle.style.display = 'none';
+            return;
+        }
+
+        // Build TOC links from h2 elements
+        headings.forEach(function(h, i) {
+            if (!h.id) h.id = h.textContent.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            const a = document.createElement('a');
+            a.href = '#' + h.id;
+            a.className = 'toc-link';
+            a.textContent = h.textContent;
+            a.addEventListener('click', function() {
+                if (window.innerWidth < 1200) toc.classList.remove('open');
+            });
+            tocNav.appendChild(a);
+        });
+
+        // Toggle sidebar
+        const stored = localStorage.getItem('toc-open');
+        if (stored === '1' && window.innerWidth >= 1200) toc.classList.add('open');
+
+        toggle.addEventListener('click', function() {
+            toc.classList.toggle('open');
+            localStorage.setItem('toc-open', toc.classList.contains('open') ? '1' : '0');
+        });
+        close.addEventListener('click', function() {
+            toc.classList.remove('open');
+            localStorage.setItem('toc-open', '0');
+        });
+
+        // Highlight active section on scroll
+        var links = tocNav.querySelectorAll('.toc-link');
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    links.forEach(function(l) { l.classList.remove('active'); });
+                    var active = tocNav.querySelector('a[href="#' + entry.target.id + '"]');
+                    if (active) active.classList.add('active');
+                }
+            });
+        }, { rootMargin: '-80px 0px -60% 0px' });
+        headings.forEach(function(h) { observer.observe(h); });
+    })();
+    </script>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>Built by <a href="https://github.com/benjibromberg" target="_blank" rel="noopener">Benji Bromberg</a></p>
+            <p><a href="https://github.com/benjibromberg/survivor-fantasy" target="_blank" rel="noopener">Source on GitHub</a> &middot; <a href="https://github.com/benjibromberg/survivor-fantasy/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a></p>
+        </div>
+    </footer>
+</body>
+</html>

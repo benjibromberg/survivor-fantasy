@@ -1,0 +1,1768 @@
+/* Survivor Fantasy — Tribal Council / Fiji Night theme */
+
+/* Survivant — official Survivor logo font (Public domain / GPL / OFL) */
+@font-face {
+    font-family: 'Survivant';
+    src: url('fonts/survivant.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    --night-sky: #0d1b2a;
+    --deep-ocean: #1b2d3e;
+    --ocean-surface: #274060;
+    --fire-bright: #e85d26;
+    --fire-glow: #f4a261;
+    --ember: #d4602e;
+    --torch-gold: #fca311;
+    --sand-warm: #e8d5b7;
+    --sand-light: #f0e6d3;
+    --palm-green: #2d6a4f;
+    --text-light: #e8e0d6;
+    --text-dim: #9aa5b1;
+    --card-bg: #162535;
+    --card-border: #2a4055;
+
+    --pico-primary: var(--fire-bright);
+    --pico-primary-hover: var(--ember);
+    --pico-primary-focus: rgba(232, 93, 38, 0.2);
+}
+
+/* Override Pico dark theme with our palette */
+[data-theme="dark"] {
+    --pico-background-color: var(--night-sky);
+    --pico-color: var(--text-light);
+    --pico-card-background-color: var(--card-bg);
+    --pico-card-border-color: var(--card-border);
+    --pico-card-sectioning-background-color: var(--card-bg);
+    --pico-muted-color: var(--text-dim);
+    --pico-muted-border-color: var(--card-border);
+    --pico-h1-color: var(--sand-warm);
+    --pico-h2-color: var(--sand-warm);
+    --pico-h3-color: var(--fire-glow);
+
+    /* Survivor fonts */
+    --font-logo: 'Survivant', Georgia, serif;
+    --font-heading: 'Cinzel', Georgia, serif;
+    --font-label: 'Bebas Neue', 'Arial Narrow', sans-serif;
+    --font-tribal: 'Palatino Linotype', Palatino, 'Book Antiqua', serif;
+    --pico-dropdown-background-color: var(--deep-ocean);
+    --pico-dropdown-border-color: var(--card-border);
+    --pico-dropdown-color: var(--text-light);
+    --pico-dropdown-hover-background-color: var(--ocean-surface);
+    color-scheme: dark;
+}
+
+body {
+    background: var(--night-sky);
+    color: var(--text-light);
+    margin: 0;
+}
+
+h1, h2 {
+    font-family: var(--font-heading);
+    letter-spacing: 0.04em;
+}
+
+h3 {
+    font-family: var(--font-heading);
+    letter-spacing: 0.03em;
+}
+
+a { color: var(--fire-glow); }
+a:hover { color: var(--torch-gold); }
+
+/* Nav bar */
+nav {
+    background: var(--deep-ocean);
+    border-bottom: 2px solid var(--fire-bright);
+    padding: 0.75rem 1rem;
+    margin: 0 0 1.5rem 0;
+}
+
+@media (min-width: 768px) {
+    nav { padding: 0.75rem 2rem; }
+}
+
+/* Site logo */
+.site-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none !important;
+}
+
+.site-logo:hover {
+    text-decoration: none !important;
+}
+
+.logo-torch {
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 4px rgba(232, 93, 38, 0.5));
+    transition: filter 0.2s;
+}
+
+.site-logo:hover .logo-torch {
+    filter: drop-shadow(0 0 8px rgba(252, 163, 17, 0.7));
+}
+
+.logo-text {
+    font-family: 'Survivant', Georgia, serif;
+    font-size: 1.5em;
+    font-weight: normal;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--sand-warm) !important;
+    text-shadow:
+        0 0 10px rgba(232, 93, 38, 0.4),
+        0 1px 2px rgba(0, 0, 0, 0.5);
+    background: linear-gradient(180deg, var(--sand-light) 0%, var(--fire-glow) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.site-logo:hover .logo-text {
+    background: linear-gradient(180deg, var(--torch-gold) 0%, var(--fire-bright) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+/* Nav buttons */
+.nav-links {
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.nav-links li {
+    display: flex;
+    align-items: center;
+}
+
+.nav-btn {
+    font-family: var(--font-label) !important;
+    font-size: 0.95em !important;
+    font-weight: 400 !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sand-warm) !important;
+    text-decoration: none !important;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+
+.nav-btn:hover {
+    color: var(--torch-gold) !important;
+    background: rgba(244, 162, 97, 0.1);
+}
+
+.nav-btn-user {
+    color: var(--fire-glow) !important;
+    border: 1px solid rgba(244, 162, 97, 0.3);
+}
+
+.nav-btn-dim {
+    color: var(--text-dim) !important;
+    font-size: 0.85em !important;
+}
+
+.nav-btn-dim:hover {
+    color: var(--sand-warm) !important;
+}
+
+/* Seasons dropdown */
+.nav-dropdown-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.nav-dropdown-trigger {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    cursor: pointer;
+    margin: 0 !important;
+    padding: 0.3rem 0.6rem !important;
+    line-height: 1 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    width: auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    --pico-form-element-spacing-vertical: 0 !important;
+    --pico-form-element-spacing-horizontal: 0 !important;
+}
+
+.nav-dropdown-trigger .caret {
+    font-size: 0.65em;
+    opacity: 0.6;
+}
+
+#seasons-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.5rem);
+    background: var(--night-sky);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 6px;
+    min-width: 200px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    z-index: 500;
+    flex-direction: column;
+    gap: 0;
+}
+
+#seasons-dropdown.open {
+    display: flex;
+}
+
+#seasons-dropdown > a.nav-dropdown-item {
+    all: unset;
+    box-sizing: border-box;
+    font-family: var(--font-heading);
+    font-size: 0.85em;
+    letter-spacing: 0.03em;
+    color: var(--text-dim);
+    padding: 10px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    transition: background 0.12s, color 0.12s;
+}
+
+#seasons-dropdown > a.nav-dropdown-item:hover {
+    background: var(--ocean-surface);
+    color: var(--sand-warm);
+}
+
+.nav-dropdown-badge {
+    font-family: var(--font-label);
+    font-size: 0.7em;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fire-bright);
+    background: rgba(232, 93, 38, 0.15);
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: auto;
+}
+
+nav a, nav strong a {
+    color: var(--sand-warm) !important;
+}
+
+nav a:hover {
+    color: var(--torch-gold) !important;
+}
+
+/* Flash messages */
+.flash-success { color: var(--palm-green); }
+.flash-error { color: var(--fire-bright); }
+.flash-warning { color: var(--fire-glow); }
+
+/* --- Leaderboard --- */
+
+/* Season timeline */
+.season-timeline {
+    display: flex;
+    align-items: center;
+    position: relative;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 2rem 1.5rem 2.2rem;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    gap: 0;
+}
+
+/* Connecting line behind dots */
+.season-timeline::before {
+    content: '';
+    position: absolute;
+    top: calc(2rem + 5px); /* vertically centered on dots */
+    left: 1.5rem;
+    right: 1.5rem;
+    height: 2px;
+    background: var(--card-border);
+    z-index: 0;
+}
+
+.tl-point {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    min-width: 0;
+}
+
+.tl-point:hover { text-decoration: none; color: inherit; }
+
+.tl-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.tl-point:hover .tl-dot {
+    background: var(--fire-glow);
+    transform: scale(1.3);
+}
+
+.tl-point.active .tl-dot {
+    width: 14px;
+    height: 14px;
+    background: var(--fire-bright);
+    box-shadow: 0 0 8px rgba(232, 93, 38, 0.6);
+}
+
+.tl-point.milestone .tl-dot {
+    width: 12px;
+    height: 12px;
+    background: var(--fire-glow);
+}
+
+.tl-point.active.milestone .tl-dot {
+    width: 14px;
+    height: 14px;
+    background: var(--fire-bright);
+}
+
+.tl-milestone {
+    font-family: var(--font-label);
+    position: absolute;
+    bottom: calc(100% + 4px);
+    font-size: 0.8em;
+    font-weight: 400;
+    color: var(--fire-glow);
+    white-space: nowrap;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.tl-label {
+    position: absolute;
+    top: calc(100% + 6px);
+    font-size: 0.65em;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    text-align: center;
+}
+
+.tl-point.active .tl-label {
+    color: var(--fire-glow);
+    font-weight: 600;
+}
+
+
+/* Toolbar — controls bar above leaderboard */
+.lb-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 0.6rem 1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    flex-wrap: wrap;
+}
+
+.toolbar-link {
+    font-family: var(--font-label);
+    font-size: 1em;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fire-glow) !important;
+    text-decoration: none;
+    padding: 0.3rem 0.8rem;
+    border: 1px solid var(--fire-glow);
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+
+.toolbar-link:hover {
+    background: rgba(244, 162, 97, 0.15);
+    color: var(--torch-gold) !important;
+    border-color: var(--torch-gold);
+}
+
+.toolbar-toggles {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-left: auto;
+}
+
+.toolbar-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+    margin: 0;
+    font-size: 0.85em;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
+.toolbar-toggle input[role="switch"] {
+    margin: 0;
+    height: 1.2rem;
+}
+
+.toolbar-toggle span {
+    font-family: var(--font-label);
+    font-size: 0.95em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+/* Navigation back links */
+.nav-link-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-label);
+    font-size: 1em;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim) !important;
+    text-decoration: none;
+    padding: 0.3rem 0.8rem;
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+
+.nav-link-back:hover {
+    color: var(--fire-glow) !important;
+    border-color: var(--fire-glow);
+    background: rgba(244, 162, 97, 0.08);
+}
+
+.leaderboard-entry {
+    margin-bottom: 1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-left: 4px solid var(--fire-glow);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.lb-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin-bottom: 0;
+    padding-bottom: 0.25rem;
+}
+
+.lb-rank {
+    font-family: var(--font-label);
+    font-size: 2em;
+    font-weight: 400;
+    color: var(--fire-bright);
+    opacity: 0.6;
+    min-width: 2.2rem;
+    text-align: center;
+}
+
+.lb-name {
+    font-family: var(--font-heading);
+    font-size: 1.25em;
+    font-weight: 700;
+    color: var(--sand-warm);
+    letter-spacing: 0.03em;
+}
+
+.lb-ss-pick {
+    font-size: 0.8em;
+    color: var(--text-dim);
+    font-style: italic;
+}
+
+.lb-ss-pick.eliminated {
+    text-decoration: line-through;
+    opacity: 0.5;
+}
+
+.lb-win-pct {
+    font-family: var(--font-label);
+    margin-left: auto;
+    font-size: 0.95em;
+    font-weight: 400;
+    color: var(--fire-glow);
+    opacity: 0.8;
+    letter-spacing: 0.03em;
+}
+
+.lb-points {
+    font-family: var(--font-label);
+    font-size: 1.4em;
+    font-weight: 400;
+    color: var(--torch-gold);
+    letter-spacing: 0.03em;
+}
+
+/* Prediction mode toggle — frozen vs projected win percentages */
+.lb-win-projected {
+    display: none;
+}
+
+.show-projected .lb-win-frozen {
+    display: none;
+}
+
+.show-projected .lb-win-projected {
+    display: inline;
+}
+
+/* Points should push right if no win-pct */
+.lb-header:not(:has(.lb-win-pct)) .lb-points {
+    margin-left: auto;
+}
+
+/* SS pick should push right when no win-pct */
+.lb-header:not(:has(.lb-win-pct)) .lb-ss-pick {
+    margin-left: auto;
+}
+.lb-header:has(.lb-ss-pick):not(:has(.lb-win-pct)) .lb-points {
+    margin-left: 0;
+}
+
+/* Leaderboard warnings */
+.lb-warnings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.25rem;
+}
+
+.lb-warning {
+    font-size: 0.72em;
+    font-weight: 600;
+    color: var(--torch-gold);
+    background: rgba(252, 163, 17, 0.12);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid rgba(252, 163, 17, 0.25);
+}
+
+.lb-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.lb-pick {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem 0.4rem 0.35rem;
+    border: 2px solid var(--card-border);
+    border-radius: 2rem;
+    font-size: 0.85em;
+    background: var(--deep-ocean);
+    transition: transform 0.1s, box-shadow 0.1s;
+    overflow: hidden;
+}
+
+.lb-pick:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.lb-pick.eliminated {
+    opacity: 0.3;
+}
+
+.lb-pick-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 2px solid var(--card-border);
+}
+
+.lb-pick-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ocean-surface);
+    color: var(--text-dim);
+    font-weight: 700;
+    font-size: 1em;
+}
+
+.lb-pick-info {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.lb-pick-name {
+    font-family: var(--font-tribal);
+    font-weight: 600;
+    color: var(--sand-light);
+    letter-spacing: 0.02em;
+}
+
+.lb-pick-meta {
+    font-size: 0.78em;
+    color: var(--sand-warm);
+}
+
+.lb-pick-stats {
+    font-size: 0.7em;
+    color: var(--text-light);
+}
+
+/* Point breakdowns — toggled by "Point breakdowns" switch */
+.lb-pick-pts-detail {
+    display: none;
+    flex-direction: column;
+    gap: 0.1rem;
+    margin-top: 0.15rem;
+}
+
+.show-pts .lb-pick-pts-detail {
+    display: flex;
+}
+
+/* Game stats — toggled by "Game stats" switch */
+.lb-pick-stats-detail {
+    display: none;
+    flex-direction: column;
+    gap: 0.1rem;
+    margin-top: 0.15rem;
+}
+
+.show-stats .lb-pick-stats-detail {
+    display: flex;
+}
+
+/* Hide compact stats line when game stats detail is shown */
+.show-stats .lb-pick-stats {
+    display: none;
+}
+
+/* Bio detail — toggled by "Bio" switch */
+.lb-pick-bio-detail {
+    display: none;
+    font-size: 0.68em;
+    color: var(--text-dim);
+    margin-top: 0.15rem;
+    font-style: italic;
+}
+
+.show-bio .lb-pick-bio-detail {
+    display: block;
+}
+
+/* Expand pill border-radius when any detail is shown */
+.show-pts .lb-pick,
+.show-stats .lb-pick,
+.show-bio .lb-pick {
+    border-radius: 1rem;
+    padding: 0.5rem 1rem 0.5rem 0.35rem;
+}
+
+.lb-breakdown-item {
+    font-size: 0.68em;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
+.lb-breakdown-pts {
+    color: var(--fire-glow);
+    font-weight: 600;
+}
+
+.lb-pick-result {
+    font-size: 0.72em;
+    color: var(--text-light);
+    font-style: italic;
+}
+
+/* Team aggregate stats */
+.lb-team-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    margin-top: 0.5rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--card-border);
+}
+
+.lb-team-stat {
+    font-size: 0.72em;
+    color: var(--text-dim);
+}
+
+.lb-team-stat strong {
+    color: var(--sand-warm);
+    font-weight: 600;
+}
+
+/* Special pick types — visual separation */
+.lb-special-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px dashed var(--card-border);
+}
+
+.lb-pick-badge {
+    font-family: var(--font-label);
+    font-size: 0.8em;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.05rem 0.3rem;
+    border-radius: 3px;
+}
+
+.lb-pick-wildcard .lb-pick-badge {
+    background: rgba(252, 163, 17, 0.2);
+    color: var(--torch-gold);
+}
+
+.lb-pick-sole_survivor .lb-pick-badge {
+    background: rgba(232, 93, 38, 0.25);
+    color: var(--fire-bright);
+}
+
+.lb-pick-pmr_w .lb-pick-badge,
+.lb-pick-pmr_d .lb-pick-badge {
+    background: rgba(154, 165, 177, 0.2);
+    color: var(--text-dim);
+}
+
+.lb-pick-sole_survivor {
+    border-style: dashed;
+}
+
+/* Make pick links not look like typical links */
+a.lb-pick {
+    text-decoration: none;
+    color: inherit;
+}
+
+a.lb-pick:hover {
+    text-decoration: none;
+    color: inherit;
+    border-color: var(--fire-glow);
+}
+
+a.lb-pick:hover .lb-pick-name {
+    color: var(--torch-gold);
+}
+
+/* --- Stats page --- */
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1rem;
+}
+
+.stat-board {
+    margin-bottom: 0;
+}
+
+.stat-board header {
+    padding: 0.5rem 1rem;
+    margin: 0;
+}
+
+.stat-board header h3 {
+    margin: 0;
+    font-size: 1em;
+}
+
+.stat-rows {
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.stat-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 6px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.1s;
+}
+
+a.stat-row:hover {
+    background: var(--ocean-surface);
+    color: inherit;
+    text-decoration: none;
+}
+
+.stat-row.eliminated {
+    opacity: 0.4;
+}
+
+.stat-rank {
+    font-family: var(--font-label);
+    font-weight: 400;
+    color: var(--fire-bright);
+    opacity: 0.5;
+    min-width: 1.5rem;
+    text-align: center;
+    font-size: 1em;
+}
+
+.stat-img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--card-border);
+    flex-shrink: 0;
+}
+
+.stat-name {
+    font-family: var(--font-tribal);
+    font-weight: 600;
+    color: var(--sand-light);
+    flex: 1;
+    letter-spacing: 0.02em;
+}
+
+.stat-tribe {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    opacity: 0.6;
+}
+
+.stat-value {
+    font-family: var(--font-label);
+    font-weight: 400;
+    color: var(--torch-gold);
+    font-size: 1.2em;
+    letter-spacing: 0.03em;
+    min-width: 2rem;
+    text-align: right;
+}
+
+/* --- Predictions page --- */
+
+progress {
+    accent-color: var(--fire-bright);
+}
+
+/* Main content area */
+main.container {
+    background: transparent;
+}
+
+/* --- Articles / cards --- */
+
+article {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+}
+
+article header {
+    background: var(--deep-ocean);
+}
+
+/* Section elements (Pico sometimes adds bg to these) */
+section {
+    background: transparent;
+}
+
+/* --- Tables (admin) --- */
+
+table {
+    --pico-table-border-color: var(--card-border);
+}
+
+thead {
+    --pico-table-row-stripped-background-color: var(--deep-ocean);
+}
+
+/* --- Form inputs --- */
+
+fieldset[role="group"] > input,
+fieldset[role="group"] > button {
+    margin-bottom: 0;
+}
+
+input, select, textarea {
+    --pico-form-element-background-color: var(--deep-ocean);
+    --pico-form-element-border-color: var(--card-border);
+    --pico-form-element-color: var(--text-light);
+    --pico-form-element-focus-color: var(--fire-glow);
+}
+
+/* --- Buttons --- */
+
+button, a[role="button"] {
+    --pico-primary-background: var(--fire-bright);
+    --pico-primary-border: var(--fire-bright);
+}
+
+a[role="button"].outline {
+    color: var(--fire-glow);
+    border-color: var(--fire-glow);
+    background: transparent;
+}
+
+a[role="button"].outline:hover {
+    color: var(--torch-gold);
+    border-color: var(--torch-gold);
+}
+
+/* --- Survivor card grid for admin picks page --- */
+
+.survivor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.survivor-card {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem;
+    border: 2px solid var(--card-border);
+    border-radius: var(--pico-border-radius);
+    cursor: pointer;
+    transition: border-color 0.15s;
+    background: var(--deep-ocean);
+}
+
+.survivor-card:hover {
+    border-color: var(--fire-bright);
+}
+
+.survivor-card:has(input:checked) {
+    border-color: var(--fire-bright);
+    background: var(--pico-primary-focus);
+}
+
+.survivor-card input[type="checkbox"] {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.survivor-headshot {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.survivor-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.survivor-name {
+    font-weight: 600;
+    font-size: 0.9em;
+    line-height: 1.2;
+    color: var(--sand-light);
+}
+
+.survivor-tribe {
+    font-size: 0.75em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.eliminated {
+    opacity: 0.35;
+}
+
+.eliminated .survivor-name {
+    text-decoration: line-through;
+}
+
+/* hgroup subtitle */
+hgroup p {
+    color: var(--text-dim);
+}
+
+/* small text */
+small {
+    color: var(--text-dim);
+}
+
+/* --- Scoring config table (admin) --- */
+
+.scoring-table td,
+.scoring-table th { padding: 0.35rem 0.5rem; font-size: 0.85rem; }
+.scoring-table small { color: var(--text-dim); }
+
+/* --- Scoring comparison page --- */
+
+.compare-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.compare-card {
+    margin-bottom: 0;
+}
+
+.compare-card header {
+    padding: 0.5rem 0.75rem;
+}
+
+.compare-card header h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1em;
+}
+
+.compare-config {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.config-tag {
+    font-size: 0.7em;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    background: var(--ocean-surface);
+    color: var(--text-dim);
+}
+
+.compare-rankings {
+    padding: 0.5rem;
+}
+
+.compare-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+}
+
+.compare-row:nth-child(1) { background: rgba(252, 163, 17, 0.15); }
+.compare-row:nth-child(2) { background: rgba(252, 163, 17, 0.08); }
+.compare-row:nth-child(3) { background: rgba(252, 163, 17, 0.04); }
+
+.compare-rank {
+    font-family: var(--font-label);
+    font-weight: 400;
+    color: var(--fire-bright);
+    opacity: 0.6;
+    min-width: 1.5rem;
+}
+
+.compare-name {
+    font-family: var(--font-heading);
+    flex: 1;
+    font-weight: 600;
+    color: var(--sand-light);
+    letter-spacing: 0.03em;
+}
+
+.compare-pts {
+    font-family: var(--font-label);
+    font-weight: 400;
+    color: var(--torch-gold);
+    font-size: 1.1em;
+    letter-spacing: 0.03em;
+}
+
+/* --- Mobile responsive --- */
+
+@media (max-width: 576px) {
+    /* Stack header: rank + name on top, points below */
+    .lb-header {
+        flex-wrap: wrap;
+    }
+
+    .lb-points {
+        margin-left: 0;
+        width: 100%;
+        padding-left: 3rem;
+        font-size: 1.1em;
+    }
+
+    .lb-rank {
+        font-size: 1.4em;
+        min-width: 1.8rem;
+    }
+
+    .lb-name {
+        font-size: 1.1em;
+    }
+
+    /* Pick pills: show image only on very small screens, full info on tap */
+    .lb-pick {
+        padding: 0.25rem 0.5rem 0.25rem 0.25rem;
+        gap: 0.35rem;
+        font-size: 0.8em;
+    }
+
+    .lb-pick-img {
+        width: 32px;
+        height: 32px;
+    }
+
+    .lb-pick-name {
+        font-size: 0.85em;
+    }
+
+    .lb-pick-meta {
+        font-size: 0.7em;
+    }
+
+    /* Leaderboard card padding */
+    .leaderboard-entry {
+        padding: 0.75rem;
+    }
+
+    /* Timeline: tighter on mobile */
+    .season-timeline {
+        padding: 1.8rem 1rem 2rem;
+    }
+    .season-timeline::before {
+        left: 1rem;
+        right: 1rem;
+    }
+    /* On mobile, only show milestone + active labels */
+    .season-timeline .tl-label {
+        display: none;
+    }
+    .season-timeline .tl-point.milestone .tl-label,
+    .season-timeline .tl-point.active .tl-label {
+        display: block;
+    }
+
+    /* Survivor grid: single column */
+    .survivor-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Logo: smaller on mobile */
+    .logo-text {
+        font-size: 1.15em;
+        letter-spacing: 0.04em;
+    }
+
+    /* Toolbar: stack on mobile */
+    .lb-toolbar {
+        gap: 0.5rem;
+    }
+
+    .toolbar-toggles {
+        margin-left: 0;
+    }
+
+    /* TOC: position above toggle on mobile */
+    .page-toc {
+        left: 0.5rem;
+        width: 180px;
+    }
+}
+
+/* --- Sidebar TOC --- */
+
+/* TOC toggle — bottom-left corner, out of the way */
+.toc-toggle {
+    position: fixed;
+    left: 0.75rem;
+    bottom: 1.5rem;
+    z-index: 100;
+    background: var(--deep-ocean);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    color: var(--text-dim);
+    padding: 0.55rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    line-height: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.toc-toggle:hover {
+    color: var(--fire-glow);
+    border-color: var(--fire-glow);
+}
+
+/* TOC panel — overlays content, doesn't push it */
+.page-toc {
+    position: fixed;
+    left: 0.75rem;
+    bottom: 3.5rem;
+    width: 200px;
+    max-height: calc(100vh - 8rem);
+    background: var(--deep-ocean);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    z-index: 200;
+    display: none;
+    flex-direction: column;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.page-toc.open {
+    display: flex;
+}
+
+.toc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 0.8rem 0.5rem;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.toc-title {
+    font-family: var(--font-label);
+    font-size: 0.85em;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--fire-glow);
+}
+
+.toc-close {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.1em;
+    cursor: pointer;
+    padding: 0.1rem 0.25rem;
+    line-height: 1;
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+
+.toc-close:hover {
+    color: var(--fire-glow);
+}
+
+.toc-nav {
+    padding: 0.4rem 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.toc-link {
+    font-family: var(--font-heading);
+    font-size: 0.7em;
+    color: var(--text-dim) !important;
+    text-decoration: none !important;
+    padding: 0.4rem 0.8rem;
+    border-left: 2px solid transparent;
+    transition: all 0.12s;
+    line-height: 1.3;
+}
+
+.toc-link:hover {
+    color: var(--sand-warm) !important;
+    border-left-color: var(--card-border);
+}
+
+.toc-link.active {
+    color: var(--fire-glow) !important;
+    border-left-color: var(--fire-bright);
+}
+
+/* --- Site footer --- */
+
+.site-footer {
+    margin-top: 3rem;
+    padding: 1.5rem 1rem;
+    border-top: 1px solid var(--card-border);
+    text-align: center;
+}
+
+.site-footer p {
+    margin: 0.25rem 0;
+    font-size: 0.8em;
+    color: var(--text-dim);
+}
+
+.site-footer a {
+    color: var(--text-dim);
+    text-decoration: underline;
+    text-decoration-color: rgba(154, 165, 177, 0.3);
+}
+
+.site-footer a:hover {
+    color: var(--fire-glow);
+}
+
+/* --- Logo motto --- */
+
+.logo-motto {
+    display: none;
+    font-family: 'Survivant', Georgia, serif;
+    font-size: 0.55em;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim) !important;
+    -webkit-text-fill-color: var(--text-dim);
+    background: none;
+    opacity: 0.6;
+}
+
+@media (min-width: 768px) {
+    .logo-motto {
+        display: block;
+    }
+}
+
+/* --- Finale Celebration --- */
+
+/* Hero banner */
+.finale-banner {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #1a0a00 0%, #2d1200 30%, #0d1b2a 100%);
+    border: 2px solid var(--fire-bright);
+    border-radius: 12px;
+    padding: 2.5rem 2rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    animation: finale-glow 3s ease-in-out infinite alternate;
+}
+
+@keyframes finale-glow {
+    0% { box-shadow: 0 0 20px rgba(232, 93, 38, 0.3), inset 0 0 30px rgba(232, 93, 38, 0.05); }
+    100% { box-shadow: 0 0 40px rgba(252, 163, 17, 0.4), inset 0 0 50px rgba(252, 163, 17, 0.08); }
+}
+
+.finale-content {
+    position: relative;
+    z-index: 2;
+}
+
+.finale-label {
+    font-family: 'Survivant', Georgia, serif;
+    font-size: 1.1em;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--fire-glow);
+    margin-bottom: 0.25rem;
+    text-shadow: 0 0 20px rgba(244, 162, 97, 0.5);
+}
+
+.finale-winner-name {
+    font-family: var(--font-heading) !important;
+    font-size: 2.8em;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    margin: 0.25rem 0;
+    background: linear-gradient(180deg, var(--sand-light) 0%, var(--torch-gold) 50%, var(--fire-bright) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: none;
+    animation: torch-light 2s ease-out forwards;
+}
+
+@keyframes torch-light {
+    0% { opacity: 0; filter: blur(8px); transform: scale(0.9); }
+    60% { opacity: 1; filter: blur(0); transform: scale(1.02); }
+    100% { opacity: 1; filter: blur(0); transform: scale(1); }
+}
+
+.finale-subtitle {
+    font-family: var(--font-label);
+    font-size: 1.1em;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--sand-warm);
+    margin-bottom: 1.5rem;
+}
+
+.finale-stats {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+.finale-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.finale-stat-value {
+    font-family: var(--font-label);
+    font-size: 1.5em;
+    color: var(--torch-gold);
+    letter-spacing: 0.04em;
+}
+
+.finale-stat-label {
+    font-size: 0.7em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+/* Ember particles */
+.finale-embers {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 1;
+}
+
+.ember-particle {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    bottom: -10px;
+    animation: ember-rise linear infinite;
+    opacity: 0;
+}
+
+.ember-particle:nth-child(odd) {
+    background: var(--fire-bright);
+    width: 3px;
+    height: 3px;
+}
+
+.ember-particle:nth-child(even) {
+    background: var(--torch-gold);
+    width: 5px;
+    height: 5px;
+}
+
+/* Distribute particles across the width with varied timing */
+.ember-particle:nth-child(1) { left: 5%; animation-duration: 3.2s; animation-delay: 0s; }
+.ember-particle:nth-child(2) { left: 10%; animation-duration: 2.8s; animation-delay: 0.5s; }
+.ember-particle:nth-child(3) { left: 15%; animation-duration: 3.5s; animation-delay: 1.1s; }
+.ember-particle:nth-child(4) { left: 20%; animation-duration: 2.6s; animation-delay: 0.3s; }
+.ember-particle:nth-child(5) { left: 25%; animation-duration: 3.1s; animation-delay: 1.6s; }
+.ember-particle:nth-child(6) { left: 30%; animation-duration: 2.9s; animation-delay: 0.8s; }
+.ember-particle:nth-child(7) { left: 35%; animation-duration: 3.4s; animation-delay: 2.0s; }
+.ember-particle:nth-child(8) { left: 40%; animation-duration: 2.5s; animation-delay: 0.2s; }
+.ember-particle:nth-child(9) { left: 45%; animation-duration: 3.0s; animation-delay: 1.3s; }
+.ember-particle:nth-child(10) { left: 50%; animation-duration: 3.3s; animation-delay: 0.7s; }
+.ember-particle:nth-child(11) { left: 55%; animation-duration: 2.7s; animation-delay: 1.8s; }
+.ember-particle:nth-child(12) { left: 60%; animation-duration: 3.6s; animation-delay: 0.4s; }
+.ember-particle:nth-child(13) { left: 65%; animation-duration: 2.4s; animation-delay: 1.0s; }
+.ember-particle:nth-child(14) { left: 70%; animation-duration: 3.2s; animation-delay: 2.2s; }
+.ember-particle:nth-child(15) { left: 75%; animation-duration: 2.8s; animation-delay: 0.6s; }
+.ember-particle:nth-child(16) { left: 80%; animation-duration: 3.1s; animation-delay: 1.5s; }
+.ember-particle:nth-child(17) { left: 85%; animation-duration: 2.9s; animation-delay: 0.9s; }
+.ember-particle:nth-child(18) { left: 90%; animation-duration: 3.5s; animation-delay: 2.4s; }
+.ember-particle:nth-child(19) { left: 95%; animation-duration: 2.6s; animation-delay: 1.2s; }
+.ember-particle:nth-child(20) { left: 8%; animation-duration: 3.3s; animation-delay: 1.7s; }
+.ember-particle:nth-child(21) { left: 18%; animation-duration: 2.5s; animation-delay: 2.1s; }
+.ember-particle:nth-child(22) { left: 28%; animation-duration: 3.0s; animation-delay: 0.1s; }
+.ember-particle:nth-child(23) { left: 38%; animation-duration: 3.4s; animation-delay: 1.4s; }
+.ember-particle:nth-child(24) { left: 48%; animation-duration: 2.7s; animation-delay: 2.3s; }
+.ember-particle:nth-child(25) { left: 58%; animation-duration: 3.2s; animation-delay: 0.5s; }
+.ember-particle:nth-child(26) { left: 68%; animation-duration: 2.8s; animation-delay: 1.9s; }
+.ember-particle:nth-child(27) { left: 78%; animation-duration: 3.6s; animation-delay: 0.3s; }
+.ember-particle:nth-child(28) { left: 88%; animation-duration: 2.4s; animation-delay: 2.5s; }
+.ember-particle:nth-child(29) { left: 42%; animation-duration: 3.1s; animation-delay: 0.8s; }
+.ember-particle:nth-child(30) { left: 72%; animation-duration: 2.9s; animation-delay: 1.6s; }
+
+@keyframes ember-rise {
+    0% {
+        opacity: 0;
+        transform: translateY(0) translateX(0) scale(1);
+    }
+    10% {
+        opacity: 0.9;
+    }
+    50% {
+        opacity: 0.6;
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-300px) translateX(20px) scale(0.3);
+    }
+}
+
+/* Champion card — gold glow treatment */
+.lb-champion {
+    border-color: var(--torch-gold) !important;
+    border-left-width: 4px;
+    border-left-color: var(--torch-gold) !important;
+    box-shadow: 0 0 20px rgba(252, 163, 17, 0.15), inset 0 0 20px rgba(252, 163, 17, 0.03);
+    animation: champion-reveal 1s ease-out var(--reveal-delay, 0s) both;
+}
+
+.lb-champion .lb-rank {
+    opacity: 1;
+    color: var(--torch-gold);
+}
+
+.lb-torch-icon {
+    filter: drop-shadow(0 0 6px rgba(252, 163, 17, 0.7));
+    vertical-align: middle;
+}
+
+.lb-torch-snuffed {
+    vertical-align: middle;
+}
+
+/* Winner badges */
+.lb-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.lb-season-badge {
+    font-family: var(--font-label);
+    font-size: 0.95em;
+    letter-spacing: 0.04em;
+    color: var(--torch-gold);
+    background: rgba(252, 163, 17, 0.12);
+    border: 1px solid rgba(252, 163, 17, 0.25);
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    line-height: 1;
+}
+
+/* Sole Survivor pick pill — highlighted on finale pages */
+.lb-pick-sole-survivor {
+    opacity: 1 !important;
+    border-color: var(--torch-gold) !important;
+    box-shadow: 0 0 12px rgba(252, 163, 17, 0.2);
+    background: linear-gradient(135deg, var(--deep-ocean) 0%, rgba(252, 163, 17, 0.06) 100%);
+}
+
+.lb-pick-sole-survivor .lb-pick-name {
+    color: var(--torch-gold);
+}
+
+.lb-pick-ss-tag {
+    font-family: var(--font-label);
+    font-size: 0.65em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--fire-bright);
+    background: rgba(232, 93, 38, 0.15);
+    padding: 0.05rem 0.3rem;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-left: 0.2rem;
+}
+
+.lb-champion .lb-name {
+    background: linear-gradient(90deg, var(--sand-light), var(--torch-gold));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.lb-champion .lb-points {
+    color: var(--torch-gold);
+    text-shadow: 0 0 8px rgba(252, 163, 17, 0.3);
+}
+
+@keyframes champion-reveal {
+    0% { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Snuffed (non-winner) cards — subtle dim, torches do the heavy lifting */
+.lb-snuffed {
+    opacity: 0.85;
+    transition: opacity 0.3s;
+}
+
+.lb-snuffed:hover {
+    opacity: 1;
+}
+
+/* Team charts — stacked bar + donut side by side */
+.charts-row {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+.chart-card { flex: 1; min-width: 0; }
+.chart-card h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
+.chart-card .chart-wrap { position: relative; height: 300px; }
+.chart-card .chart-wrap canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: 100% !important; }
+@media (max-width: 768px) {
+    .charts-row { flex-direction: column; }
+}
+
+/* Progression layout — chart + mini standings side by side */
+.progression-layout {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.progression-chart-wrap {
+    flex: 1;
+    min-width: 0;
+    height: 350px;
+    position: relative;
+}
+
+.progression-chart-wrap canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.progression-standings {
+    flex-shrink: 0;
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 0.5rem;
+}
+
+.prog-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 5px;
+    transition: background 0.12s;
+}
+
+.prog-row:hover {
+    background: var(--ocean-surface);
+}
+
+.prog-row-leader {
+    background: rgba(252, 163, 17, 0.08);
+}
+
+.prog-rank {
+    font-family: var(--font-label);
+    font-size: 0.85em;
+    color: var(--text-dim);
+    min-width: 1.8rem;
+    letter-spacing: 0.02em;
+}
+
+.prog-row-leader .prog-rank {
+    color: var(--torch-gold);
+}
+
+.prog-color {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.prog-name {
+    font-family: var(--font-heading);
+    font-size: 0.72em;
+    color: var(--sand-warm);
+    flex: 1;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.prog-row-leader .prog-name {
+    color: var(--torch-gold);
+}
+
+.prog-pts {
+    font-family: var(--font-label);
+    font-size: 0.9em;
+    color: var(--text-dim);
+    letter-spacing: 0.02em;
+}
+
+.prog-row-leader .prog-pts {
+    color: var(--torch-gold);
+}
+
+/* --- Finale responsive --- */
+@media (max-width: 768px) {
+    .progression-layout {
+        flex-direction: column;
+    }
+
+    .progression-standings {
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.15rem;
+    }
+
+    .prog-row {
+        flex: 1 1 auto;
+        min-width: 140px;
+    }
+}
+
+@media (max-width: 576px) {
+    .finale-banner {
+        padding: 1.5rem 1rem;
+    }
+
+    .finale-winner-name {
+        font-size: 1.8em;
+    }
+
+    .finale-stats {
+        gap: 1rem;
+    }
+
+    .finale-stat-value {
+        font-size: 1.2em;
+    }
+
+    .finale-label {
+        font-size: 0.9em;
+    }
+}

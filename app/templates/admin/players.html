@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Admin - Players{% endblock %}
+{% block content %}
+<h1>Manage Fantasy Players</h1>
+{% if season %}
+<p><a href="{{ url_for('main.admin_season_detail', season_id=season.id) }}">&larr; Back to {{ season.name or 'Season ' ~ season.number }}</a></p>
+{% endif %}
+
+<section>
+    <h3>Add Player</h3>
+    <form method="POST" style="max-width: 24rem;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <input type="text" name="name" required placeholder="Friend's name" style="margin-bottom: 0; font-size: 0.85rem;">
+            <button type="submit" style="margin-bottom: 0; padding: 0.4rem 1rem; font-size: 0.85rem; white-space: nowrap;">Add</button>
+        </div>
+    </form>
+</section>
+
+{% if players %}
+<section>
+    <h3>Current Players</h3>
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Display Name</th><th>Role</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for player in players %}
+            <tr>
+                <td>{{ player.username }}</td>
+                <td>{{ player.display_name or '—' }}</td>
+                <td>{{ 'Admin' if player.is_admin else 'Player' }}</td>
+                <td>
+                    {% if not player.is_admin %}
+                    <form method="POST" action="{{ url_for('main.admin_delete_player', user_id=player.id) }}"
+                          style="margin:0" onsubmit="return confirm('Delete this player and all their picks?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="outline secondary" style="padding: 0.25rem 0.5rem; font-size: 0.8em;">Delete</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+{% endblock %}
