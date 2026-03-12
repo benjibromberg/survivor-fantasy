@@ -25,7 +25,8 @@ BREAKDOWN_LABELS = {
 # Episode stats JSON key → model attribute (full mapping used by _apply_as_of)
 _EP_STAT_MAP = {
     'ii': 'individual_immunity_wins', 'ti': 'tribal_immunity_wins',
-    'idol': 'idols_found', 'adv': 'advantages_found',
+    'idol': 'idols_found', 'idol_play': 'idols_played',
+    'adv': 'advantages_found',
     'adv_play': 'advantages_played', 'conf': 'confessional_count',
     'conf_time': 'confessional_time', 'votes': 'votes_received',
     'reward': 'reward_wins', 'tribals': 'tribal_councils_attended',
@@ -142,9 +143,8 @@ def _build_leaderboard(season):
                 stats.append(f'{survivor.individual_immunity_wins} immunity win{"s" if survivor.individual_immunity_wins > 1 else ""}')
             if survivor.idols_found:
                 stats.append(f'{survivor.idols_found} idol{"s" if survivor.idols_found > 1 else ""} found')
-            if survivor.advantages_found and survivor.advantages_found > survivor.idols_found:
-                extra = survivor.advantages_found - survivor.idols_found
-                stats.append(f'{extra} advantage{"s" if extra > 1 else ""} found')
+            if survivor.advantages_found:
+                stats.append(f'{survivor.advantages_found} advantage{"s" if survivor.advantages_found > 1 else ""} found')
 
             stats_detail = []
             if survivor.confessional_count:
@@ -167,8 +167,10 @@ def _build_leaderboard(season):
                 stats_detail.append(('Votes against', survivor.votes_received))
             if survivor.idols_found:
                 stats_detail.append(('Idols found', survivor.idols_found))
-            if survivor.advantages_found and survivor.advantages_found > (survivor.idols_found or 0):
-                stats_detail.append(('Advantages found', survivor.advantages_found - (survivor.idols_found or 0)))
+            if getattr(survivor, 'idols_played', 0):
+                stats_detail.append(('Idols played', survivor.idols_played))
+            if survivor.advantages_found:
+                stats_detail.append(('Advantages found', survivor.advantages_found))
             if survivor.advantages_played:
                 stats_detail.append(('Advantages played', survivor.advantages_played))
             if survivor.votes_nullified:
@@ -330,7 +332,7 @@ def _apply_as_of(season, as_of):
     # All stat fields that get saved/restored
     stat_fields = [
         'individual_immunity_wins', 'tribal_immunity_wins',
-        'idols_found', 'advantages_found', 'advantages_played',
+        'idols_found', 'idols_played', 'advantages_found', 'advantages_played',
         'confessional_count', 'confessional_time', 'votes_received',
         'reward_wins', 'tribal_councils_attended', 'correct_votes',
         'votes_nullified', 'sit_outs', 'tribe', 'tribe_color',

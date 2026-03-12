@@ -27,7 +27,7 @@ def make_season(num_players=18, left_at_jury=8, n_finalists=3):
             voted_out_order=i, made_jury=made_jury,
             elimination_episode=i,
             episode_stats={
-                i: {'ii': 0, 'ti': 0, 'idol': 0, 'adv': 0, 'adv_play': 0}
+                i: {'ii': 0, 'ti': 0, 'idol': 0, 'idol_play': 0, 'adv': 0, 'adv_play': 0}
                 for i in range(1, num_players + 1)
             },
         ))
@@ -206,8 +206,8 @@ class TestStatOverrides:
             id=1, name='Test', voted_out_order=15, made_jury=True,
             individual_immunity_wins=3, idols_found=1,
             episode_stats={
-                5: {'ii': 0, 'ti': 1, 'idol': 0, 'adv': 0, 'adv_play': 0},
-                10: {'ii': 1, 'ti': 2, 'idol': 1, 'adv': 0, 'adv_play': 0},
+                5: {'ii': 0, 'ti': 1, 'idol': 0, 'idol_play': 0, 'adv': 0, 'adv_play': 0},
+                10: {'ii': 1, 'ti': 2, 'idol': 1, 'idol_play': 0, 'adv': 0, 'adv_play': 0},
             },
         )
         overrides = _compute_sim_stat_overrides(surv, merge_episode=10)
@@ -610,7 +610,7 @@ class TestFastScoreTotal:
         surv = season.survivors[14]  # voted_out_order=15, past merge=10
         surv.individual_immunity_wins = 4
         surv.episode_stats = {
-            i: {'ii': min(i, 4), 'ti': 0, 'idol': 0, 'adv': 0, 'adv_play': 0}
+            i: {'ii': min(i, 4), 'ti': 0, 'idol': 0, 'idol_play': 0, 'adv': 0, 'adv_play': 0}
             for i in range(1, 19)
         }
         merge_ep = surv.episode_stats.get(10, {})  # merge at step 10
@@ -646,6 +646,7 @@ class TestTimelineFidelity:
                     'ii': 1 if (i + ep) % 5 == 0 and ep <= i else 0,
                     'ti': 1 if ep <= 3 and i > 6 else 0,
                     'idol': 1 if i == 10 and ep == 4 else 0,
+                    'idol_play': 1 if i == 10 and ep == 7 else 0,
                     'adv': 1 if i == 8 and ep == 6 else 0,
                     'adv_play': 1 if i == 8 and ep == 8 else 0,
                 }
@@ -659,6 +660,7 @@ class TestTimelineFidelity:
                 individual_immunity_wins=ep_stats[num_players]['ii'],
                 tribal_immunity_wins=ep_stats[num_players]['ti'],
                 idols_found=ep_stats[num_players]['idol'],
+                idols_played=ep_stats[num_players]['idol_play'],
                 advantages_found=ep_stats[num_players]['adv'],
                 advantages_played=ep_stats[num_players]['adv_play'],
                 elimination_episode=i,
@@ -736,8 +738,8 @@ class TestTimelineFidelity:
 
         elim_idx = 0
         ep_key_map = {'ii': 'individual_immunity_wins', 'ti': 'tribal_immunity_wins',
-                      'idol': 'idols_found', 'adv': 'advantages_found',
-                      'adv_play': 'advantages_played'}
+                      'idol': 'idols_found', 'idol_play': 'idols_played',
+                      'adv': 'advantages_found', 'adv_play': 'advantages_played'}
 
         for elim in range(1, max_elim + 1):
             while elim_idx < len(surv_by_elim) and orig_state[surv_by_elim[elim_idx].id][0] == elim:

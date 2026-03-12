@@ -17,6 +17,7 @@ SCORING_STAT_KEYS = {
     'ii': 'individual_immunity_wins',
     'ti': 'tribal_immunity_wins',
     'idol': 'idols_found',
+    'idol_play': 'idols_played',
     'adv': 'advantages_found',
     'adv_play': 'advantages_played',
 }

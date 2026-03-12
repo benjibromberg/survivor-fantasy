@@ -223,18 +223,13 @@ class ClassicScoring(ScoringSystem):
             breakdown.items['idols_found'] = survivor.idols_found * c['idol_found_val']
 
         if c['advantage_found_val'] and survivor.advantages_found:
-            non_idol_found = survivor.advantages_found - survivor.idols_found
-            if non_idol_found > 0:
-                breakdown.items['advantages_found'] = non_idol_found * c['advantage_found_val']
+            breakdown.items['advantages_found'] = survivor.advantages_found * c['advantage_found_val']
 
-        if c['idol_play_val'] and survivor.idols_found:
-            # Use idols_found as proxy for idol plays (survivoR tracks "Played" events)
-            breakdown.items['idol_plays'] = survivor.idols_found * c['idol_play_val']
+        if c['idol_play_val'] and getattr(survivor, 'idols_played', 0):
+            breakdown.items['idol_plays'] = survivor.idols_played * c['idol_play_val']
 
         if c['advantage_play_val'] and survivor.advantages_played:
-            non_idol_plays = max(0, survivor.advantages_played - survivor.idols_found)
-            if non_idol_plays > 0:
-                breakdown.items['advantage_plays'] = non_idol_plays * c['advantage_play_val']
+            breakdown.items['advantage_plays'] = survivor.advantages_played * c['advantage_play_val']
 
         if c.get('fire_win_val') and getattr(survivor, 'won_fire', False):
             breakdown.items['fire_win'] = c['fire_win_val']

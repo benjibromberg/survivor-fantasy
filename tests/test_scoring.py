@@ -29,7 +29,8 @@ def make_survivor(**kwargs):
     """Build a single SimSurvivor with defaults."""
     defaults = dict(id=1, name='Test', voted_out_order=0, made_jury=False,
                     individual_immunity_wins=0, tribal_immunity_wins=0,
-                    idols_found=0, advantages_found=0, advantages_played=0,
+                    idols_found=0, idols_played=0,
+                    advantages_found=0, advantages_played=0,
                     won_fire=False)
     defaults.update(kwargs)
     return SimSurvivor(**defaults)
@@ -269,26 +270,27 @@ class TestPerformanceBonuses:
         assert bd.items['idols_found'] == 2
 
     def test_advantages_found_excludes_idols(self):
-        """advantages_found includes idols; scoring subtracts idols_found."""
+        """advantages_found already excludes idols (separated at data layer)."""
         season = make_season()
         scoring = ClassicScoring(advantage_found_val=1)
-        surv = make_survivor(voted_out_order=15, advantages_found=3, idols_found=1)
+        surv = make_survivor(voted_out_order=15, advantages_found=2, idols_found=1)
         bd = scoring.calculate_survivor_points(surv, season)
-        assert bd.items['advantages_found'] == 2  # 3 - 1 idol
+        assert bd.items['advantages_found'] == 2  # non-idol advantages only
 
     def test_idol_plays(self):
         season = make_season()
         scoring = ClassicScoring(idol_play_val=3)
-        surv = make_survivor(voted_out_order=15, idols_found=2)
+        surv = make_survivor(voted_out_order=15, idols_played=2)
         bd = scoring.calculate_survivor_points(surv, season)
         assert bd.items['idol_plays'] == 6  # 2 * 3
 
     def test_advantage_plays_excludes_idol_plays(self):
+        """advantages_played already excludes idol plays (separated at data layer)."""
         season = make_season()
         scoring = ClassicScoring(advantage_play_val=2)
-        surv = make_survivor(voted_out_order=15, advantages_played=3, idols_found=1)
+        surv = make_survivor(voted_out_order=15, advantages_played=2, idols_played=1)
         bd = scoring.calculate_survivor_points(surv, season)
-        assert bd.items['advantage_plays'] == 4  # (3-1) * 2
+        assert bd.items['advantage_plays'] == 4  # 2 non-idol plays * 2
 
     def test_fire_win(self):
         season = make_season()
@@ -344,7 +346,8 @@ class TestScorePick:
         surv = make_survivor(voted_out_order=15, individual_immunity_wins=3)
         # Override: only 1 immunity win after merge
         overrides = {'individual_immunity_wins': 1, 'tribal_immunity_wins': 0,
-                     'idols_found': 0, 'advantages_found': 0, 'advantages_played': 0}
+                     'idols_found': 0, 'idols_played': 0,
+                     'advantages_found': 0, 'advantages_played': 0}
         pts, bd = scoring.score_pick(surv, season, 'pmr_d', stat_overrides=overrides)
         # pre_merge_tribal stripped, post_merge_tribal stays, immunity=1*3
         assert 'pre_merge_tribal' not in bd.items
@@ -360,7 +363,8 @@ class TestScorePick:
         )
         surv = make_survivor(voted_out_order=15)
         overrides = {'individual_immunity_wins': 0, 'tribal_immunity_wins': 0,
-                     'idols_found': 0, 'advantages_found': 0, 'advantages_played': 0}
+                     'idols_found': 0, 'idols_played': 0,
+                     'advantages_found': 0, 'advantages_played': 0}
         pts_w, _ = scoring.score_pick(surv, season, 'pmr_w', stat_overrides=overrides)
         pts_d, _ = scoring.score_pick(surv, season, 'pmr_d', stat_overrides=overrides)
         assert pts_w == pts_d * 0.5
@@ -573,14 +577,16 @@ class TestComputeStatOverrides:
     def test_basic_post_merge_delta(self):
         stats = {
             'individual_immunity_wins': 4, 'tribal_immunity_wins': 3,
-            'idols_found': 2, 'advantages_found': 1, 'advantages_played': 1,
+            'idols_found': 2, 'idols_played': 1,
+            'advantages_found': 1, 'advantages_played': 1,
         }
-        ep_stats = {'5': {'ii': 1, 'ti': 2, 'idol': 1, 'adv': 0, 'adv_play': 0}}
+        ep_stats = {'5': {'ii': 1, 'ti': 2, 'idol': 1, 'idol_play': 0, 'adv': 0, 'adv_play': 0}}
         surv = _MockSurvivor(stats, json.dumps(ep_stats))
         overrides = compute_stat_overrides(surv, merge_episode=5)
         assert overrides['individual_immunity_wins'] == 3  # 4 - 1
         assert overrides['tribal_immunity_wins'] == 1  # 3 - 2
         assert overrides['idols_found'] == 1  # 2 - 1
+        assert overrides['idols_played'] == 1  # 1 - 0
         assert overrides['advantages_found'] == 1  # 1 - 0
         assert overrides['advantages_played'] == 1  # 1 - 0
 
@@ -592,7 +598,8 @@ class TestComputeStatOverrides:
     def test_merge_episode_not_in_stats(self):
         """merge_episode exists but isn't in episode_stats → at_merge defaults to 0."""
         stats = {'individual_immunity_wins': 3, 'tribal_immunity_wins': 0,
-                 'idols_found': 0, 'advantages_found': 0, 'advantages_played': 0}
+                 'idols_found': 0, 'idols_played': 0,
+                 'advantages_found': 0, 'advantages_played': 0}
         ep_stats = {'10': {'ii': 2}}  # merge at ep 5, but only ep 10 in stats
         surv = _MockSurvivor(stats, json.dumps(ep_stats))
         overrides = compute_stat_overrides(surv, merge_episode=5)
@@ -602,7 +609,8 @@ class TestComputeStatOverrides:
     def test_current_less_than_at_merge_clamped(self):
         """If current < at_merge (data inconsistency), clamp to 0."""
         stats = {'individual_immunity_wins': 1, 'tribal_immunity_wins': 0,
-                 'idols_found': 0, 'advantages_found': 0, 'advantages_played': 0}
+                 'idols_found': 0, 'idols_played': 0,
+                 'advantages_found': 0, 'advantages_played': 0}
         ep_stats = {'5': {'ii': 3}}  # at_merge=3 but current=1 (data error)
         surv = _MockSurvivor(stats, json.dumps(ep_stats))
         overrides = compute_stat_overrides(surv, merge_episode=5)
@@ -611,7 +619,8 @@ class TestComputeStatOverrides:
     def test_missing_keys_in_episode_data(self):
         """Episode data missing some keys → those default to 0."""
         stats = {'individual_immunity_wins': 5, 'tribal_immunity_wins': 2,
-                 'idols_found': 0, 'advantages_found': 0, 'advantages_played': 0}
+                 'idols_found': 0, 'idols_played': 0,
+                 'advantages_found': 0, 'advantages_played': 0}
         ep_stats = {'5': {'ii': 2}}  # only 'ii', missing 'ti' etc.
         surv = _MockSurvivor(stats, json.dumps(ep_stats))
         overrides = compute_stat_overrides(surv, merge_episode=5)

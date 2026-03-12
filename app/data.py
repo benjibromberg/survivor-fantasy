@@ -69,7 +69,7 @@ def compute_castaway_stats(s_conf, s_vh, s_cr, s_am, idol_ids):
     """Compute per-castaway aggregate stats from pre-filtered season DataFrames.
 
     Returns dict with: conf_totals, votes_against, indiv_imm, tribal_imm,
-    idols_found, adv_found, adv_played.
+    idols_found, idols_played, adv_found (non-idol), adv_played (non-idol).
     """
     conf_totals = s_conf.groupby('castaway_id')['confessional_count'].sum() \
         if not s_conf.empty else pd.Series(dtype=int)
@@ -85,14 +85,20 @@ def compute_castaway_stats(s_conf, s_vh, s_cr, s_am, idol_ids):
             s_am['event'].str.contains('Found', na=False) &
             s_am['advantage_id'].isin(idol_ids)
         ].groupby('castaway_id').size()
+        idols_played = s_am[
+            (s_am['event'] == 'Played') &
+            s_am['advantage_id'].isin(idol_ids)
+        ].groupby('castaway_id').size()
         adv_found = s_am[
-            s_am['event'].str.contains('Found', na=False)
+            s_am['event'].str.contains('Found', na=False) &
+            ~s_am['advantage_id'].isin(idol_ids)
         ].groupby('castaway_id').size()
         adv_played = s_am[
-            s_am['event'] == 'Played'
+            (s_am['event'] == 'Played') &
+            ~s_am['advantage_id'].isin(idol_ids)
         ].groupby('castaway_id').size()
     else:
-        idols_found = adv_found = adv_played = pd.Series(dtype=int)
+        idols_found = idols_played = adv_found = adv_played = pd.Series(dtype=int)
 
     return {
         'conf_totals': conf_totals,
@@ -100,6 +106,7 @@ def compute_castaway_stats(s_conf, s_vh, s_cr, s_am, idol_ids):
         'indiv_imm': indiv_imm,
         'tribal_imm': tribal_imm,
         'idols_found': idols_found,
+        'idols_played': idols_played,
         'adv_found': adv_found,
         'adv_played': adv_played,
     }
@@ -158,6 +165,7 @@ def refresh_season(season):
     indiv_imm = stats['indiv_imm']
     tribal_imm = stats['tribal_imm']
     idols_found = stats['idols_found']
+    idols_played = stats['idols_played']
     adv_found = stats['adv_found']
     adv_played = stats['adv_played']
 
@@ -269,13 +277,20 @@ def refresh_season(season):
         lambda df: df[df['event'].str.contains('Found', na=False) &
                        df['advantage_id'].isin(idol_ids)]
     ) if not s_am.empty else {}
+    idol_play_by_ep = _ep_counts(
+        s_am, 'castaway_id', 'episode',
+        lambda df: df[(df['event'] == 'Played') &
+                       df['advantage_id'].isin(idol_ids)]
+    ) if not s_am.empty else {}
     adv_found_by_ep = _ep_counts(
         s_am, 'castaway_id', 'episode',
-        lambda df: df[df['event'].str.contains('Found', na=False)]
+        lambda df: df[df['event'].str.contains('Found', na=False) &
+                       ~df['advantage_id'].isin(idol_ids)]
     ) if not s_am.empty else {}
     adv_played_by_ep = _ep_counts(
         s_am, 'castaway_id', 'episode',
-        lambda df: df[df['event'] == 'Played']
+        lambda df: df[(df['event'] == 'Played') &
+                       ~df['advantage_id'].isin(idol_ids)]
     ) if not s_am.empty else {}
     nullified_by_ep = _ep_sums(
         s_am, 'castaway_id', 'episode', 'votes_nullified',
@@ -302,7 +317,7 @@ def refresh_season(season):
         cumulative = {}
         running = {
             'conf': 0, 'conf_time': 0, 'ii': 0, 'ti': 0, 'reward': 0,
-            'idol': 0, 'adv': 0, 'adv_play': 0, 'votes': 0,
+            'idol': 0, 'idol_play': 0, 'adv': 0, 'adv_play': 0, 'votes': 0,
             'tribals': 0, 'correct_votes': 0, 'nullified': 0, 'sit_outs': 0,
         }
         last_tribe = ('', '')
@@ -314,6 +329,7 @@ def refresh_season(season):
             running['ti'] += ti_by_ep.get(cid, {}).get(ep, 0)
             running['reward'] += reward_by_ep.get(cid, {}).get(ep, 0)
             running['idol'] += idol_found_by_ep.get(cid, {}).get(ep, 0)
+            running['idol_play'] += idol_play_by_ep.get(cid, {}).get(ep, 0)
             running['adv'] += adv_found_by_ep.get(cid, {}).get(ep, 0)
             running['adv_play'] += adv_played_by_ep.get(cid, {}).get(ep, 0)
             running['nullified'] += int(nullified_by_ep.get(cid, {}).get(ep, 0))
@@ -398,6 +414,7 @@ def refresh_season(season):
         surv.immunity_wins = surv.individual_immunity_wins
         surv.reward_wins = int(reward_wins.get(cid, 0))
         surv.idols_found = int(idols_found.get(cid, 0))
+        surv.idols_played = int(idols_played.get(cid, 0))
         surv.advantages_found = int(adv_found.get(cid, 0))
         surv.advantages_played = int(adv_played.get(cid, 0))
         surv.tribal_councils_attended = int(tribals_attended.get(cid, 0))

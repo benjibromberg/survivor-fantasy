@@ -75,8 +75,9 @@ class Survivor(db.Model):
     individual_immunity_wins = db.Column(db.Integer, default=0)
     tribal_immunity_wins = db.Column(db.Integer, default=0)
     idols_found = db.Column(db.Integer, default=0)
-    advantages_found = db.Column(db.Integer, default=0)
-    advantages_played = db.Column(db.Integer, default=0)
+    idols_played = db.Column(db.Integer, default=0)
+    advantages_found = db.Column(db.Integer, default=0)  # non-idol advantages only
+    advantages_played = db.Column(db.Integer, default=0)  # non-idol advantages only
     # Extended stats from survivoR
     tribal_councils_attended = db.Column(db.Integer, default=0)
     correct_votes = db.Column(db.Integer, default=0)

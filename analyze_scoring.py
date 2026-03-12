@@ -98,12 +98,12 @@ def expand_config(config):
 class SimSurvivor:
     __slots__ = ('id', 'name', 'voted_out_order', 'made_jury',
                  'individual_immunity_wins', 'tribal_immunity_wins',
-                 'idols_found', 'advantages_found', 'advantages_played',
+                 'idols_found', 'idols_played', 'advantages_found', 'advantages_played',
                  'won_fire', 'elimination_episode', 'episode_stats')
 
     def __init__(self, id, name, voted_out_order, made_jury,
                  individual_immunity_wins=0, tribal_immunity_wins=0,
-                 idols_found=0, advantages_found=0, advantages_played=0,
+                 idols_found=0, idols_played=0, advantages_found=0, advantages_played=0,
                  won_fire=False, elimination_episode=None, episode_stats=None):
         self.id = id
         self.name = name
@@ -112,6 +112,7 @@ class SimSurvivor:
         self.individual_immunity_wins = individual_immunity_wins
         self.tribal_immunity_wins = tribal_immunity_wins
         self.idols_found = idols_found
+        self.idols_played = idols_played
         self.advantages_found = advantages_found
         self.advantages_played = advantages_played
         self.won_fire = won_fire
@@ -183,23 +184,7 @@ def load_all_seasons(season_numbers=None):
     tribal_imm = us_cr[us_cr['won_tribal_immunity'] == 1].groupby(
         ['season', 'castaway_id']).size()
 
-    idol_ids = get_idol_ids(advantage_details)
-
-    if not us_am.empty:
-        idols_found_df = us_am[
-            (us_am['event'].str.contains('Found', na=False)) &
-            (us_am['advantage_id'].isin(idol_ids))
-        ].groupby(['season', 'castaway_id']).size()
-        adv_found_df = us_am[
-            us_am['event'].str.contains('Found', na=False)
-        ].groupby(['season', 'castaway_id']).size()
-        adv_played_df = us_am[
-            us_am['event'] == 'Played'
-        ].groupby(['season', 'castaway_id']).size()
-    else:
-        idols_found_df = adv_found_df = adv_played_df = pd.Series(dtype=int)
-
-    # Per-episode incremental stats for cumulative episode_stats
+    # Per-episode incremental stats for immunity (global, no idol_id issue)
     def _ep_counts(df, filter_fn=None):
         """Return {(season, castaway_id): {episode: count}}."""
         if df.empty:
@@ -215,16 +200,6 @@ def load_all_seasons(season_numbers=None):
 
     ii_by_ep = _ep_counts(us_cr, lambda df: df[df['won_individual_immunity'] == 1])
     ti_by_ep = _ep_counts(us_cr, lambda df: df[df['won_tribal_immunity'] == 1])
-    idol_found_by_ep = _ep_counts(
-        us_am, lambda df: df[df['event'].str.contains('Found', na=False) &
-                              df['advantage_id'].isin(idol_ids)]
-    ) if not us_am.empty else {}
-    adv_found_by_ep = _ep_counts(
-        us_am, lambda df: df[df['event'].str.contains('Found', na=False)]
-    ) if not us_am.empty else {}
-    adv_played_by_ep = _ep_counts(
-        us_am, lambda df: df[df['event'] == 'Played']
-    ) if not us_am.empty else {}
 
     seasons = []
     for snum in season_numbers:
@@ -253,6 +228,60 @@ def load_all_seasons(season_numbers=None):
             s_episodes.update(s_am_season['episode'].dropna().astype(int))
         max_episode = max(s_episodes) if s_episodes else 0
 
+        # Per-season idol IDs (advantage_id is per-season, not global)
+        s_idol_ids = get_idol_ids(advantage_details, season_number=snum)
+
+        # Per-season advantage stats (idols vs non-idol separated)
+        if not s_am_season.empty:
+            idols_found_s = s_am_season[
+                s_am_season['event'].str.contains('Found', na=False) &
+                s_am_season['advantage_id'].isin(s_idol_ids)
+            ].groupby('castaway_id').size()
+            idols_played_s = s_am_season[
+                (s_am_season['event'] == 'Played') &
+                s_am_season['advantage_id'].isin(s_idol_ids)
+            ].groupby('castaway_id').size()
+            adv_found_s = s_am_season[
+                s_am_season['event'].str.contains('Found', na=False) &
+                ~s_am_season['advantage_id'].isin(s_idol_ids)
+            ].groupby('castaway_id').size()
+            adv_played_s = s_am_season[
+                (s_am_season['event'] == 'Played') &
+                ~s_am_season['advantage_id'].isin(s_idol_ids)
+            ].groupby('castaway_id').size()
+        else:
+            idols_found_s = idols_played_s = adv_found_s = adv_played_s = pd.Series(dtype=int)
+
+        # Per-episode advantage stats (per-season idol filtering)
+        def _season_ep_counts(df, filter_fn=None):
+            if df.empty:
+                return {}
+            filtered = filter_fn(df) if filter_fn else df
+            if filtered.empty:
+                return {}
+            grouped = filtered.groupby(['castaway_id', 'episode']).size()
+            result = {}
+            for (cid, ep), count in grouped.items():
+                result.setdefault(cid, {})[int(ep)] = int(count)
+            return result
+
+        s_idol_found_by_ep = _season_ep_counts(
+            s_am_season, lambda df: df[df['event'].str.contains('Found', na=False) &
+                                        df['advantage_id'].isin(s_idol_ids)]
+        ) if not s_am_season.empty else {}
+        s_idol_play_by_ep = _season_ep_counts(
+            s_am_season, lambda df: df[(df['event'] == 'Played') &
+                                        df['advantage_id'].isin(s_idol_ids)]
+        ) if not s_am_season.empty else {}
+        s_adv_found_by_ep = _season_ep_counts(
+            s_am_season, lambda df: df[df['event'].str.contains('Found', na=False) &
+                                        ~df['advantage_id'].isin(s_idol_ids)]
+        ) if not s_am_season.empty else {}
+        s_adv_played_by_ep = _season_ep_counts(
+            s_am_season, lambda df: df[(df['event'] == 'Played') &
+                                        ~df['advantage_id'].isin(s_idol_ids)]
+        ) if not s_am_season.empty else {}
+
         survs = []
         for _, row in cast.iterrows():
             order = int(row['order']) if pd.notna(row['order']) else 0
@@ -266,29 +295,32 @@ def load_all_seasons(season_numbers=None):
             cid = row['castaway_id'] if pd.notna(row.get('castaway_id')) else None
             ii = int(indiv_imm.get((snum, cid), 0)) if cid else 0
             ti = int(tribal_imm.get((snum, cid), 0)) if cid else 0
-            idf = int(idols_found_df.get((snum, cid), 0)) if cid else 0
-            af = int(adv_found_df.get((snum, cid), 0)) if cid else 0
-            ap = int(adv_played_df.get((snum, cid), 0)) if cid else 0
+            idf = int(idols_found_s.get(cid, 0)) if cid else 0
+            ipd = int(idols_played_s.get(cid, 0)) if cid else 0
+            af = int(adv_found_s.get(cid, 0)) if cid else 0
+            ap = int(adv_played_s.get(cid, 0)) if cid else 0
 
             elim_ep = int(row['episode']) if pd.notna(row.get('episode')) else None
 
             # Build per-episode cumulative stats for scoring-relevant fields
             ep_stats = {}
             if cid and max_episode > 0:
-                running = {'ii': 0, 'ti': 0, 'idol': 0, 'adv': 0, 'adv_play': 0}
+                running = {'ii': 0, 'ti': 0, 'idol': 0, 'idol_play': 0, 'adv': 0, 'adv_play': 0}
                 for ep in range(1, max_episode + 1):
                     running['ii'] += ii_by_ep.get((snum, cid), {}).get(ep, 0)
                     running['ti'] += ti_by_ep.get((snum, cid), {}).get(ep, 0)
-                    running['idol'] += idol_found_by_ep.get((snum, cid), {}).get(ep, 0)
-                    running['adv'] += adv_found_by_ep.get((snum, cid), {}).get(ep, 0)
-                    running['adv_play'] += adv_played_by_ep.get((snum, cid), {}).get(ep, 0)
+                    running['idol'] += s_idol_found_by_ep.get(cid, {}).get(ep, 0)
+                    running['idol_play'] += s_idol_play_by_ep.get(cid, {}).get(ep, 0)
+                    running['adv'] += s_adv_found_by_ep.get(cid, {}).get(ep, 0)
+                    running['adv_play'] += s_adv_played_by_ep.get(cid, {}).get(ep, 0)
                     ep_stats[ep] = dict(running)
 
             survs.append(SimSurvivor(
                 id=len(survs), name=row['castaway'],
                 voted_out_order=order, made_jury=made_jury,
                 individual_immunity_wins=ii, tribal_immunity_wins=ti,
-                idols_found=idf, advantages_found=af, advantages_played=ap,
+                idols_found=idf, idols_played=ipd,
+                advantages_found=af, advantages_played=ap,
                 won_fire=(snum, cid) in fire_winner_set if cid else False,
                 elimination_episode=elim_ep, episode_stats=ep_stats,
             ))
@@ -502,11 +534,11 @@ def generate_scenarios(seasons, player_counts=None, drafts_per=None, seed=42):
 # ── Scoring ─────────────────────────────────────────────────────────────────
 
 _STAT_FIELDS = ('individual_immunity_wins', 'tribal_immunity_wins',
-                 'idols_found', 'advantages_found', 'advantages_played')
+                 'idols_found', 'idols_played', 'advantages_found', 'advantages_played')
 _EP_KEY_MAP = {
     'ii': 'individual_immunity_wins', 'ti': 'tribal_immunity_wins',
-    'idol': 'idols_found', 'adv': 'advantages_found',
-    'adv_play': 'advantages_played',
+    'idol': 'idols_found', 'idol_play': 'idols_played',
+    'adv': 'advantages_found', 'adv_play': 'advantages_played',
 }
 
 
@@ -613,12 +645,14 @@ def _fast_score_total(survivor, config, season, tribal_table,
         ii = stat_overrides.get('individual_immunity_wins', 0)
         ti = stat_overrides.get('tribal_immunity_wins', 0)
         idols = stat_overrides.get('idols_found', 0)
+        idol_plays = stat_overrides.get('idols_played', 0)
         adv = stat_overrides.get('advantages_found', 0)
         adv_play = stat_overrides.get('advantages_played', 0)
     else:
         ii = survivor.individual_immunity_wins or 0
         ti = survivor.tribal_immunity_wins or 0
         idols = survivor.idols_found or 0
+        idol_plays = survivor.idols_played or 0
         adv = survivor.advantages_found or 0
         adv_play = survivor.advantages_played or 0
 
@@ -628,16 +662,12 @@ def _fast_score_total(survivor, config, season, tribal_table,
         total += ti * config['tribal_immunity_val']
     if config['idol_found_val'] and idols:
         total += idols * config['idol_found_val']
-    if config['advantage_found_val']:
-        non_idol = adv - idols
-        if non_idol > 0:
-            total += non_idol * config['advantage_found_val']
-    if config['idol_play_val'] and idols:
-        total += idols * config['idol_play_val']
-    if config['advantage_play_val']:
-        non_idol_plays = adv_play - idols
-        if non_idol_plays > 0:
-            total += non_idol_plays * config['advantage_play_val']
+    if config['advantage_found_val'] and adv:
+        total += adv * config['advantage_found_val']
+    if config['idol_play_val'] and idol_plays:
+        total += idol_plays * config['idol_play_val']
+    if config['advantage_play_val'] and adv_play:
+        total += adv_play * config['advantage_play_val']
 
     if config.get('fire_win_val') and survivor.won_fire:
         total += config['fire_win_val']
