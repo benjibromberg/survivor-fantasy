@@ -14,7 +14,8 @@ def make_season(num_players=18, left_at_jury=8, n_finalists=3):
     survivors = []
     merge_threshold = num_players - left_at_jury
     for i in range(1, num_players + 1):
-        made_jury = i > merge_threshold and i < num_players
+        # Jury: post-merge boots only, not finalists or winner
+        made_jury = i > merge_threshold and i <= num_players - n_finalists
         survivors.append(SimSurvivor(
             id=i, name=f'P{i}', voted_out_order=i, made_jury=made_jury,
         ))
@@ -85,9 +86,9 @@ class TestFlatTribalPoints:
     def test_in_game_uses_current_tribal_count(self):
         season = make_season(num_players=18, left_at_jury=8)
         scoring = ClassicScoring(tribal_val=0.5, post_merge_tribal_val=1)
-        # Still in game (voted_out_order=0), season has had 5 eliminations
+        # Still in game (voted_out_order=0); tribals_survived = max(voted_out_order) in season = 18
         surv = make_survivor(voted_out_order=0)
-        # current_tribal_count = max voted_out_order among survivors = 18
+        # current_tribal_count = max voted_out_order among survivors = 18 (all assigned)
         bd = scoring.calculate_survivor_points(surv, season)
         # All 18 tribals: 10 pre-merge * 0.5 + 8 post-merge * 1 = 13
         assert bd.items['pre_merge_tribal'] == 5.0
@@ -235,6 +236,19 @@ class TestMilestones:
         bd = scoring.calculate_survivor_points(surv, season)
         assert 'merge' not in bd.items
 
+    def test_finalists_no_jury_bonus(self):
+        """2nd and 3rd place finalists have made_jury=False — no jury bonus."""
+        season = make_season(num_players=18, left_at_jury=8, n_finalists=3)
+        scoring = ClassicScoring(jury_val=2)
+        # 2nd place (voted_out_order=17)
+        surv2 = make_survivor(voted_out_order=17, made_jury=False)
+        bd2 = scoring.calculate_survivor_points(surv2, season)
+        assert 'jury' not in bd2.items
+        # 3rd place (voted_out_order=16)
+        surv3 = make_survivor(voted_out_order=16, made_jury=False)
+        bd3 = scoring.calculate_survivor_points(surv3, season)
+        assert 'jury' not in bd3.items
+
     def test_zero_val_disables_component(self):
         season = make_season()
         scoring = ClassicScoring(jury_val=0, merge_val=0, first_val=0)
@@ -335,23 +349,29 @@ class TestScorePick:
         assert pts == expected
 
     def test_replacement_with_stat_overrides(self):
-        """pmr_d with stat_overrides: uses overridden stats, strips pre-merge tribal."""
-        season = make_season(num_players=18, left_at_jury=8)
+        """pmr_d with stat_overrides: uses overridden stats, strips pre-merge tribal & merge."""
+        season = make_season(num_players=18, left_at_jury=8)  # merge at 10
         scoring = ClassicScoring(
             tribal_val=1, post_merge_tribal_val=2,
             individual_immunity_val=3,
-            first_val=0, merge_val=0, jury_val=0,
+            first_val=0, merge_val=5, jury_val=0,
         )
-        # Survivor with 15 voted_out_order (14 tribals total)
+        # Survivor with 15 voted_out_order (14 tribals total: 10 pre + 4 post)
         surv = make_survivor(voted_out_order=15, individual_immunity_wins=3)
         # Override: only 1 immunity win after merge
         overrides = {'individual_immunity_wins': 1, 'tribal_immunity_wins': 0,
                      'idols_found': 0, 'idols_played': 0,
                      'advantages_found': 0, 'advantages_played': 0}
         pts, bd = scoring.score_pick(surv, season, 'pmr_d', stat_overrides=overrides)
-        # pre_merge_tribal stripped, post_merge_tribal stays, immunity=1*3
+        # pre_merge_tribal stripped, merge stripped
         assert 'pre_merge_tribal' not in bd.items
         assert 'merge' not in bd.items
+        # post_merge_tribal stays: 4 post-merge tribals * 2 = 8 (2 tribals at rate 2 each)
+        assert bd.items['post_merge_tribal'] == 8
+        # immunity uses override (1 * 3 = 3)
+        assert bd.items['individual_immunity'] == 3
+        # total = post_merge(8) + immunity(3) = 11; pmr_d = 1.0x
+        assert pts == 11
         # Survivor stats restored after scoring
         assert surv.individual_immunity_wins == 3
 
@@ -380,6 +400,19 @@ class TestScorePick:
         pts, bd = scoring.score_pick(surv, season, 'pmr_d')
         # Flat deduction: total - pre_jury (10)
         assert pts == bd.total - 10
+
+    def test_replacement_fallback_no_deduction(self):
+        """pmr_d without stat_overrides and replacement_deduction=False: full points."""
+        season = make_season(num_players=18, left_at_jury=8)
+        scoring = ClassicScoring(
+            tribal_val=1, replacement_deduction=False,
+            first_val=0, merge_val=0, jury_val=0,
+        )
+        surv = make_survivor(voted_out_order=15)
+        pts_repl, bd_repl = scoring.score_pick(surv, season, 'pmr_d')
+        pts_draft, bd_draft = scoring.score_pick(surv, season, 'draft')
+        # No deduction and no overrides: pmr_d gets same as draft
+        assert pts_repl == pts_draft
 
 
 # ── apply_pick_modifier ───────────────────────────────────────────────────

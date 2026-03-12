@@ -61,6 +61,8 @@ def load_survivor_ref():
 
 def build_season_from_survivor_db(season_number, ref_data):
     """Create a Season and all its Survivors from survivoR data."""
+    if season_number < 41:
+        raise ValueError(f'Season {season_number}: only new-era seasons (41+) are supported.')
     castaways, tribe_colours, season_summary, confessionals, vote_history, challenge_results, advantage_movement, advantage_details, castaway_details = ref_data
     cast = us_season_filter(castaways, season_number).copy()
     if cast.empty:
@@ -75,9 +77,17 @@ def build_season_from_survivor_db(season_number, ref_data):
         if season_name.isdigit():
             season_name = f'Season {season_name}'
 
-    n_cast = int(ss.iloc[0]['n_cast']) if not ss.empty and pd.notna(ss.iloc[0]['n_cast']) else len(cast)
-    n_jury = int(ss.iloc[0]['n_jury']) if not ss.empty and pd.notna(ss.iloc[0]['n_jury']) else 8
-    left_at_jury = n_jury + (int(ss.iloc[0]['n_finalists']) if not ss.empty and pd.notna(ss.iloc[0]['n_finalists']) else 3)
+    if ss.empty:
+        raise ValueError(f'Season {season_number}: no Season Summary data in survivoR. '
+                         'Only new-era seasons (41+) are supported.')
+    row = ss.iloc[0]
+    if pd.isna(row['n_cast']) or pd.isna(row['n_jury']) or pd.isna(row['n_finalists']):
+        raise ValueError(f'Season {season_number}: survivoR data missing required fields '
+                         '(n_cast, n_jury, n_finalists). Only new-era seasons (41+) are supported.')
+    n_cast = int(row['n_cast'])
+    n_jury = int(row['n_jury'])
+    n_finalists = int(row['n_finalists'])
+    left_at_jury = n_jury + n_finalists
 
     # Build tribe color lookup
     tc = us_season_filter(tribe_colours, season_number)
@@ -91,6 +101,7 @@ def build_season_from_survivor_db(season_number, ref_data):
         is_active=False,
         num_players=n_cast,
         left_at_jury=left_at_jury,
+        n_finalists=n_finalists,
     )
     db.session.add(season)
     db.session.flush()

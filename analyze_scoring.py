@@ -157,6 +157,9 @@ def load_all_seasons(season_numbers=None):
     """Load season data from survivoR.xlsx. Returns list of SimSeason."""
     if season_numbers is None:
         season_numbers = DEFAULT_SEASONS
+    invalid = [s for s in season_numbers if s < 41]
+    if invalid:
+        raise ValueError(f'Only new-era seasons (41+) are supported. Invalid: {invalid}')
 
     if not os.path.exists(SURVIVOR_DATA_FILE):
         print(f'{SURVIVOR_DATA_FILE} not found, downloading...')
@@ -213,9 +216,13 @@ def load_all_seasons(season_numbers=None):
             continue
         ss = ss_row.iloc[0]
 
-        n_cast = int(ss['n_cast']) if pd.notna(ss['n_cast']) else len(cast)
-        n_jury = int(ss['n_jury']) if pd.notna(ss['n_jury']) else 7
-        n_finalists = int(ss['n_finalists']) if pd.notna(ss['n_finalists']) else 2
+        if pd.isna(ss['n_cast']) or pd.isna(ss['n_jury']) or pd.isna(ss['n_finalists']):
+            raise ValueError(
+                f'Season {snum}: survivoR data missing required fields '
+                f'(n_cast, n_jury, n_finalists). Only new-era seasons (41+) are supported.')
+        n_cast = int(ss['n_cast'])
+        n_jury = int(ss['n_jury'])
+        n_finalists = int(ss['n_finalists'])
         left_at_jury = n_jury + n_finalists
 
         season_name = str(ss['season_name']) if pd.notna(ss['season_name']) else f'Season {snum}'
@@ -287,11 +294,10 @@ def load_all_seasons(season_numbers=None):
         survs = []
         for _, row in cast.iterrows():
             order = int(row['order']) if pd.notna(row['order']) else 0
-            # Jury status
+            # Jury status — prefer the boolean 'jury' column over 'jury_status'
+            # ('jury_status' contains strings like '1st jury member', not just 'jury')
             made_jury = False
-            if 'jury_status' in row.index and pd.notna(row['jury_status']):
-                made_jury = (str(row['jury_status']).strip().lower() == 'jury')
-            elif 'jury' in row.index and pd.notna(row['jury']):
+            if 'jury' in row.index and pd.notna(row['jury']):
                 made_jury = bool(row['jury'])
 
             cid = row['castaway_id'] if pd.notna(row.get('castaway_id')) else None
@@ -732,14 +738,26 @@ def calculate_leaderboard(season, scoring, survivors, picks_by_user,
     if as_of is not None:
         target_episode = elim_to_episode.get(as_of, 0) if as_of > 0 else 0
 
+        n_fin = season.n_finalists
+        fire_elim = season.num_players - n_fin
+        finalist_threshold = season.num_players - n_fin
         for s in survivors:
             originals[s.id] = (
-                s.voted_out_order, s.made_jury,
+                s.voted_out_order, s.made_jury, s.won_fire,
                 {f: getattr(s, f) for f in _STAT_FIELDS},
             )
             if s.voted_out_order and s.voted_out_order > as_of:
                 s.voted_out_order = 0
                 s.made_jury = False
+            elif (s.voted_out_order > 0
+                  and s.voted_out_order > merge_thresh
+                  and s.voted_out_order <= finalist_threshold):
+                # Force jury for post-merge boots; exclude finalists and winner
+                s.made_jury = True
+
+            # Fire-making hasn't happened yet at this point
+            if as_of < fire_elim:
+                s.won_fire = False
 
             # Set stats to their values at the target episode
             if target_episode > 0 and s.episode_stats:
@@ -784,7 +802,7 @@ def calculate_leaderboard(season, scoring, survivors, picks_by_user,
     # Restore original values
     for s in survivors:
         if s.id in originals:
-            s.voted_out_order, s.made_jury, saved_stats = originals[s.id]
+            s.voted_out_order, s.made_jury, s.won_fire, saved_stats = originals[s.id]
             for f, val in saved_stats.items():
                 setattr(s, f, val)
 
@@ -839,12 +857,13 @@ def evaluate_config(config, scenarios):
         orig_state = {}
         for s in survivors:
             orig_state[s.id] = (
-                s.voted_out_order, s.made_jury,
+                s.voted_out_order, s.made_jury, s.won_fire,
                 {f: getattr(s, f) for f in _STAT_FIELDS},
             )
             # Reset to pre-game state
             s.voted_out_order = 0
             s.made_jury = False
+            s.won_fire = False
             for f in _STAT_FIELDS:
                 setattr(s, f, 0)
 
@@ -877,13 +896,27 @@ def evaluate_config(config, scenarios):
         leaders = []
         elim_idx = 0
 
+        n_fin = season.n_finalists
+        fire_elim = season.num_players - n_fin
+        finalist_threshold = season.num_players - n_fin
+
         for elim in range(1, max_elim + 1):
             # Reveal this elimination: set the survivor's real voted_out_order
             while elim_idx < len(surv_by_elim) and orig_state[surv_by_elim[elim_idx].id][0] == elim:
                 s = surv_by_elim[elim_idx]
                 s.voted_out_order = orig_state[s.id][0]
-                s.made_jury = orig_state[s.id][1]
+                # Force jury for post-merge boots; exclude finalists and winner
+                if (s.voted_out_order > merge_thresh
+                        and s.voted_out_order <= finalist_threshold):
+                    s.made_jury = True
+                else:
+                    s.made_jury = orig_state[s.id][1]
                 elim_idx += 1
+
+            # Restore won_fire once fire-making challenge has occurred
+            if elim >= fire_elim:
+                for s in survivors:
+                    s.won_fire = orig_state[s.id][2]
 
             # Update all survivors' episode stats to this step's episode
             target_episode = elim_to_ep.get(elim, 0)
@@ -949,7 +982,7 @@ def evaluate_config(config, scenarios):
         # Restore original state before final leaderboard scoring
         for s in survivors:
             if s.id in orig_state:
-                s.voted_out_order, s.made_jury, saved_stats = orig_state[s.id]
+                s.voted_out_order, s.made_jury, s.won_fire, saved_stats = orig_state[s.id]
                 for f, val in saved_stats.items():
                     setattr(s, f, val)
 
@@ -1031,8 +1064,12 @@ def evaluate_config(config, scenarios):
                     draft_pts += modified
                 else:
                     non_draft_pts += modified
+                # Apply same multiplier to tribal components so numerator
+                # and denominator are on the same scale.
+                raw_total = breakdown.total
+                mult = (modified / raw_total) if raw_total else 1.0
                 for k in ('pre_merge_tribal', 'post_merge_tribal', 'finale_tribal'):
-                    tribal_pts += breakdown.items.get(k, 0)
+                    tribal_pts += breakdown.items.get(k, 0) * mult
             total = draft_pts + non_draft_pts
             if total > 0:
                 metrics['non_draft_pct'].append(non_draft_pts / total)
@@ -1043,11 +1080,12 @@ def evaluate_config(config, scenarios):
         draft_quality = {}  # user_id -> avg voted_out_order of draft picks
         for user_id, picks in picks_by_user.items():
             draft_picks = [p for p in picks if p.pick_type == 'draft']
-            if draft_picks:
+            valid_draft = [p for p in draft_picks
+                           if p.survivor.voted_out_order]
+            if valid_draft:
                 avg_order = sum(
-                    p.survivor.voted_out_order for p in draft_picks
-                    if p.survivor.voted_out_order
-                ) / len(draft_picks)
+                    p.survivor.voted_out_order for p in valid_draft
+                ) / len(valid_draft)
                 draft_quality[user_id] = avg_order
         if len(draft_quality) >= 3 and final_ranking:
             # Spearman-style: correlation between draft quality rank and final rank
@@ -1119,7 +1157,7 @@ def _evaluate_worker(config):
 
 def print_metrics(metrics):
     print(f'  Draft skill corr:     {metrics.get("draft_skill_correlation", 0):.3f}'
-          f'  (good drafting → winning, weight=3.0)')
+          f'  (good drafting → winning, weight=2.0)')
     print(f'  Longevity share:      {metrics.get("longevity_share", 0):.0%}'
           f'  (% pts from tribals, weight=2.0)')
     print(f'  Rank volatility:      {metrics.get("rank_volatility", 0):.3f}'

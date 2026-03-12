@@ -21,7 +21,8 @@ def make_season(num_players=18, left_at_jury=8, n_finalists=3):
     merge_threshold = num_players - left_at_jury  # 10
 
     for i in range(1, num_players + 1):
-        made_jury = i > merge_threshold and i < num_players  # winner not on jury
+        # Jury: post-merge boots only, not finalists or winner
+        made_jury = i > merge_threshold and i <= num_players - n_finalists
         survivors.append(SimSurvivor(
             id=i, name=f'Player{i}',
             voted_out_order=i, made_jury=made_jury,
@@ -290,23 +291,23 @@ class TestMetrics:
 
     def test_draft_skill_correlation_range(self):
         result = self._run_evaluate()
-        if 'draft_skill_correlation' in result:
-            assert -1.0 <= result['draft_skill_correlation'] <= 1.0
+        assert 'draft_skill_correlation' in result
+        assert -1.0 <= result['draft_skill_correlation'] <= 1.0
 
     def test_longevity_share_range(self):
         result = self._run_evaluate()
-        if 'longevity_share' in result:
-            assert 0 <= result['longevity_share'] <= 1.0
+        assert 'longevity_share' in result
+        assert 0 <= result['longevity_share'] <= 1.0
 
     def test_comeback_rate_range(self):
         result = self._run_evaluate()
-        if 'comeback_rate' in result:
-            assert 0 <= result['comeback_rate'] <= 1.0
+        assert 'comeback_rate' in result
+        assert 0 <= result['comeback_rate'] <= 1.0
 
     def test_suspense_range(self):
         result = self._run_evaluate()
-        if 'suspense' in result:
-            assert 0 <= result['suspense'] <= 1.0
+        assert 'suspense' in result
+        assert 0 <= result['suspense'] <= 1.0
 
     def test_high_tribal_config_has_high_longevity(self):
         """Config with high tribal values and zero bonuses should have high longevity_share."""
@@ -320,8 +321,8 @@ class TestMetrics:
             'final_tribal_val': 0, 'fire_win_val': 0,
             'first_val': 0, 'placement_ratio': (0, 0),
         })
-        if 'longevity_share' in result:
-            assert result['longevity_share'] > 0.9
+        assert 'longevity_share' in result
+        assert result['longevity_share'] > 0.9
 
 
 # ── _build_elim_to_episode ────────────────────────────────────────────────
@@ -551,7 +552,8 @@ class TestFastScoreTotal:
         surv = season.survivors[14]
         surv.individual_immunity_wins = 5
         stat_ov = {'individual_immunity_wins': 2, 'tribal_immunity_wins': 0,
-                   'idols_found': 0, 'advantages_found': 0, 'advantages_played': 0}
+                   'idols_found': 0, 'idols_played': 0,
+                   'advantages_found': 0, 'advantages_played': 0}
         repl = _fast_score_total(surv, config, season, table,
                                  stat_overrides=stat_ov, is_replacement=True)
         # Should use 2 immunities (override), not 5 (original)
@@ -638,7 +640,8 @@ class TestTimelineFidelity:
         survivors = []
         for i in range(1, num_players + 1):
             merge_thresh = num_players - left_at_jury  # 7
-            made_jury = i > merge_thresh and i < num_players
+            n_finalists = 3
+            made_jury = i > merge_thresh and i <= num_players - n_finalists
             # Build cumulative episode_stats
             ep_stats = {}
             for ep in range(1, num_players + 1):
@@ -655,6 +658,8 @@ class TestTimelineFidelity:
                     for k in ep_stats[ep]:
                         ep_stats[ep][k] += ep_stats[ep - 1].get(k, 0)
 
+            # Survivor 10 won fire-making (eliminated at position 9 = fire_elim)
+            won_fire = (i == 10)
             survivors.append(SimSurvivor(
                 id=i, name=f'S{i}', voted_out_order=i, made_jury=made_jury,
                 individual_immunity_wins=ep_stats[num_players]['ii'],
@@ -663,6 +668,7 @@ class TestTimelineFidelity:
                 idols_played=ep_stats[num_players]['idol_play'],
                 advantages_found=ep_stats[num_players]['adv'],
                 advantages_played=ep_stats[num_players]['adv_play'],
+                won_fire=won_fire,
                 elimination_episode=i,
                 episode_stats=ep_stats,
             ))
@@ -704,19 +710,23 @@ class TestTimelineFidelity:
 
         # Method 2: Forward walk (same logic as evaluate_config)
         tribal_table = _build_tribal_table(fast_config, season)
+        _STAT_FIELDS = ('individual_immunity_wins', 'tribal_immunity_wins',
+                        'idols_found', 'idols_played', 'advantages_found',
+                        'advantages_played')
         orig_state = {}
         for s in season.survivors:
             orig_state[s.id] = (
-                s.voted_out_order, s.made_jury,
-                {f: getattr(s, f) for f in
-                 ('individual_immunity_wins', 'tribal_immunity_wins',
-                  'idols_found', 'advantages_found', 'advantages_played')},
+                s.voted_out_order, s.made_jury, getattr(s, 'won_fire', False),
+                {f: getattr(s, f) for f in _STAT_FIELDS},
             )
             s.voted_out_order = 0
             s.made_jury = False
-            for f in ('individual_immunity_wins', 'tribal_immunity_wins',
-                      'idols_found', 'advantages_found', 'advantages_played'):
+            s.won_fire = False
+            for f in _STAT_FIELDS:
                 setattr(s, f, 0)
+
+        n_fin = season.n_finalists
+        fire_elim = season.num_players - n_fin
 
         surv_by_elim = sorted(
             [s for s in season.survivors if orig_state[s.id][0] > 0],
@@ -745,8 +755,21 @@ class TestTimelineFidelity:
             while elim_idx < len(surv_by_elim) and orig_state[surv_by_elim[elim_idx].id][0] == elim:
                 s = surv_by_elim[elim_idx]
                 s.voted_out_order = orig_state[s.id][0]
-                s.made_jury = orig_state[s.id][1]
+                finalist_threshold = season.num_players - (season.n_finalists)
+                if (s.voted_out_order > merge_thresh
+                        and s.voted_out_order <= finalist_threshold):
+                    s.made_jury = True
+                else:
+                    s.made_jury = orig_state[s.id][1]
                 elim_idx += 1
+
+            # Time-gate won_fire: only credited at or after fire_elim step
+            if elim >= fire_elim:
+                for s in season.survivors:
+                    s.won_fire = orig_state[s.id][2]
+            else:
+                for s in season.survivors:
+                    s.won_fire = False
 
             target_episode = elim_to_ep.get(elim, 0)
             if target_episode > 0:
@@ -805,7 +828,7 @@ class TestTimelineFidelity:
         # Restore
         for s in season.survivors:
             if s.id in orig_state:
-                s.voted_out_order, s.made_jury, saved = orig_state[s.id]
+                s.voted_out_order, s.made_jury, s.won_fire, saved = orig_state[s.id]
                 for f, val in saved.items():
                     setattr(s, f, val)
 

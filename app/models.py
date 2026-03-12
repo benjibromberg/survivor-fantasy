@@ -28,9 +28,11 @@ class Season(db.Model):
     number = db.Column(db.Integer, unique=True, nullable=False)
     name = db.Column(db.String(100))
     is_active = db.Column(db.Boolean, default=True)
+    # Defaults are placeholders — always overwritten by survivoR data for new-era (41+) seasons
     num_players = db.Column(db.Integer, default=18)
     num_episodes = db.Column(db.Integer, default=13)
     left_at_jury = db.Column(db.Integer, default=11)
+    n_finalists = db.Column(db.Integer, default=3)
     scoring_system = db.Column(db.String(50), default='Classic')
     scoring_config = db.Column(db.Text, default='{}')
     survivors = db.relationship('Survivor', backref='season', lazy=True)

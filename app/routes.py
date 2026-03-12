@@ -362,15 +362,21 @@ def _apply_as_of(season, as_of):
     fraction = as_of / max_elim if as_of > 0 and max_elim > 0 else 0
 
     jury_threshold = season.merge_threshold
-    # Fire-making happens at final 4; fire loser is eliminated at num_players - 2
-    fire_elim = season.num_players - 2
+    n_finalists = season.n_finalists
+    # Fire loser is last eliminated before FTC (4th place with 3 finalists)
+    fire_elim = season.num_players - n_finalists
+    # Finalists are the last n_finalists (not jury members)
+    finalist_threshold = season.num_players - n_finalists
 
     for s in survivors:
         if s.voted_out_order > as_of:
             s.voted_out_order = 0
             s.made_jury = False
             s.result = None
-        elif s.voted_out_order > 0 and s.voted_out_order > jury_threshold:
+        elif (s.voted_out_order > 0
+              and s.voted_out_order > jury_threshold
+              and s.voted_out_order <= finalist_threshold):
+            # Force jury for post-merge boots; exclude finalists and winner
             s.made_jury = True
 
         # Fire challenge hasn't happened yet at this point in the timeline
@@ -1186,7 +1192,9 @@ def admin_seasons():
 
     if request.method == 'POST':
         number = int(request.form['number'])
-        if Season.query.filter_by(number=number).first():
+        if number < 41:
+            flash('Only new-era seasons (41+) are supported.', 'error')
+        elif Season.query.filter_by(number=number).first():
             flash(f'Season {number} already exists.', 'error')
         else:
             season = Season(number=number, name=f'Season {number}')

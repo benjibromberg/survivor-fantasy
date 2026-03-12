@@ -38,15 +38,13 @@ def _cache_key(season, scoring_config):
     return hashlib.md5(raw.encode()).hexdigest()
 
 
-# New era starts at season 41 (shorter seasons, more idols/advantages)
 NEW_ERA_START = 41
 
 def _compute_historical_rates():
-    """Compute per-tribal-survived rates from the full survivoR dataset.
+    """Compute per-tribal-survived rates from new-era (41+) survivoR data.
 
-    Immunity win rates use ALL US seasons (format hasn't changed).
-    Idol/advantage rates use only new-era seasons (41+) since the volume
-    of advantages changed dramatically in the modern game.
+    All rates (immunity, idols, advantages) use new-era seasons only,
+    since this app exclusively supports new-era Survivor.
 
     Results are cached in memory (dataset doesn't change within a session).
     """
@@ -59,33 +57,65 @@ def _compute_historical_rates():
         _rates_cache = {
             'ii_per_pm_tribal': 0, 'idol_per_tribal': 0,
             'adv_per_tribal': 0, 'adv_play_per_tribal': 0,
-            'n_seasons_immunity': 0, 'n_seasons_advantages': 0,
+            'n_seasons': 0,
             'career_ii_rates': {}, 'idol_play_rate': 0.5, 'idol_ids': set(),
         }
         return _rates_cache
 
-    # --- Immunity wins: all US seasons ---
+    # Load survivoR data, filtered to new-era US seasons only
     castaways = pd.read_excel(SURVIVOR_DATA_FILE, 'Castaways')
-    us_cast = castaways[castaways['version'] == 'US'].copy()
+    us_cast = castaways[
+        (castaways['version'] == 'US') &
+        (castaways['season'] >= NEW_ERA_START)
+    ].copy()
 
     challenge_results = pd.read_excel(SURVIVOR_DATA_FILE, 'Challenge Results')
-    us_cr = challenge_results[challenge_results['version'] == 'US']
+    us_cr = challenge_results[
+        (challenge_results['version'] == 'US') &
+        (challenge_results['season'] >= NEW_ERA_START)
+    ]
 
     # Individual immunity wins per castaway per season
     ii_wins = (us_cr[us_cr['won_individual_immunity'] == 1]
                .groupby(['season', 'castaway_id']).size()
                .reset_index(name='ii_wins'))
 
-    # Merge count: use 'order' column (elimination order) from castaways
-    # order = elimination position, winner has highest order
-    # tribals survived = order - 1 for eliminated players
-    # We need num_players per season to find merge threshold
     season_sizes = us_cast.groupby('season')['castaway_id'].nunique()
 
+    # --- Single pass over new-era seasons: immunity + idol/advantage rates ---
     all_post_merge_tribals = 0
     all_ii = 0
-    n_seasons_ii = 0
-    merge_thresholds = {}  # season_num -> merge_threshold (for career rates)
+    all_tribals = 0
+    all_idols = 0
+    all_adv = 0
+    all_adv_played = 0
+    n_seasons = 0
+    merge_thresholds = {}
+
+    # Idol/advantage data
+    advantage_movement = pd.read_excel(SURVIVOR_DATA_FILE, 'Advantage Movement')
+    us_am = advantage_movement[
+        (advantage_movement['version'] == 'US') &
+        (advantage_movement['season'] >= NEW_ERA_START)
+    ]
+
+    idol_found = us_am[us_am['event'] == 'Found'].copy()
+    try:
+        adv_details = pd.read_excel(SURVIVOR_DATA_FILE, 'Advantage Details')
+        idol_ids = get_idol_ids(adv_details[adv_details['version'] == 'US'])
+    except Exception:
+        idol_ids = set()
+
+    idol_found_counts = (idol_found[idol_found['advantage_id'].isin(idol_ids)]
+                         .groupby(['season', 'castaway_id']).size()
+                         .reset_index(name='count'))
+    all_found_counts = (idol_found
+                        .groupby(['season', 'castaway_id']).size()
+                        .reset_index(name='count'))
+    adv_played = us_am[us_am['event'] == 'Played']
+    played_counts = (adv_played
+                     .groupby(['season', 'castaway_id']).size()
+                     .reset_index(name='count'))
 
     for season_num in sorted(us_cast['season'].unique()):
         s_cast = us_cast[us_cast['season'] == season_num]
@@ -93,8 +123,7 @@ def _compute_historical_rates():
         if n_players == 0:
             continue
 
-        # Estimate merge at ~50% of players remaining (standard Survivor)
-        # Use jury column: players with jury=1 made the jury
+        # Compute merge threshold from jury/finalist/winner columns
         n_jury = int(s_cast['jury'].sum()) if 'jury' in s_cast.columns else 0
         n_finalists = int(s_cast['finalist'].sum()) if 'finalist' in s_cast.columns else 0
         left_at_merge = n_jury + n_finalists + (1 if s_cast['winner'].sum() > 0 else 0)
@@ -110,16 +139,33 @@ def _compute_historical_rates():
             tribals = int(order) - 1
             post_merge = max(0, tribals - merge_threshold)
             all_post_merge_tribals += post_merge
+            all_tribals += tribals
 
             cid = row['castaway_id']
+            # Immunity
             ii_row = ii_wins[(ii_wins['season'] == season_num) &
                              (ii_wins['castaway_id'] == cid)]
             all_ii += int(ii_row['ii_wins'].sum()) if len(ii_row) > 0 else 0
 
-        n_seasons_ii += 1
+            # Idols/advantages
+            idol_r = idol_found_counts[
+                (idol_found_counts['season'] == season_num) &
+                (idol_found_counts['castaway_id'] == cid)]
+            all_idols += int(idol_r['count'].sum()) if len(idol_r) > 0 else 0
 
-    # --- Per-castaway career immunity win rates ---
-    # Vectorized: compute post-merge tribals per castaway-season, then career totals
+            adv_r = all_found_counts[
+                (all_found_counts['season'] == season_num) &
+                (all_found_counts['castaway_id'] == cid)]
+            all_adv += int(adv_r['count'].sum()) if len(adv_r) > 0 else 0
+
+            play_r = played_counts[
+                (played_counts['season'] == season_num) &
+                (played_counts['castaway_id'] == cid)]
+            all_adv_played += int(play_r['count'].sum()) if len(play_r) > 0 else 0
+
+        n_seasons += 1
+
+    # --- Per-castaway career immunity win rates (new-era appearances only) ---
     us_valid = us_cast[us_cast['order'].notna() & (us_cast['order'] > 0)].copy()
     us_valid['tribals'] = us_valid['order'].astype(int) - 1
     us_valid['merge_threshold'] = us_valid['season'].map(merge_thresholds)
@@ -137,101 +183,32 @@ def _compute_historical_rates():
             ii_count = career_ii_total.get(cid, 0) if cid in career_ii_total.index else 0
             career_ii_rates[cid] = ii_count / pm
 
-    # --- Idols/advantages: new era (41+) only ---
-    advantage_movement = pd.read_excel(SURVIVOR_DATA_FILE, 'Advantage Movement')
-    us_am = advantage_movement[
-        (advantage_movement['version'] == 'US') &
-        (advantage_movement['season'] >= NEW_ERA_START)
-    ]
-
-    new_era_cast = us_cast[us_cast['season'] >= NEW_ERA_START]
-    new_era_seasons = sorted(new_era_cast['season'].unique())
-
-    # Count idol/advantage events per castaway per season
-    idol_found = us_am[us_am['event'] == 'Found'].copy()
-    # Distinguish idols from other advantages via advantage_details
-    try:
-        adv_details = pd.read_excel(SURVIVOR_DATA_FILE, 'Advantage Details')
-        idol_ids = get_idol_ids(adv_details[adv_details['version'] == 'US'])
-    except Exception:
-        idol_ids = set()
-
-    idol_found_counts = (idol_found[idol_found['advantage_id'].isin(idol_ids)]
-                         .groupby(['season', 'castaway_id']).size()
-                         .reset_index(name='count'))
-    all_found_counts = (idol_found
-                        .groupby(['season', 'castaway_id']).size()
-                        .reset_index(name='count'))
-
-    adv_played = us_am[us_am['event'] == 'Played']
-    played_counts = (adv_played
-                     .groupby(['season', 'castaway_id']).size()
-                     .reset_index(name='count'))
-
-    new_tribals = 0
-    new_idols = 0
-    new_adv = 0
-    new_adv_played = 0
-    n_seasons_adv = 0
-
-    for season_num in new_era_seasons:
-        s_cast = new_era_cast[new_era_cast['season'] == season_num]
-        n_players = int(season_sizes.get(season_num, 0))
-        if n_players == 0:
-            continue
-
-        for _, row in s_cast.iterrows():
-            order = row.get('order')
-            if pd.isna(order) or int(order) <= 0:
-                continue
-            tribals = int(order) - 1
-            new_tribals += tribals
-
-            cid = row['castaway_id']
-            idol_r = idol_found_counts[
-                (idol_found_counts['season'] == season_num) &
-                (idol_found_counts['castaway_id'] == cid)]
-            new_idols += int(idol_r['count'].sum()) if len(idol_r) > 0 else 0
-
-            adv_r = all_found_counts[
-                (all_found_counts['season'] == season_num) &
-                (all_found_counts['castaway_id'] == cid)]
-            new_adv += int(adv_r['count'].sum()) if len(adv_r) > 0 else 0
-
-            play_r = played_counts[
-                (played_counts['season'] == season_num) &
-                (played_counts['castaway_id'] == cid)]
-            new_adv_played += int(play_r['count'].sum()) if len(play_r) > 0 else 0
-
-        n_seasons_adv += 1
-
-    # --- Idol play rate: fraction of found idols that were played (new era) ---
-    total_idol_found_ne = int(idol_found_counts['count'].sum()) if len(idol_found_counts) > 0 else 0
-    idol_played_ne = us_am[
+    # --- Idol play rate: fraction of found idols that were played ---
+    total_idol_found = int(idol_found_counts['count'].sum()) if len(idol_found_counts) > 0 else 0
+    idol_played_events = us_am[
         (us_am['event'] == 'Played') & (us_am['advantage_id'].isin(idol_ids))]
-    total_idol_played_ne = len(idol_played_ne)
-    idol_play_rate = (total_idol_played_ne / total_idol_found_ne
-                      if total_idol_found_ne > 0 else 0.5)
+    total_idol_played = len(idol_played_events)
+    idol_play_rate = (total_idol_played / total_idol_found
+                      if total_idol_found > 0 else 0.5)
 
     _rates_cache = {
         'ii_per_pm_tribal': all_ii / all_post_merge_tribals if all_post_merge_tribals else 0,
-        'idol_per_tribal': new_idols / new_tribals if new_tribals else 0,
-        'adv_per_tribal': new_adv / new_tribals if new_tribals else 0,
-        'adv_play_per_tribal': new_adv_played / new_tribals if new_tribals else 0,
-        'n_seasons_immunity': n_seasons_ii,
-        'n_seasons_advantages': n_seasons_adv,
+        'idol_per_tribal': all_idols / all_tribals if all_tribals else 0,
+        'adv_per_tribal': all_adv / all_tribals if all_tribals else 0,
+        'adv_play_per_tribal': all_adv_played / all_tribals if all_tribals else 0,
+        'n_seasons': n_seasons,
         'career_ii_rates': career_ii_rates,
         'idol_play_rate': idol_play_rate,
         'idol_ids': idol_ids,
     }
 
     logger.info(
-        'Historical rates computed: ii=%.4f (%d seasons), '
-        'idol=%.4f, adv=%.4f, adv_play=%.4f (%d new-era seasons), '
+        'Historical rates computed from %d new-era seasons: '
+        'ii=%.4f, idol=%.4f, adv=%.4f, adv_play=%.4f, '
         'career_ii_rates=%d castaways, idol_play_rate=%.2f',
-        _rates_cache['ii_per_pm_tribal'], n_seasons_ii,
+        n_seasons, _rates_cache['ii_per_pm_tribal'],
         _rates_cache['idol_per_tribal'], _rates_cache['adv_per_tribal'],
-        _rates_cache['adv_play_per_tribal'], n_seasons_adv,
+        _rates_cache['adv_play_per_tribal'],
         len(career_ii_rates), idol_play_rate)
 
     return _rates_cache
@@ -436,6 +413,7 @@ def calculate_win_probabilities(season):
     original_jury = {s.id: s.made_jury for s in survivors}
     original_ii = {s.id: s.individual_immunity_wins for s in remaining}
     original_idols = {s.id: s.idols_found for s in remaining}
+    original_idols_played = {s.id: s.idols_played for s in remaining}
     original_adv = {s.id: s.advantages_found for s in remaining}
     original_adv_played = {s.id: s.advantages_played for s in remaining}
 
@@ -478,9 +456,12 @@ def calculate_win_probabilities(season):
         # --- Frozen mode: original ordering, current stats ---
         for i, surv in enumerate(ordering):
             surv.voted_out_order = current_max_vo + i + 1
+        n_fin = season.n_finalists
+        finalist_threshold = season.num_players - n_fin
         for s in survivors:
             if s.voted_out_order > jury_threshold:
-                s.made_jury = True
+                # Finalists and winner are NOT jury members
+                s.made_jury = s.voted_out_order <= finalist_threshold
 
         winner_frozen = _score_all_users(
             scoring, users_with_picks, user_picks, surv_by_id, season,
@@ -498,7 +479,8 @@ def calculate_win_probabilities(season):
             surv.voted_out_order = current_max_vo + i + 1
         # Re-compute jury for remaining (ordering may differ from frozen)
         for surv in remaining:
-            surv.made_jury = surv.voted_out_order > jury_threshold
+            surv.made_jury = (surv.voted_out_order > jury_threshold
+                              and surv.voted_out_order <= finalist_threshold)
 
         # Adjust stats with per-player immunity rates
         for surv in remaining:
@@ -514,6 +496,11 @@ def calculate_win_probabilities(season):
             surv.idols_found = (
                 (original_idols[surv.id] or 0)
                 + additional_tribals * rates['idol_per_tribal']
+            )
+            surv.idols_played = (
+                (original_idols_played[surv.id] or 0)
+                + additional_tribals * rates['idol_per_tribal']
+                * rates.get('idol_play_rate', 0.5)
             )
             surv.advantages_found = (
                 (original_adv[surv.id] or 0)
@@ -537,6 +524,7 @@ def calculate_win_probabilities(season):
         for surv in remaining:
             surv.individual_immunity_wins = original_ii[surv.id]
             surv.idols_found = original_idols[surv.id]
+            surv.idols_played = original_idols_played[surv.id]
             surv.advantages_found = original_adv[surv.id]
             surv.advantages_played = original_adv_played[surv.id]
 

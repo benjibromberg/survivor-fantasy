@@ -354,18 +354,24 @@ def refresh_season(season):
     existing = {s.castaway_id: s for s in Survivor.query.filter_by(season_id=season.id).all()
                 if s.castaway_id}
 
-    # Season metadata from survivoR (update num_players/left_at_jury if not set)
+    # Season metadata from survivoR (required for new-era seasons 41+)
     season_summary = pd.read_excel(SURVIVOR_DATA_FILE, 'Season Summary')
     ss = season_summary[
         (season_summary['version'] == 'US') &
         (season_summary['season'] == season.number)
     ]
     if not ss.empty:
-        n_cast = int(ss.iloc[0]['n_cast']) if pd.notna(ss.iloc[0]['n_cast']) else len(cast)
-        n_jury = int(ss.iloc[0]['n_jury']) if pd.notna(ss.iloc[0]['n_jury']) else 8
-        n_finalists = int(ss.iloc[0]['n_finalists']) if pd.notna(ss.iloc[0]['n_finalists']) else 3
+        row = ss.iloc[0]
+        if pd.isna(row['n_cast']) or pd.isna(row['n_jury']) or pd.isna(row['n_finalists']):
+            raise ValueError(
+                f"Season {season.number}: survivoR data missing required fields "
+                f"(n_cast, n_jury, n_finalists). Only new-era seasons (41+) are supported.")
+        n_cast = int(row['n_cast'])
+        n_jury = int(row['n_jury'])
+        n_finalists = int(row['n_finalists'])
         season.num_players = n_cast
         season.left_at_jury = n_jury + n_finalists
+        season.n_finalists = n_finalists
         # Update season name if still default
         if season.name == f'Season {season.number}':
             raw_name = ss.iloc[0]['season_name'] if pd.notna(ss.iloc[0]['season_name']) else ''
