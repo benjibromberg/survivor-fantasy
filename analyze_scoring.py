@@ -69,7 +69,9 @@ PARAM_GRID = {
     'replacement_multiplier': [0, 0.25, 0.5, 0.75, 1.0],
     'replacement_deduction': [True, False],
     # Sole Survivor streak
-    'sole_survivor_val': [0, 0.25, 0.5, 1, 2],
+    # sole_survivor_val excluded from optimization — tuned separately as a
+    # fun bonus that shouldn't distort scoring balance.  Locked at 0 during
+    # the sweep so it can't inflate comeback/suspense/non-draft metrics.
 }
 
 
@@ -951,9 +953,11 @@ def evaluate_config(config, scenarios):
                 for f, val in saved_stats.items():
                     setattr(s, f, val)
 
-        # Final leaderboard (with SS bonus + breakdowns for non-draft/longevity metrics)
+        # Final leaderboard WITHOUT SS bonus — SS is tuned separately and must
+        # not inflate comeback/suspense/draft_skill/final_spread metrics.
+        zero_ss = {uid: 0 for uid in picks_by_user}
         final_lb, final_breakdowns = calculate_leaderboard(
-            season, scoring, survivors, picks_by_user, ss_streaks,
+            season, scoring, survivors, picks_by_user, zero_ss,
             elim_to_episode=elim_to_ep, return_breakdowns=True)
         final_ranking = rank_users(final_lb)
         winner_id = final_ranking[0] if final_ranking else None
@@ -1018,7 +1022,7 @@ def evaluate_config(config, scenarios):
             spread = (final_scores[0] - final_scores[-1]) / final_scores[0]
             metrics['final_spread'].append(spread)
 
-        # Non-draft impact and longevity share (reuse breakdowns from final leaderboard)
+        # Non-draft impact and longevity share (SS excluded — tuned separately)
         for user_id, pick_results in final_breakdowns.items():
             draft_pts = non_draft_pts = 0
             tribal_pts = 0
@@ -1029,8 +1033,6 @@ def evaluate_config(config, scenarios):
                     non_draft_pts += modified
                 for k in ('pre_merge_tribal', 'post_merge_tribal', 'finale_tribal'):
                     tribal_pts += breakdown.items.get(k, 0)
-            streak = ss_streaks.get(user_id, 0)
-            non_draft_pts += scoring.calculate_sole_survivor_bonus(streak)
             total = draft_pts + non_draft_pts
             if total > 0:
                 metrics['non_draft_pct'].append(non_draft_pts / total)
