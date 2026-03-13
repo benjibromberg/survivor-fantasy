@@ -84,7 +84,7 @@
     <header><h2 id="scoring">Scoring Components</h2></header>
     <p>Points are calculated per castaway, then modified by pick type.{% if progressive %} Tribal survival uses <strong>progressive values</strong>&mdash;each tribal council survived is worth more than the last.{% endif %} The following components are <strong>active</strong> this season:</p>
 
-    {% if progressive %}
+    {% if progressive and examples %}
     <p>This season uses <strong>progressive tribal values</strong>&mdash;later tribals are worth more than earlier ones. The value of each tribal increases as the game progresses through three phases:</p>
     <table>
         <thead><tr><th>Phase</th><th>How Value Grows</th></tr></thead>
@@ -104,6 +104,8 @@
             </tr>
         </tbody>
     </table>
+    {% elif progressive %}
+    <p>This season uses <strong>progressive tribal values</strong>&mdash;later tribals are worth more than earlier ones. Detailed phase breakdowns will appear once merge data is available.</p>
     {% endif %}
 
     {% if active_rules %}
