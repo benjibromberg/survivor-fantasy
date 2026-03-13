@@ -29,7 +29,7 @@
         <div class="compare-row">
             <span class="compare-rank">{{ loop.index }}</span>
             <span class="compare-name">{{ entry.user.display_name or entry.user.username }}</span>
-            <span class="compare-pts">{{ "%.1f"|format(entry.total_points) }}</span>
+            <span class="compare-pts">{{ "%.2f"|format(entry.total_points) }}</span>
         </div>
         {% endfor %}
     </div>
@@ -125,7 +125,7 @@ progressionData.forEach((datasets, ci) => {
             labels: bd.map(d => d.name),
             datasets: categories.map((key, i) => ({
                 label: catLabels[i],
-                data: bd.map(d => Math.round((d.breakdown[key] || 0) * 10) / 10),
+                data: bd.map(d => Math.round((d.breakdown[key] || 0) * 100) / 100),
                 backgroundColor: categoryColors[i % categoryColors.length],
             })),
         },

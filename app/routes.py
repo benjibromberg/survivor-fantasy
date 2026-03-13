@@ -652,7 +652,7 @@ def leaderboard(season_id):
                 ss_streak = calculate_ss_streak(user_ss_picks[user.id], season)
                 total += scoring.calculate_sole_survivor_bonus(ss_streak)
 
-                progression[user.id].append(round(total, 1))
+                progression[user.id].append(round(total, 2))
             r()
 
         progression_labels = []
@@ -697,7 +697,7 @@ def leaderboard(season_id):
     if is_finished and leaderboard_data:
         winner_entry = leaderboard_data[0]
         runner_up = leaderboard_data[1] if len(leaderboard_data) > 1 else None
-        margin = round(winner_entry['total_points'] - runner_up['total_points'], 1) if runner_up else 0
+        margin = round(winner_entry['total_points'] - runner_up['total_points'], 2) if runner_up else 0
 
         # Find the Sole Survivor castaway
         sole_survivor = None
@@ -945,7 +945,7 @@ def _build_compare_data(season):
                     total += modified
                 ss_streak = calculate_ss_streak(user_ss_picks[user.id], season)
                 total += scoring.calculate_sole_survivor_bonus(ss_streak)
-                progression[user.id].append(round(total, 1))
+                progression[user.id].append(round(total, 2))
             restore()
 
         # Build chart datasets (ordered by final rank)
@@ -971,12 +971,12 @@ def _build_compare_data(season):
                 raw = bd.total
                 modifier = modified / raw if raw else 1
                 for k, v in bd.items.items():
-                    agg[k] = round(agg.get(k, 0) + v * modifier, 1)
+                    agg[k] = round(agg.get(k, 0) + v * modifier, 2)
             # Add SS streak
             ss_streak = calculate_ss_streak(user_ss_picks[uid], season)
             ss_bonus = scoring.calculate_sole_survivor_bonus(ss_streak)
             if ss_bonus:
-                agg['sole_survivor_streak'] = round(ss_bonus, 1)
+                agg['sole_survivor_streak'] = round(ss_bonus, 2)
             breakdown_data.append({
                 'name': entry['user'].display_name or entry['user'].username,
                 'breakdown': agg,

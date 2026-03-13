@@ -92,15 +92,15 @@
             <tr>
                 <td><strong>Pre-Merge</strong></td>
                 <td>Starts at {{ config.tribal_base }} pts, {% if config.tribal_step %}increases by {{ config.tribal_step }} per tribal{% else %}stays flat{% endif %}
-                <br><small>1st tribal = {{ examples.first_tribal }} pts{% if config.tribal_step %}, last pre-merge tribal = {{ examples.merge_tribal|round(1) }} pts{% endif %}</small></td>
+                <br><small>1st tribal = {{ examples.first_tribal }} pts{% if config.tribal_step %}, last pre-merge tribal = {{ examples.merge_tribal|round(2) }} pts{% endif %}</small></td>
             </tr>
             <tr>
                 <td><strong>Post-Merge</strong></td>
-                <td>Continues from {{ examples.merge_tribal|round(1) }} pts, {% if config.post_merge_step %}increases by {{ config.post_merge_step }} per tribal{% else %}stays flat{% endif %}</td>
+                <td>Continues from {{ examples.merge_tribal|round(2) }} pts, {% if config.post_merge_step %}increases by {{ config.post_merge_step }} per tribal{% else %}stays flat{% endif %}</td>
             </tr>
             <tr>
                 <td><strong>Finale</strong> ({{ config.finale_size }} players left)</td>
-                <td>Continues from {{ examples.last_post_merge|round(1) }} pts, {% if config.finale_step %}increases by {{ config.finale_step }} per tribal{% else %}stays flat{% endif %}</td>
+                <td>Continues from {{ examples.last_post_merge|round(2) }} pts, {% if config.finale_step %}increases by {{ config.finale_step }} per tribal{% else %}stays flat{% endif %}</td>
             </tr>
         </tbody>
     </table>
@@ -118,7 +118,7 @@
                 <td>{{ rule.value }}</td>
                 <td>{{ rule.desc }}
                     {% if rule.key == 'tribal_val' %}
-                    <br><small>A castaway eliminated at the 10th tribal earns {{ (9 * rule.value)|round(1) }} tribal points (9 tribals survived).
+                    <br><small>A castaway eliminated at the 10th tribal earns {{ (9 * rule.value)|round(2) }} tribal points (9 tribals survived).
                     A castaway still in the game earns points for every tribal that has occurred so far.</small>
                     {% elif rule.key == 'first_val' %}
                     <br><small>The Sole Survivor earns this bonus on top of all other points.</small>
@@ -153,13 +153,13 @@
     <p>In a {{ season.num_players }}-player season with these rules:</p>
 
     <p><strong>Sole Survivor</strong> (picked as a Draft):
-        ~{{ examples.winner_total|round(1) }} pts
-        <small>({% if progressive %}{{ examples.winner_tribal_pts|round(1) }} from progressive tribals{% else %}{{ season.merge_threshold }} pre-merge tribals &times; {{ c.tribal_val }} + {{ season.left_at_jury - 1 }} post-merge tribals &times; {{ c.get('post_merge_tribal_val', c.tribal_val) }}{% endif %}{% if c.merge_val %} + {{ c.merge_val }} merge{% endif %}{% if c.final_tribal_val %} + {{ c.final_tribal_val }} FTC{% endif %} + {{ c.first_val }} winner, plus any immunity/idol bonuses)</small>
+        ~{{ examples.winner_total|round(2) }} pts
+        <small>({% if progressive %}{{ examples.winner_tribal_pts|round(2) }} from progressive tribals{% else %}{{ season.merge_threshold }} pre-merge tribals &times; {{ c.tribal_val }} + {{ season.left_at_jury - 1 }} post-merge tribals &times; {{ c.get('post_merge_tribal_val', c.tribal_val) }}{% endif %}{% if c.merge_val %} + {{ c.merge_val }} merge{% endif %}{% if c.final_tribal_val %} + {{ c.final_tribal_val }} FTC{% endif %} + {{ c.first_val }} winner, plus any immunity/idol bonuses)</small>
     </p>
 
     <p><strong>First juror</strong> (picked as a Draft):
-        {{ examples.juror_total|round(1) }} pts
-        <small>({% if progressive %}{{ examples.juror_tribal_pts|round(1) }} from progressive tribals{% else %}{{ season.merge_threshold }} pre-merge tribals &times; {{ c.tribal_val }}{% endif %}{% if c.merge_val %} + {{ c.merge_val }} merge{% endif %}{% if c.jury_val %} + {{ c.jury_val }} jury{% endif %})</small>
+        {{ examples.juror_total|round(2) }} pts
+        <small>({% if progressive %}{{ examples.juror_tribal_pts|round(2) }} from progressive tribals{% else %}{{ season.merge_threshold }} pre-merge tribals &times; {{ c.tribal_val }}{% endif %}{% if c.merge_val %} + {{ c.merge_val }} merge{% endif %}{% if c.jury_val %} + {{ c.jury_val }} jury{% endif %})</small>
     </p>
 
     <p><strong>First boot</strong> (picked as a Draft):
@@ -168,8 +168,8 @@
     </p>
 
     <p><strong>Sole Survivor</strong> (picked as a Wildcard):
-        ~{{ (examples.winner_total * c.get('wildcard_multiplier', 0.5))|round(1) }} pts
-        <small>({{ "%.0f"|format(c.get('wildcard_multiplier', 0.5) * 100) }}% of {{ examples.winner_total|round(1) }})</small>
+        ~{{ (examples.winner_total * c.get('wildcard_multiplier', 0.5))|round(2) }} pts
+        <small>({{ "%.0f"|format(c.get('wildcard_multiplier', 0.5) * 100) }}% of {{ examples.winner_total|round(2) }})</small>
     </p>
     {% endif %}
 </article>

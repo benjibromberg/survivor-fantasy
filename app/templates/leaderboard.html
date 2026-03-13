@@ -14,7 +14,7 @@
         <p class="finale-subtitle">Champion of {{ season.name or 'Season ' ~ season.number }}</p>
         <div class="finale-stats">
             <div class="finale-stat">
-                <span class="finale-stat-value">{{ "%.1f"|format(finale_data.winner.total_points) }}</span>
+                <span class="finale-stat-value">{{ "%.2f"|format(finale_data.winner.total_points) }}</span>
                 <span class="finale-stat-label">Total Points</span>
             </div>
             {% if finale_data.margin > 0 %}
@@ -26,7 +26,7 @@
             {% if finale_data.best_pick %}
             <div class="finale-stat">
                 <span class="finale-stat-value">{{ finale_data.best_pick.survivor }}</span>
-                <span class="finale-stat-label">Best Pick ({{ "%.1f"|format(finale_data.best_pick.modified_points) }} pts — {{ finale_data.best_pick_owner }})</span>
+                <span class="finale-stat-label">Best Pick ({{ "%.2f"|format(finale_data.best_pick.modified_points) }} pts — {{ finale_data.best_pick_owner }})</span>
             </div>
             {% endif %}
             {% if finale_data.sole_survivor %}
@@ -109,7 +109,7 @@
         <span class="lb-win-pct lb-win-frozen">{{ "%.0f"|format(win_pcts[entry.user.id]) }}% win</span>
         <span class="lb-win-pct lb-win-projected">{{ "%.0f"|format(projected_win_pcts.get(entry.user.id, 0)) }}% win</span>
         {% endif %}
-        <span class="lb-points">{{ "%.1f"|format(entry.total_points) }} pts</span>
+        <span class="lb-points">{{ "%.2f"|format(entry.total_points) }} pts</span>
     </header>
     {% if entry.warnings %}
     <div class="lb-warnings">
@@ -141,7 +141,7 @@
             {% endif %}
             <div class="lb-pick-info">
                 <span class="lb-pick-name">{{ pick.survivor }}{% if is_sole_survivor %} <span class="lb-pick-ss-tag">Sole Survivor</span>{% endif %}</span>
-                <span class="lb-pick-meta">{{ "%.1f"|format(pick.modified_points) }} pts</span>
+                <span class="lb-pick-meta">{{ "%.2f"|format(pick.modified_points) }} pts</span>
                 {% if pick.stats_line %}
                 <span class="lb-pick-stats">{{ pick.stats_line }}</span>
                 {% endif %}
@@ -153,7 +153,7 @@
                 {% if pick.breakdown %}
                 <div class="lb-pick-pts-detail">
                     {% for key, val in pick.breakdown.items() %}
-                    <span class="lb-breakdown-item lb-breakdown-pts">{{ breakdown_labels.get(key, key) }}: {{ "%.1f"|format(val) }}</span>
+                    <span class="lb-breakdown-item lb-breakdown-pts">{{ breakdown_labels.get(key, key) }}: {{ "%.2f"|format(val) }}</span>
                     {% endfor %}
                 </div>
                 {% endif %}
@@ -193,7 +193,7 @@
                 <span class="lb-pick-name">{{ pick.survivor }}{% if is_sole_survivor %} <span class="lb-pick-ss-tag">Sole Survivor</span>{% endif %}</span>
                 <span class="lb-pick-meta">
                     <span class="lb-pick-badge">{{ pick.pick_type }}</span>
-                    &middot; {{ "%.1f"|format(pick.modified_points) }} pts
+                    &middot; {{ "%.2f"|format(pick.modified_points) }} pts
                 </span>
                 {% if pick.stats_line %}
                 <span class="lb-pick-stats">{{ pick.stats_line }}</span>
@@ -204,7 +204,7 @@
                 {% if pick.breakdown %}
                 <div class="lb-pick-pts-detail">
                     {% for key, val in pick.breakdown.items() %}
-                    <span class="lb-breakdown-item lb-breakdown-pts">{{ breakdown_labels.get(key, key) }}: {{ "%.1f"|format(val) }}</span>
+                    <span class="lb-breakdown-item lb-breakdown-pts">{{ breakdown_labels.get(key, key) }}: {{ "%.2f"|format(val) }}</span>
                     {% endfor %}
                 </div>
                 {% endif %}
@@ -251,7 +251,7 @@
         <span class="prog-rank">{{ loop.index }}{{ 'st' if loop.index == 1 else ('nd' if loop.index == 2 else ('rd' if loop.index == 3 else 'th')) }}</span>
         <span class="prog-color" style="background: {{ ['#e85d26','#f4a261','#fca311','#2d6a4f','#4ea8de','#a78bfa','#ef4444','#10b981'][loop.index0 % 8] }};"></span>
         <span class="prog-name">{{ entry.user.display_name or entry.user.username }}</span>
-        <span class="prog-pts">{{ "%.1f"|format(entry.total_points) }}</span>
+        <span class="prog-pts">{{ "%.2f"|format(entry.total_points) }}</span>
     </div>
     {% endfor %}
 </div>
@@ -368,7 +368,7 @@ const breakdownChart = new Chart(document.getElementById('breakdown-chart'), {
         labels: breakdownData.map(d => d.name),
         datasets: categories.map((key, i) => ({
             label: catLabels[i],
-            data: breakdownData.map(d => Math.round((d.breakdown[key] || 0) * 10) / 10),
+            data: breakdownData.map(d => Math.round((d.breakdown[key] || 0) * 100) / 100),
             backgroundColor: categoryColors[i % categoryColors.length],
         })),
     },
