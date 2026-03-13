@@ -253,7 +253,7 @@ def _build_leaderboard(season):
         def _pick_active(p):
             if p.pick_type == 'wildcard' and current_elim_count == 0:
                 return False
-            if p.pick_type in ('pmr_w', 'pmr_d') and current_elim_count < merge_elim:
+            if p.pick_type in ('pmr_w', 'pmr_d') and (merge_elim is None or current_elim_count < merge_elim):
                 return False
             return True
         team_survivors = [p.survivor for p in picks if _pick_active(p)]
@@ -287,7 +287,7 @@ def _build_leaderboard(season):
             if current_elim_count > 0 and 'wildcard' not in pick_types:
                 warnings.append('Wildcard not yet picked')
             # Replacement eligibility after merge
-            if current_elim_count >= merge_elim:
+            if merge_elim is not None and current_elim_count >= merge_elim:
                 has_replacement = 'pmr_w' in pick_types or 'pmr_d' in pick_types
                 if not has_replacement:
                     draft_elim = any(
