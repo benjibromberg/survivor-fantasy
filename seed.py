@@ -185,10 +185,27 @@ def build_season_from_survivor_db(season_number, ref_data):
     return season, survivor_map
 
 
-def load_picks_from_json(filepath, season, survivor_map):
-    """Load pick assignments and scoring config from a JSON file.
+def _resolve_survivor(surv_name, survivor_map):
+    """Resolve a survivor name to a Survivor object using nickname map and prefix matching."""
+    lookup = NICKNAME_MAP.get(surv_name.lower(), surv_name).lower()
+    survivor = survivor_map.get(lookup)
+    if not survivor:
+        for key, surv in survivor_map.items():
+            if key.startswith(surv_name.lower()):
+                survivor = surv
+                break
+    return survivor
 
-    JSON format: {"scoring": "legacy"|"default", "picks": {"Player": [{"survivor": "Name", "type": "d"}, ...], ...}}
+
+def load_picks_from_json(filepath, season, survivor_map):
+    """Load pick assignments, scoring config, and SS picks from a JSON file.
+
+    JSON format:
+        {"scoring": "legacy"|"default"|"custom",
+         "scoring_config": {...},  # only when scoring="custom"
+         "picks": {"Player": [{"survivor": "Name", "type": "d", "order": 1}, ...]},
+         "sole_survivor_picks": {"Player": [{"survivor": "Name", "episode": 1}, ...]}}
+
     Type codes: d=draft, w=wildcard, pmr_w=pmr_w, pmr_d=pmr_d
     """
     import json as _json
@@ -197,10 +214,12 @@ def load_picks_from_json(filepath, season, survivor_map):
     with open(filepath) as f:
         data = _json.load(f)
 
-    # Apply scoring config if specified
+    # Apply scoring config
     scoring = data.get('scoring', 'default')
     if scoring == 'legacy':
         season.scoring_config = _json.dumps(LEGACY_CONFIG)
+    elif scoring == 'custom' and 'scoring_config' in data:
+        season.scoring_config = _json.dumps(data['scoring_config'])
     else:
         season.scoring_config = _json.dumps(DEFAULT_CONFIG)
 
@@ -217,15 +236,8 @@ def load_picks_from_json(filepath, season, survivor_map):
             db.session.flush()
 
         for entry in picks:
-            # Resolve survivor name
             surv_name = entry['survivor']
-            lookup = NICKNAME_MAP.get(surv_name.lower(), surv_name).lower()
-            survivor = survivor_map.get(lookup)
-            if not survivor:
-                for key, surv in survivor_map.items():
-                    if key.startswith(surv_name.lower()):
-                        survivor = surv
-                        break
+            survivor = _resolve_survivor(surv_name, survivor_map)
             if not survivor:
                 print(f'    WARNING: "{surv_name}" not found in survivoR data for season {season.number}')
                 continue
@@ -243,11 +255,36 @@ def load_picks_from_json(filepath, season, survivor_map):
                     season_id=season.id,
                     survivor_id=survivor.id,
                     pick_type=matched_type,
+                    pick_order=entry.get('order'),
                 ))
                 pick_count += 1
 
+    # Load sole survivor picks
+    ss_count = 0
+    ss_data = data.get('sole_survivor_picks', {})
+    for player_name, ss_picks in ss_data.items():
+        user = User.query.filter_by(username=player_name.lower()).first()
+        if not user:
+            user = User(username=player_name.lower(), display_name=player_name)
+            db.session.add(user)
+            db.session.flush()
+
+        for entry in ss_picks:
+            survivor = _resolve_survivor(entry['survivor'], survivor_map)
+            if not survivor:
+                print(f'    WARNING: SS pick "{entry["survivor"]}" not found for season {season.number}')
+                continue
+            db.session.add(SoleSurvivorPick(
+                user_id=user.id,
+                season_id=season.id,
+                survivor_id=survivor.id,
+                episode=entry['episode'],
+            ))
+            ss_count += 1
+
     db.session.commit()
-    print(f'  Picks for {season.name}: {len(picks_data)} players, {pick_count} picks')
+    ss_msg = f', {ss_count} SS picks' if ss_count else ''
+    print(f'  Picks for {season.name}: {len(picks_data)} players, {pick_count} picks{ss_msg}')
 
 
 def generate_image_urls():

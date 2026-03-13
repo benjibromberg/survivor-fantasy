@@ -6,7 +6,7 @@ import os
 import pandas as pd
 import requests
 
-from .models import db, Season, Survivor
+from .models import db, Season, Survivor, Pick, User, SoleSurvivorPick
 
 logger = logging.getLogger(__name__)
 
@@ -498,3 +498,92 @@ def generate_season_images(season):
     total = Survivor.query.filter_by(season_id=season.id).count()
     logger.info('Season %d images: %d/%d', season.number, matched, total)
     return matched
+
+
+PICKS_DIR = 'picks'
+
+
+def export_season_picks(season, picks_dir=None):
+    """Export all picks for a season to a JSON file.
+
+    Produces a file compatible with seed.py's load_picks_from_json, extended
+    with sole_survivor_picks and custom scoring_config.
+
+    Returns the filepath written, or None if no picks exist.
+    """
+    picks_dir = picks_dir or PICKS_DIR
+    os.makedirs(picks_dir, exist_ok=True)
+
+    picks = (Pick.query.filter_by(season_id=season.id)
+             .order_by(Pick.user_id, Pick.pick_order).all())
+    if not picks:
+        return None
+
+    surv_by_id = {s.id: s for s in Survivor.query.filter_by(season_id=season.id)}
+
+    # Build picks by user display name
+    picks_data = {}
+    for pick in picks:
+        user = db.session.get(User, pick.user_id)
+        name = user.display_name or user.username
+        if name not in picks_data:
+            picks_data[name] = []
+
+        type_codes = {'draft': 'd', 'wildcard': 'w', 'pmr_w': 'pmr_w', 'pmr_d': 'pmr_d'}
+        surv = surv_by_id.get(pick.survivor_id)
+        entry = {
+            'survivor': surv.name if surv else f'id:{pick.survivor_id}',
+            'type': type_codes.get(pick.pick_type, pick.pick_type),
+        }
+        if pick.pick_type == 'draft' and pick.pick_order is not None:
+            entry['order'] = pick.pick_order
+        picks_data[name].append(entry)
+
+    # Build sole survivor picks
+    ss_picks = SoleSurvivorPick.query.filter_by(season_id=season.id).order_by(
+        SoleSurvivorPick.user_id, SoleSurvivorPick.episode).all()
+    ss_data = {}
+    for sp in ss_picks:
+        user = db.session.get(User, sp.user_id)
+        name = user.display_name or user.username
+        if name not in ss_data:
+            ss_data[name] = []
+        surv = surv_by_id.get(sp.survivor_id)
+        ss_data[name].append({
+            'survivor': surv.name if surv else f'id:{sp.survivor_id}',
+            'episode': sp.episode,
+        })
+
+    # Determine scoring label
+    from .scoring.classic import DEFAULT_CONFIG, LEGACY_CONFIG
+    config = season.get_scoring_config()
+    if config == LEGACY_CONFIG:
+        scoring = 'legacy'
+    elif config == DEFAULT_CONFIG:
+        scoring = 'default'
+    else:
+        scoring = 'custom'
+
+    result = {'scoring': scoring, 'picks': picks_data}
+    if scoring == 'custom':
+        result['scoring_config'] = config
+    if ss_data:
+        result['sole_survivor_picks'] = ss_data
+
+    filepath = os.path.join(picks_dir, f'season{season.number}.json')
+    with open(filepath, 'w') as f:
+        json.dump(result, f, indent=2)
+
+    logger.info('Exported picks for season %d to %s (%d players, %d picks)',
+                season.number, filepath, len(picks_data), len(picks))
+    return filepath
+
+
+def export_all_picks(picks_dir=None):
+    """Export picks for all seasons that have picks."""
+    exported = []
+    for season in Season.query.all():
+        path = export_season_picks(season, picks_dir)
+        if path:
+            exported.append(path)
+    return exported

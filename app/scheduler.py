@@ -11,13 +11,19 @@ def refresh_active_seasons(app):
     """Download latest survivoR data and refresh all active seasons."""
     with app.app_context():
         from .models import Season
-        from .data import download_survivor_data, refresh_season
+        from .data import download_survivor_data, refresh_season, export_all_picks
 
         try:
             download_survivor_data()
         except Exception as e:
             logger.error(f'Failed to download survivoR data: {e}')
             return
+
+        # Export picks before refresh (preserve current state)
+        try:
+            export_all_picks()
+        except Exception as e:
+            logger.warning(f'Pick export before refresh failed: {e}')
 
         active = Season.query.filter_by(is_active=True).all()
         for season in active:
@@ -26,6 +32,12 @@ def refresh_active_seasons(app):
                 logger.info(f'Auto-refresh: updated {count} survivors for season {season.number}')
             except Exception as e:
                 logger.error(f'Auto-refresh failed for season {season.number}: {e}')
+
+        # Export picks after refresh (capture updated names/stats)
+        try:
+            export_all_picks()
+        except Exception as e:
+            logger.warning(f'Pick export after refresh failed: {e}')
 
 
 def init_scheduler(app):

@@ -1,4 +1,5 @@
 import json
+import logging
 
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_required, current_user
@@ -6,8 +7,10 @@ from flask_login import login_required, current_user
 from .models import db, Season, Survivor, Pick, User, SoleSurvivorPick, calculate_ss_streak
 from .scoring import get_scoring_system, SCORING_SYSTEMS, compute_stat_overrides
 from .scoring.classic import DEFAULT_CONFIG, LEGACY_CONFIG, CONFIG_LABELS
-from .data import download_survivor_data, refresh_season, generate_season_images
+from .data import download_survivor_data, refresh_season, generate_season_images, export_season_picks, export_all_picks
 from .predictions import calculate_win_probabilities
+
+logger = logging.getLogger(__name__)
 
 main_bp = Blueprint('main', __name__)
 
@@ -1298,6 +1301,13 @@ def admin_refresh(season_id):
         return denied
 
     season = Season.query.get_or_404(season_id)
+
+    # Auto-export picks before refresh (so picks are preserved if refresh changes data)
+    try:
+        export_all_picks()
+    except Exception as e:
+        logger.warning('Pick export before refresh failed: %s', e)
+
     try:
         download_survivor_data()
         count = refresh_season(season)
@@ -1306,7 +1316,46 @@ def admin_refresh(season_id):
         db.session.rollback()
         flash(f'Refresh failed: {e}', 'error')
 
+    # Auto-export picks after refresh (capture any name/id updates)
+    try:
+        export_all_picks()
+    except Exception as e:
+        logger.warning('Pick export after refresh failed: %s', e)
+
     return redirect(url_for('main.admin_season_detail', season_id=season.id))
+
+
+# --- Admin: Export Picks ---
+
+@main_bp.route('/admin/season/<int:season_id>/export-picks', methods=['POST'])
+@login_required
+def admin_export_picks(season_id):
+    denied = _require_admin()
+    if denied:
+        return denied
+
+    season = Season.query.get_or_404(season_id)
+    path = export_season_picks(season)
+    if path:
+        flash(f'Exported picks to {path}', 'success')
+    else:
+        flash('No picks to export for this season.', 'warning')
+    return redirect(url_for('main.admin_season_detail', season_id=season.id))
+
+
+@main_bp.route('/admin/export-all-picks', methods=['POST'])
+@login_required
+def admin_export_all_picks():
+    denied = _require_admin()
+    if denied:
+        return denied
+
+    paths = export_all_picks()
+    if paths:
+        flash(f'Exported picks for {len(paths)} season(s).', 'success')
+    else:
+        flash('No picks to export.', 'warning')
+    return redirect(url_for('main.admin_seasons'))
 
 
 # --- Admin: Toggle Active / Delete Season ---

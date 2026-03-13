@@ -23,7 +23,13 @@
 
 {% if seasons %}
 <section>
-    <h3>Existing Seasons</h3>
+    <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+        <h3 style="margin:0;">Existing Seasons</h3>
+        <form method="POST" action="{{ url_for('main.admin_export_all_picks') }}" style="margin:0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="outline" style="padding:0.25rem 0.75rem;font-size:0.85rem;margin:0;">Export All Picks</button>
+        </form>
+    </div>
     <table>
         <thead>
             <tr>

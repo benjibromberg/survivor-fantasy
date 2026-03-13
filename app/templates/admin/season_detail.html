@@ -11,6 +11,10 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="outline" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;">Refresh from survivoR</button>
     </form>
+    <form method="POST" action="{{ url_for('main.admin_export_picks', season_id=season.id) }}" style="margin:0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="outline" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;">Export Picks</button>
+    </form>
 </div>
 
 <!-- Season Info -->
