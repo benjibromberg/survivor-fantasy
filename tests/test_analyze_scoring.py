@@ -606,7 +606,8 @@ class TestFastScoreTotal:
         """Full replacement path: fast + multiplier should match score_pick."""
         config, season, table = self._make_config_and_table(
             tribal_base=1, tribal_step=0.5, post_merge_step=1, finale_step=2,
-            replacement_multiplier=0.5, individual_immunity_val=3)
+            wc_replacement_multiplier=0.5, draft_replacement_multiplier=1.0,
+            individual_immunity_val=3)
         scoring = ClassicScoring(**config)
         # Post-merge survivor with stats
         surv = season.survivors[14]  # voted_out_order=15, past merge=10
@@ -615,17 +616,17 @@ class TestFastScoreTotal:
             i: {'ii': min(i, 4), 'ti': 0, 'idol': 0, 'idol_play': 0, 'adv': 0, 'adv_play': 0}
             for i in range(1, 19)
         }
-        merge_ep = surv.episode_stats.get(10, {})  # merge at step 10
         stat_ov = _compute_sim_stat_overrides(surv, merge_episode=10)
         # pmr_w path
         fast_repl = _fast_score_total(surv, config, season, table,
                                       stat_overrides=stat_ov, is_replacement=True)
-        fast_modified = fast_repl * config['replacement_multiplier']
+        fast_modified = fast_repl * config['wc_replacement_multiplier']
         official, _ = scoring.score_pick(surv, season, 'pmr_w', stat_ov)
         assert abs(fast_modified - official) < 1e-9
         # pmr_d path (multiplier = 1.0)
+        fast_d = fast_repl * config['draft_replacement_multiplier']
         official_d, _ = scoring.score_pick(surv, season, 'pmr_d', stat_ov)
-        assert abs(fast_repl - official_d) < 1e-9
+        assert abs(fast_d - official_d) < 1e-9
 
 
 # ── Timeline fidelity ──────────────────────────────────────────────────────
@@ -742,8 +743,8 @@ class TestTimelineFidelity:
         picked_survivors = [s for s in season.survivors if s.id in picked_sids]
         surv_map = {s.id: s for s in season.survivors}
         wildcard_mult = fast_config.get('wildcard_multiplier', 0.5)
-        replacement_mult = fast_config.get('replacement_multiplier', 0.5)
-        repl_deduction = fast_config.get('replacement_deduction', True)
+        draft_repl_mult = fast_config.get('draft_replacement_multiplier', 1.0)
+        wc_repl_mult = fast_config.get('wc_replacement_multiplier', fast_config.get('replacement_multiplier', 0.5))
         pre_jury = season.num_players - season.left_at_jury
 
         elim_idx = 0
@@ -805,10 +806,9 @@ class TestTimelineFidelity:
                         if sid in repl_scores:
                             base = repl_scores[sid]
                         else:
-                            base = base_scores.get(sid, 0)
-                            if repl_deduction:
-                                base -= pre_jury
-                        mult = replacement_mult if pick.pick_type == 'pmr_w' else 1.0
+                            # Always deduct pre-merge tribals
+                            base = base_scores.get(sid, 0) - pre_jury
+                        mult = wc_repl_mult if pick.pick_type == 'pmr_w' else draft_repl_mult
                     elif pick.pick_type == 'wildcard':
                         base = base_scores.get(sid, 0)
                         mult = wildcard_mult

@@ -44,14 +44,16 @@
     </ul>
 
     <h3>Scoring</h3>
-    {% if config.get('replacement_multiplier', 0.5) == 0 %}
+    {% set draft_repl_mult = config.get('draft_replacement_multiplier', 1.0) %}
+    {% set wc_repl_mult = config.get('wc_replacement_multiplier', config.get('replacement_multiplier', 0.5)) %}
+    {% if draft_repl_mult == 0 and wc_repl_mult == 0 %}
     <p>Replacement picks <strong>do not earn points</strong> this season. Our <a href="{{ url_for('main.scoring_analysis') }}">scoring analysis</a> found that replacement picks rarely accumulate enough post-merge points to meaningfully affect the standings. Instead, replacements serve as a <strong>stay-in-the-game</strong> mechanic &mdash; you still get to root for a castaway even after losing one of your picks early.</p>
     <p>Replacements still appear on your roster and their game stats are tracked, but their point contribution is zero.</p>
     {% else %}
     <p>Replacements only earn points for what their castaway does <strong>from the time they are picked onward</strong>. There are no retroactive points&mdash;stats accumulated before the replacement was selected do not count.</p>
     <ul>
-        <li><strong>Replacement</strong> (for a drafted pick): earns full points, but only from post-selection stats.</li>
-        <li><strong>Replacement &frac12; pts</strong> (for a Wildcard): earns {{ "%.0f"|format(config.get('replacement_multiplier', 0.5) * 100) }}% points, only from post-selection stats.</li>
+        <li><strong>Replacement</strong> (for a drafted pick): earns {{ "%.0f"|format(draft_repl_mult * 100) }}% points, post-selection stats only.</li>
+        <li><strong>Replacement &frac12; pts</strong> (for a Wildcard): earns {{ "%.0f"|format(wc_repl_mult * 100) }}% points, post-selection stats only.</li>
     </ul>
     <details>
         <summary>Example</summary>
@@ -186,7 +188,7 @@
                 <td>Half ({{ "%.0f"|format(config.wildcard_multiplier * 100) }}%)</td>
                 <td>After the first elimination</td>
             </tr>
-            {% if config.get('replacement_multiplier', 0.5) == 0 %}
+            {% if draft_repl_mult == 0 and wc_repl_mult == 0 %}
             <tr>
                 <td><strong>Replacement</strong></td>
                 <td>0 pts (roster only)</td>
@@ -195,12 +197,12 @@
             {% else %}
             <tr>
                 <td><strong>Replacement</strong></td>
-                <td>Full (100%), post-selection stats only</td>
+                <td>{{ "%.0f"|format(draft_repl_mult * 100) }}%, post-selection stats only</td>
                 <td>After merge, if a draft pick was eliminated pre-merge</td>
             </tr>
             <tr>
                 <td><strong>Replacement &frac12; pts</strong></td>
-                <td>{{ "%.0f"|format(config.get('replacement_multiplier', 0.5) * 100) }}%, post-selection stats only</td>
+                <td>{{ "%.0f"|format(wc_repl_mult * 100) }}%, post-selection stats only</td>
                 <td>After merge, if only your Wildcard was eliminated pre-merge</td>
             </tr>
             {% endif %}

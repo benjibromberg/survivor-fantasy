@@ -103,14 +103,15 @@ def _build_leaderboard(season):
 
     # Wildcards are picked after episode 1; replacements after the merge
     current_elim_count = season.current_tribal_count
-    merge_elim = season.merge_threshold
+    merge_elim = season.merge_threshold  # None if merge data unknown
 
     # Find merge episode for post-merge-only replacement scoring
     merge_episode = None
-    for s in season.survivors:
-        if s.voted_out_order and s.voted_out_order == merge_elim and s.elimination_episode:
-            merge_episode = s.elimination_episode
-            break
+    if merge_elim is not None:
+        for s in season.survivors:
+            if s.voted_out_order and s.voted_out_order == merge_elim and s.elimination_episode:
+                merge_episode = s.elimination_episode
+                break
 
     for user in users:
         picks = Pick.query.filter_by(user_id=user.id, season_id=season.id).all()
@@ -121,8 +122,8 @@ def _build_leaderboard(season):
             # Wildcards: skip if no eliminations yet (picked after ep 1)
             if pick.pick_type == 'wildcard' and current_elim_count == 0:
                 continue
-            # Replacements: skip if merge hasn't happened yet
-            if pick.pick_type in ('pmr_w', 'pmr_d') and current_elim_count < merge_elim:
+            # Replacements: skip if merge hasn't happened yet (or merge unknown)
+            if pick.pick_type in ('pmr_w', 'pmr_d') and (merge_elim is None or current_elim_count < merge_elim):
                 continue
 
             survivor = pick.survivor
@@ -361,26 +362,27 @@ def _apply_as_of(season, as_of):
                     if orig['voted_out_order']), default=1)
     fraction = as_of / max_elim if as_of > 0 and max_elim > 0 else 0
 
-    jury_threshold = season.merge_threshold
-    n_finalists = season.n_finalists
+    jury_threshold = season.merge_threshold  # None if merge data unknown
+    n_finalists = season.n_finalists  # None if in-progress
     # Fire loser is last eliminated before FTC (4th place with 3 finalists)
-    fire_elim = season.num_players - n_finalists
+    fire_elim = (season.num_players - n_finalists) if n_finalists is not None else None
     # Finalists are the last n_finalists (not jury members)
-    finalist_threshold = season.num_players - n_finalists
+    finalist_threshold = (season.num_players - n_finalists) if n_finalists is not None else None
 
     for s in survivors:
         if s.voted_out_order > as_of:
             s.voted_out_order = 0
             s.made_jury = False
             s.result = None
-        elif (s.voted_out_order > 0
+        elif (jury_threshold is not None and finalist_threshold is not None
+              and s.voted_out_order > 0
               and s.voted_out_order > jury_threshold
               and s.voted_out_order <= finalist_threshold):
             # Force jury for post-merge boots; exclude finalists and winner
             s.made_jury = True
 
         # Fire challenge hasn't happened yet at this point in the timeline
-        if as_of < fire_elim:
+        if fire_elim is not None and as_of < fire_elim:
             s.won_fire = False
 
         # Apply episode-scoped stats
@@ -454,9 +456,9 @@ def rules(season_id):
         else:
             inactive_rules.append(entry)
 
-    # Compute example values for the rules page
+    # Compute example values for the rules page (skip if merge data unknown)
     examples = {}
-    if season:
+    if season and season.merge_threshold is not None:
         scoring = get_scoring_system(season)
         mt = season.merge_threshold
 
@@ -608,13 +610,14 @@ def leaderboard(season_id):
             user_picks[user.id] = Pick.query.filter_by(
                 user_id=user.id, season_id=season.id).all()
 
-        prog_merge = season.merge_threshold
+        prog_merge = season.merge_threshold  # None if merge data unknown
         # Find merge episode for replacement scoring
         prog_merge_ep = None
-        for s in season.survivors:
-            if s.voted_out_order and s.voted_out_order == prog_merge and s.elimination_episode:
-                prog_merge_ep = s.elimination_episode
-                break
+        if prog_merge is not None:
+            for s in season.survivors:
+                if s.voted_out_order and s.voted_out_order == prog_merge and s.elimination_episode:
+                    prog_merge_ep = s.elimination_episode
+                    break
 
         # Pre-fetch sole survivor picks for all users
         user_ss_picks = {}
@@ -631,7 +634,7 @@ def leaderboard(season_id):
                 for pick in user_picks[user.id]:
                     if pick.pick_type == 'wildcard' and step == 0:
                         continue
-                    if pick.pick_type in ('pmr_w', 'pmr_d') and step < prog_merge:
+                    if pick.pick_type in ('pmr_w', 'pmr_d') and (prog_merge is None or step < prog_merge):
                         continue
 
                     survivor = pick.survivor
@@ -880,13 +883,14 @@ def _build_compare_data(season):
             user_id=user.id, season_id=season.id).all()
 
     # Find merge episode for accurate replacement scoring
-    cmp_merge = season.merge_threshold
+    cmp_merge = season.merge_threshold  # None if merge data unknown
     current_elim_count = max_elim
     merge_episode = None
-    for s in season.survivors:
-        if s.voted_out_order and s.voted_out_order == cmp_merge and s.elimination_episode:
-            merge_episode = s.elimination_episode
-            break
+    if cmp_merge is not None:
+        for s in season.survivors:
+            if s.voted_out_order and s.voted_out_order == cmp_merge and s.elimination_episode:
+                merge_episode = s.elimination_episode
+                break
 
     comparisons = []
     for preset_name, config in presets.items():
@@ -905,7 +909,7 @@ def _build_compare_data(season):
             for pick in user_picks[user.id]:
                 if pick.pick_type == 'wildcard' and current_elim_count == 0:
                     continue
-                if pick.pick_type in ('pmr_w', 'pmr_d') and current_elim_count < cmp_merge:
+                if pick.pick_type in ('pmr_w', 'pmr_d') and (cmp_merge is None or current_elim_count < cmp_merge):
                     continue
                 stat_overrides = None
                 if pick.pick_type in ('pmr_w', 'pmr_d'):
@@ -928,7 +932,7 @@ def _build_compare_data(season):
                 for pick in user_picks[user.id]:
                     if pick.pick_type == 'wildcard' and step == 0:
                         continue
-                    if pick.pick_type in ('pmr_w', 'pmr_d') and step < cmp_merge:
+                    if pick.pick_type in ('pmr_w', 'pmr_d') and (cmp_merge is None or step < cmp_merge):
                         continue
                     stat_overrides = None
                     if pick.pick_type in ('pmr_w', 'pmr_d'):

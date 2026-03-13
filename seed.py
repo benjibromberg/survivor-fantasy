@@ -81,13 +81,14 @@ def build_season_from_survivor_db(season_number, ref_data):
         raise ValueError(f'Season {season_number}: no Season Summary data in survivoR. '
                          'Only new-era seasons (41+) are supported.')
     row = ss.iloc[0]
-    if pd.isna(row['n_cast']) or pd.isna(row['n_jury']) or pd.isna(row['n_finalists']):
-        raise ValueError(f'Season {season_number}: survivoR data missing required fields '
-                         '(n_cast, n_jury, n_finalists). Only new-era seasons (41+) are supported.')
+    if pd.isna(row['n_cast']):
+        raise ValueError(f'Season {season_number}: survivoR data missing n_cast. '
+                         'Only new-era seasons (41+) are supported.')
     n_cast = int(row['n_cast'])
-    n_jury = int(row['n_jury'])
-    n_finalists = int(row['n_finalists'])
-    left_at_jury = n_jury + n_finalists
+    # For in-progress seasons, n_jury/n_finalists may be NaN — store as None
+    n_finalists = int(row['n_finalists']) if pd.notna(row['n_finalists']) else None
+    n_jury = int(row['n_jury']) if pd.notna(row['n_jury']) else None
+    left_at_jury = (n_jury + n_finalists) if (n_jury is not None and n_finalists is not None) else None
 
     # Build tribe color lookup
     tc = us_season_filter(tribe_colours, season_number)

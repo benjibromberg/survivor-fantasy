@@ -28,11 +28,11 @@ class Season(db.Model):
     number = db.Column(db.Integer, unique=True, nullable=False)
     name = db.Column(db.String(100))
     is_active = db.Column(db.Boolean, default=True)
-    # Defaults are placeholders — always overwritten by survivoR data for new-era (41+) seasons
+    # Overwritten by survivoR data — nullable for in-progress seasons
     num_players = db.Column(db.Integer, default=18)
     num_episodes = db.Column(db.Integer, default=13)
-    left_at_jury = db.Column(db.Integer, default=11)
-    n_finalists = db.Column(db.Integer, default=3)
+    left_at_jury = db.Column(db.Integer, nullable=True)
+    n_finalists = db.Column(db.Integer, nullable=True)
     scoring_system = db.Column(db.String(50), default='Classic')
     scoring_config = db.Column(db.Text, default='{}')
     survivors = db.relationship('Survivor', backref='season', lazy=True)
@@ -40,7 +40,12 @@ class Season(db.Model):
 
     @property
     def merge_threshold(self):
-        """Elimination count at which merge occurs (pre-merge tribals)."""
+        """Elimination count at which merge occurs (pre-merge tribals).
+
+        Returns None if left_at_jury is not yet known (in-progress season).
+        """
+        if self.left_at_jury is None:
+            return None
         return self.num_players - self.left_at_jury
 
     @property

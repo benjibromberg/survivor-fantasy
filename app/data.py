@@ -362,16 +362,20 @@ def refresh_season(season):
     ]
     if not ss.empty:
         row = ss.iloc[0]
-        if pd.isna(row['n_cast']) or pd.isna(row['n_jury']) or pd.isna(row['n_finalists']):
+        if pd.isna(row['n_cast']):
             raise ValueError(
-                f"Season {season.number}: survivoR data missing required fields "
-                f"(n_cast, n_jury, n_finalists). Only new-era seasons (41+) are supported.")
+                f"Season {season.number}: survivoR data missing n_cast. "
+                f"Only new-era seasons (41+) are supported.")
         n_cast = int(row['n_cast'])
-        n_jury = int(row['n_jury'])
-        n_finalists = int(row['n_finalists'])
+        # For in-progress seasons, n_jury/n_finalists may be NaN — store as None
+        n_finalists = int(row['n_finalists']) if pd.notna(row['n_finalists']) else None
+        n_jury = int(row['n_jury']) if pd.notna(row['n_jury']) else None
         season.num_players = n_cast
-        season.left_at_jury = n_jury + n_finalists
         season.n_finalists = n_finalists
+        if n_jury is not None and n_finalists is not None:
+            season.left_at_jury = n_jury + n_finalists
+        else:
+            season.left_at_jury = None
         # Update season name if still default
         if season.name == f'Season {season.number}':
             raw_name = ss.iloc[0]['season_name'] if pd.notna(ss.iloc[0]['season_name']) else ''

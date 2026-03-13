@@ -356,6 +356,10 @@ def calculate_win_probabilities(season):
     if not remaining:
         return empty
 
+    # Can't simulate without knowing game structure (in-progress pre-merge season)
+    if season.merge_threshold is None or season.n_finalists is None:
+        return empty
+
     current_max_vo = max((s.voted_out_order for s in eliminated), default=0)
 
     users_with_picks = (

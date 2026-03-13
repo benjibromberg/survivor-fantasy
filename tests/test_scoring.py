@@ -353,7 +353,7 @@ class TestScorePick:
         season = make_season(num_players=18, left_at_jury=8)  # merge at 10
         scoring = ClassicScoring(
             tribal_base=None, tribal_val=1, post_merge_tribal_val=2,
-            individual_immunity_val=3,
+            individual_immunity_val=3, draft_replacement_multiplier=1.0,
             first_val=0, merge_val=5, jury_val=0,
         )
         # Survivor with 15 voted_out_order (14 tribals total: 10 pre + 4 post)
@@ -375,10 +375,11 @@ class TestScorePick:
         # Survivor stats restored after scoring
         assert surv.individual_immunity_wins == 3
 
-    def test_pmr_w_applies_replacement_multiplier(self):
+    def test_pmr_w_applies_wc_replacement_multiplier(self):
         season = make_season(num_players=18, left_at_jury=8)
         scoring = ClassicScoring(
-            tribal_base=None, tribal_val=1, replacement_multiplier=0.5,
+            tribal_base=None, tribal_val=1,
+            wc_replacement_multiplier=0.5, draft_replacement_multiplier=1.0,
             first_val=0, merge_val=0, jury_val=0,
         )
         surv = make_survivor(voted_out_order=15)
@@ -389,16 +390,32 @@ class TestScorePick:
         pts_d, _ = scoring.score_pick(surv, season, 'pmr_d', stat_overrides=overrides)
         assert pts_w == pts_d * 0.5
 
+    def test_pmr_d_applies_draft_replacement_multiplier(self):
+        season = make_season(num_players=18, left_at_jury=8)
+        scoring = ClassicScoring(
+            tribal_base=None, tribal_val=1, draft_replacement_multiplier=0.25,
+            first_val=0, merge_val=0, jury_val=0,
+        )
+        surv = make_survivor(voted_out_order=15)
+        overrides = {'individual_immunity_wins': 0, 'tribal_immunity_wins': 0,
+                     'idols_found': 0, 'idols_played': 0,
+                     'advantages_found': 0, 'advantages_played': 0}
+        pts, bd = scoring.score_pick(surv, season, 'pmr_d', stat_overrides=overrides)
+        # post_merge_tribal only (pre-merge stripped): 4 post-merge * 1 = 4, then * 0.25
+        assert bd.items.get('post_merge_tribal') == 4
+        assert pts == bd.total * 0.25
+
     def test_replacement_fallback_without_overrides(self):
         """Without stat_overrides, falls back to flat deduction."""
         season = make_season(num_players=18, left_at_jury=8)
         scoring = ClassicScoring(
             tribal_base=None, tribal_val=1, replacement_deduction=True,
+            draft_replacement_multiplier=1.0,
             first_val=0, merge_val=0, jury_val=0,
         )
         surv = make_survivor(voted_out_order=15)
         pts, bd = scoring.score_pick(surv, season, 'pmr_d')
-        # Flat deduction: total - pre_jury (10)
+        # Flat deduction: (total - pre_jury) * 1.0; pre_jury=10
         assert pts == bd.total - 10
 
     def test_replacement_fallback_no_deduction(self):
@@ -406,12 +423,13 @@ class TestScorePick:
         season = make_season(num_players=18, left_at_jury=8)
         scoring = ClassicScoring(
             tribal_base=None, tribal_val=1, replacement_deduction=False,
+            draft_replacement_multiplier=1.0,
             first_val=0, merge_val=0, jury_val=0,
         )
         surv = make_survivor(voted_out_order=15)
         pts_repl, bd_repl = scoring.score_pick(surv, season, 'pmr_d')
         pts_draft, bd_draft = scoring.score_pick(surv, season, 'draft')
-        # No deduction and no overrides: pmr_d gets same as draft
+        # No deduction, 1.0 multiplier: pmr_d gets same as draft
         assert pts_repl == pts_draft
 
 
@@ -427,21 +445,26 @@ class TestApplyPickModifier:
         assert scoring.apply_pick_modifier(100, 'wildcard', 18, 8) == 50
 
     def test_pmr_d_deducts_pre_jury(self):
-        scoring = ClassicScoring(replacement_deduction=True)
-        # pre_jury = 18 - 8 = 10
+        scoring = ClassicScoring(draft_replacement_multiplier=1.0, replacement_deduction=True)
+        # pre_jury = 18 - 8 = 10; (100 - 10) * 1.0 = 90
         assert scoring.apply_pick_modifier(100, 'pmr_d', 18, 8) == 90
 
+    def test_pmr_d_with_multiplier(self):
+        scoring = ClassicScoring(draft_replacement_multiplier=0.5, replacement_deduction=True)
+        # (100 - 10) * 0.5 = 45
+        assert scoring.apply_pick_modifier(100, 'pmr_d', 18, 8) == 45
+
     def test_pmr_w_deducts_and_halves(self):
-        scoring = ClassicScoring(replacement_multiplier=0.5, replacement_deduction=True)
+        scoring = ClassicScoring(wc_replacement_multiplier=0.5, replacement_deduction=True)
         # (100 - 10) * 0.5 = 45
         assert scoring.apply_pick_modifier(100, 'pmr_w', 18, 8) == 45
 
     def test_no_deduction_when_disabled(self):
-        scoring = ClassicScoring(replacement_deduction=False)
+        scoring = ClassicScoring(draft_replacement_multiplier=1.0, replacement_deduction=False)
         assert scoring.apply_pick_modifier(100, 'pmr_d', 18, 8) == 100
 
     def test_pmr_w_no_deduction(self):
-        scoring = ClassicScoring(replacement_multiplier=0.5, replacement_deduction=False)
+        scoring = ClassicScoring(wc_replacement_multiplier=0.5, replacement_deduction=False)
         assert scoring.apply_pick_modifier(100, 'pmr_w', 18, 8) == 50
 
 
@@ -546,6 +569,67 @@ class TestProgressiveEdgeCases:
         assert 'pre_merge_tribal' in bd.items
         assert 'post_merge_tribal' in bd.items
         assert 'finale_tribal' not in bd.items
+
+
+# ── Null merge data (in-progress season) ─────────────────────────────────
+
+class TestNullMergeData:
+    """Scoring handles seasons where left_at_jury/n_finalists are unknown."""
+
+    def _make_premerge_season(self, num_players=18):
+        """Build a season with left_at_jury=None (in-progress, pre-merge)."""
+        survivors = [
+            SimSurvivor(id=i, name=f'P{i}', voted_out_order=i if i <= 3 else 0,
+                        made_jury=False)
+            for i in range(1, num_players + 1)
+        ]
+        return SimSeason(
+            number=50, name='Test', num_players=num_players,
+            left_at_jury=None, n_finalists=None, survivors=survivors,
+        )
+
+    def test_merge_threshold_is_none(self):
+        season = self._make_premerge_season()
+        assert season.merge_threshold is None
+
+    def test_flat_scoring_all_premerge(self):
+        """With null merge data, all tribals count as pre-merge."""
+        season = self._make_premerge_season()
+        scoring = ClassicScoring(tribal_base=None, tribal_val=1,
+                                 post_merge_tribal_val=2)
+        surv = make_survivor(voted_out_order=4)  # 3 tribals survived
+        bd = scoring.calculate_survivor_points(surv, season)
+        assert bd.items.get('pre_merge_tribal') == 3
+        assert 'post_merge_tribal' not in bd.items
+
+    def test_progressive_scoring_all_premerge(self):
+        """Progressive mode with null merge: all tribals in pre-merge phase."""
+        season = self._make_premerge_season()
+        scoring = ClassicScoring(tribal_base=1, tribal_step=0.5,
+                                 post_merge_step=1, finale_step=2)
+        surv = make_survivor(voted_out_order=4)  # 3 tribals
+        bd = scoring.calculate_survivor_points(surv, season)
+        # pre_count = min(3, 18) = 3
+        # sum = 3*1 + 0.5 * 3*2/2 = 3 + 1.5 = 4.5
+        assert bd.items.get('pre_merge_tribal') == 4.5
+        assert 'post_merge_tribal' not in bd.items
+        assert 'finale_tribal' not in bd.items
+
+    def test_no_merge_or_jury_bonus(self):
+        """No one should get merge/jury bonus when merge data is unknown."""
+        season = self._make_premerge_season()
+        scoring = ClassicScoring(tribal_val=1, merge_val=5, jury_val=3)
+        surv = make_survivor(voted_out_order=4)
+        bd = scoring.calculate_survivor_points(surv, season)
+        assert 'merge' not in bd.items
+        assert 'jury' not in bd.items
+
+    def test_apply_pick_modifier_null_left_at_jury(self):
+        """apply_pick_modifier handles None left_at_jury (no deduction)."""
+        scoring = ClassicScoring(replacement_deduction=True,
+                                 wc_replacement_multiplier=0.5)
+        result = scoring.apply_pick_modifier(10, 'pmr_w', 18, None)
+        assert result == 5  # 10 * 0.5, no deduction
 
 
 # ── Placement edge cases ─────────────────────────────────────────────────

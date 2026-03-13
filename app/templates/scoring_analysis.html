@@ -151,8 +151,8 @@
         <div class="param-group">
             <h3>Pick Type Modifiers</h3>
             <canvas id="chart-wildcard_multiplier"></canvas>
-            <canvas id="chart-replacement_multiplier"></canvas>
-            <canvas id="chart-replacement_deduction"></canvas>
+            <canvas id="chart-draft_replacement_multiplier"></canvas>
+            <canvas id="chart-wc_replacement_multiplier"></canvas>
         </div>
     </div>
 </article>
@@ -204,8 +204,8 @@ const PARAM_LABELS = {
     'idol_play_val': 'Idol Played',
     'advantage_play_val': 'Advantage Played',
     'wildcard_multiplier': 'Wildcard Multiplier',
-    'replacement_multiplier': 'Replacement Multiplier',
-    'replacement_deduction': 'Replacement Deduction',
+    'draft_replacement_multiplier': 'Draft Replacement Multiplier',
+    'wc_replacement_multiplier': 'Wildcard Replacement Multiplier',
 };
 
 const timelineColors = [
@@ -808,7 +808,8 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
 
         // Wildcard & replacement — build dynamically from param impact
         const wc = data.param_impact.wildcard_multiplier;
-        const rm = data.param_impact.replacement_multiplier;
+        const drm = data.param_impact.draft_replacement_multiplier;
+        const wrm = data.param_impact.wc_replacement_multiplier;
         if (wc) {
             const wcBest = wc.values[wc.avg.indexOf(Math.max(...wc.avg))];
             const wcPct = (parseFloat(wcBest) * 100).toFixed(0);
@@ -817,19 +818,20 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
                 + `This matches the original gameplay intent &mdash; wildcards add strategic depth `
                 + `without overshadowing the draft.`]);
         }
-        if (rm) {
-            const rmBest = rm.values[rm.avg.indexOf(Math.max(...rm.avg))];
-            if (parseFloat(rmBest) === 0) {
-                findings.push(['Replacements Don\'t Score',
-                    `Replacement picks optimize to 0 points. The data suggests that replacement picks `
-                    + `are best used as a consolation mechanic (staying engaged after losing a pick) `
-                    + `rather than a scoring opportunity. Their late entry means they rarely accumulate `
-                    + `enough points to meaningfully affect the standings.`]);
-            } else {
-                const rmPct = (parseFloat(rmBest) * 100).toFixed(0);
-                findings.push(['Replacement Scoring',
-                    `Replacements work best at ${rmPct}% of full points (${rmBest}x multiplier).`]);
-            }
+        // Replacement findings — check both draft and wildcard replacement multipliers
+        const drmBest = drm ? parseFloat(drm.values[drm.avg.indexOf(Math.max(...drm.avg))]) : null;
+        const wrmBest = wrm ? parseFloat(wrm.values[wrm.avg.indexOf(Math.max(...wrm.avg))]) : null;
+        if (drmBest === 0 && wrmBest === 0) {
+            findings.push(['Replacements Don\'t Score',
+                `Both draft and wildcard replacement picks optimize to 0 points. `
+                + `Replacement picks are best used as a consolation mechanic (staying engaged `
+                + `after losing a pick) rather than a scoring opportunity.`]);
+        } else if (drm || wrm) {
+            const parts = [];
+            if (drmBest != null) parts.push(`draft replacements at ${(drmBest * 100).toFixed(0)}%`);
+            if (wrmBest != null) parts.push(`wildcard replacements at ${(wrmBest * 100).toFixed(0)}%`);
+            findings.push(['Replacement Scoring',
+                `Replacements score best with ${parts.join(' and ')} of full points.`]);
         }
     }
 

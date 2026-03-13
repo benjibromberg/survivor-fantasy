@@ -66,9 +66,10 @@ PARAM_GRID = {
     'idol_play_val': [0, 0.5, 1],
     'advantage_play_val': [0, 0.5, 1],
     # Pick type modifiers
-    'wildcard_multiplier': [0, 0.25, 0.5],
-    'replacement_multiplier': [0, 0.25, 0.5],
-    'replacement_deduction': [True, False],
+    'wildcard_multiplier': [0, 0.5],
+    'draft_replacement_multiplier': [0, 0.5, 1],
+    'wc_replacement_multiplier': [0, 1],
+    # replacement_deduction always True — replacements never get retroactive points
     # Sole Survivor streak
     # sole_survivor_val excluded from optimization — tuned separately as a
     # fun bonus that shouldn't distort scoring balance.  Locked at 0 during
@@ -134,6 +135,8 @@ class SimSeason:
 
     @property
     def merge_threshold(self):
+        if self.left_at_jury is None:
+            return None
         return self.num_players - self.left_at_jury
 
     @property
@@ -904,8 +907,8 @@ def evaluate_config(config, scenarios):
         surv_map = {s.id: s for s in survivors}
 
         wildcard_mult = fast_config.get('wildcard_multiplier', 0.5)
-        replacement_mult = fast_config.get('replacement_multiplier', 0.5)
-        repl_deduction = fast_config.get('replacement_deduction', True)
+        draft_repl_mult = fast_config.get('draft_replacement_multiplier', 1.0)
+        wc_repl_mult = fast_config.get('wc_replacement_multiplier', fast_config.get('replacement_multiplier', 0.5))
         pre_jury = season.num_players - season.left_at_jury
 
         timeline_lbs = {}
@@ -975,11 +978,9 @@ def evaluate_config(config, scenarios):
                         if sid in repl_scores:
                             base = repl_scores[sid]
                         else:
-                            # Fallback: flat deduction
-                            base = base_scores.get(sid, 0)
-                            if repl_deduction:
-                                base -= pre_jury
-                        mult = replacement_mult if pick.pick_type == 'pmr_w' else 1.0
+                            # Fallback: always deduct pre-merge tribals
+                            base = base_scores.get(sid, 0) - pre_jury
+                        mult = wc_repl_mult if pick.pick_type == 'pmr_w' else draft_repl_mult
                     elif pick.pick_type == 'wildcard':
                         base = base_scores.get(sid, 0)
                         mult = wildcard_mult
@@ -1487,8 +1488,8 @@ def build_season_health_stats(recommended_config, scenarios):
         surv_map = {s.id: s for s in survivors}
 
         wildcard_mult = fast_config.get('wildcard_multiplier', 0.5)
-        replacement_mult = fast_config.get('replacement_multiplier', 0.5)
-        repl_deduction = fast_config.get('replacement_deduction', True)
+        draft_repl_mult = fast_config.get('draft_replacement_multiplier', 1.0)
+        wc_repl_mult = fast_config.get('wc_replacement_multiplier', fast_config.get('replacement_multiplier', 0.5))
         pre_jury = season.num_players - season.left_at_jury
         merge_ep = elim_to_ep.get(merge_thresh, 0)
 
@@ -1550,10 +1551,9 @@ def build_season_health_stats(recommended_config, scenarios):
                         if sid in repl_scores:
                             base = repl_scores[sid]
                         else:
-                            base = base_scores.get(sid, 0)
-                            if repl_deduction:
-                                base -= pre_jury
-                        mult = replacement_mult if pick.pick_type == 'pmr_w' else 1.0
+                            # Always deduct pre-merge tribals
+                            base = base_scores.get(sid, 0) - pre_jury
+                        mult = wc_repl_mult if pick.pick_type == 'pmr_w' else draft_repl_mult
                     elif pick.pick_type == 'wildcard':
                         base = base_scores.get(sid, 0)
                         mult = wildcard_mult
@@ -1972,10 +1972,10 @@ def main():
     for param, label, unit in [
         ('wildcard_multiplier', 'Wildcard multiplier',
          'e.g. 0.5 = wildcards earn half points'),
-        ('replacement_multiplier', 'Replacement multiplier',
-         'e.g. 0.5 = replacements earn half points'),
-        ('replacement_deduction', 'Replacement pre-merge deduction',
-         'subtract pre-merge tribals from replacement scores'),
+        ('draft_replacement_multiplier', 'Draft replacement multiplier',
+         'e.g. 0.5 = draft replacements earn half points'),
+        ('wc_replacement_multiplier', 'Wildcard replacement multiplier',
+         'e.g. 0.5 = wildcard replacements earn half points'),
         ('sole_survivor_val', 'Sole Survivor bonus',
          'points per episode in streak (0 = disabled)'),
     ]:

@@ -17,7 +17,7 @@
 <p style="font-size:0.9rem;color:var(--text-dim);">
     <strong>{{ season.num_players }}</strong> players &middot;
     <strong>{{ season.num_episodes }}</strong> episodes &middot;
-    Jury at <strong>{{ season.left_at_jury }}</strong> left &middot;
+    Jury at <strong>{{ season.left_at_jury if season.left_at_jury is not none else '?' }}</strong> left &middot;
     <strong>{{ season.survivors|length }}</strong> survivors loaded &middot;
     {{ 'Active' if season.is_active else 'Inactive' }}
 </p>

@@ -46,8 +46,9 @@ DEFAULT_CONFIG = {
     'sole_survivor_val': 1,
     # Pick type modifiers
     'wildcard_multiplier': 0.5,
-    'replacement_multiplier': 0,    # for pmr_w
-    'replacement_deduction': False,  # subtract pre-merge tribals for replacements
+    'draft_replacement_multiplier': 0,   # for pmr_d
+    'wc_replacement_multiplier': 0,      # for pmr_w
+    'replacement_deduction': True,  # always deduct pre-merge tribals for replacements
 }
 
 # For the admin UI — descriptions for each config key
@@ -74,7 +75,8 @@ CONFIG_LABELS = {
     'fire_win_val': ('Fire Challenge Win', 'Bonus for winning the final 4 fire-making challenge'),
     'sole_survivor_val': ('Sole Survivor Pick', 'Points per consecutive episode in winner streak (must include finale)'),
     'wildcard_multiplier': ('Wildcard Multiplier', 'Point multiplier for wildcard picks (e.g. 0.5 = half)'),
-    'replacement_multiplier': ('Replacement (W) Multiplier', 'Point multiplier for wildcard replacement picks'),
+    'draft_replacement_multiplier': ('Replacement (D) Multiplier', 'Point multiplier for draft replacement picks'),
+    'wc_replacement_multiplier': ('Replacement (W) Multiplier', 'Point multiplier for wildcard replacement picks'),
     'replacement_deduction': ('Replacement Deduction', 'Subtract pre-merge tribals from replacement picks (1=on, 0=off)'),
 }
 
@@ -103,7 +105,8 @@ class ClassicScoring(ScoringSystem):
         Returns dict of breakdown items.
         """
         c = self.config
-        merge_threshold = season.merge_threshold
+        # None means merge hasn't happened yet — treat all tribals as pre-merge
+        merge_threshold = season.merge_threshold if season.merge_threshold is not None else season.num_players
 
         if c.get('tribal_base') is not None:
             return self._progressive_tribal_points(tribals_survived, season)
@@ -134,7 +137,8 @@ class ClassicScoring(ScoringSystem):
         pm_step = c.get('post_merge_step', 0)
         f_step = c.get('finale_step', 0)
 
-        merge_threshold = season.merge_threshold
+        # None means merge hasn't happened yet — treat all tribals as pre-merge
+        merge_threshold = season.merge_threshold if season.merge_threshold is not None else season.num_players
         finale_size = c.get('finale_size', 5)
         finale_threshold = max(merge_threshold, season.num_players - finale_size)
 
@@ -175,7 +179,8 @@ class ClassicScoring(ScoringSystem):
         c = self.config
         breakdown = PointBreakdown()
 
-        merge_threshold = season.merge_threshold
+        # None means merge hasn't happened yet — treat all tribals as pre-merge
+        merge_threshold = season.merge_threshold if season.merge_threshold is not None else season.num_players
 
         if survivor.voted_out_order and survivor.voted_out_order > 0:
             tribals = survivor.voted_out_order - 1
@@ -262,7 +267,7 @@ class ClassicScoring(ScoringSystem):
             breakdown.items.pop('pre_merge_tribal', None)
             breakdown.items.pop('merge', None)
 
-            mult = c.get('replacement_multiplier', 0.5) if pick_type == 'pmr_w' else 1.0
+            mult = c.get('wc_replacement_multiplier', c.get('replacement_multiplier', 0.5)) if pick_type == 'pmr_w' else c.get('draft_replacement_multiplier', 1.0)
             modified = breakdown.total * mult
 
             for attr, val in saved.items():
@@ -286,7 +291,7 @@ class ClassicScoring(ScoringSystem):
 
     def apply_pick_modifier(self, points, pick_type, num_survivors, left_at_jury):
         c = self.config
-        pre_jury = num_survivors - left_at_jury
+        pre_jury = (num_survivors - left_at_jury) if left_at_jury is not None else 0
 
         if pick_type == 'draft':
             return points
@@ -294,12 +299,13 @@ class ClassicScoring(ScoringSystem):
             mult = c.get('wildcard_multiplier', 0.5)
             return points * mult
         elif pick_type == 'pmr_w':
-            mult = c.get('replacement_multiplier', 0.5)
+            mult = c.get('wc_replacement_multiplier', c.get('replacement_multiplier', 0.5))
             deduct = pre_jury if c.get('replacement_deduction', True) else 0
             return (points - deduct) * mult
         elif pick_type == 'pmr_d':
+            mult = c.get('draft_replacement_multiplier', 1.0)
             deduct = pre_jury if c.get('replacement_deduction', True) else 0
-            return points - deduct
+            return (points - deduct) * mult
         return points
 
     def calculate_sole_survivor_bonus(self, streak_length):
