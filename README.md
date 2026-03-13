@@ -59,12 +59,11 @@ Each fantasy player has a roster of Survivor castaways built through a snake dra
 
 | Type | Scoring | When Picked |
 | ---- | ------- | ----------- |
-| **Draft** | Full points | Before the season (snake draft) |
+| **Draft** | Full points | Before the season (snake draft, 4 picks each) |
 | **Wildcard** | Half points (0.5x) | After first elimination |
-| **Replacement** | Full points, post-selection stats only | After merge, if a draft pick is eliminated post-merge |
-| **Replacement (half)** | Half points, post-selection stats only | After merge, if only wildcard is eliminated post-merge |
+| **Replacement** | 0 pts (roster only) | After merge, if a pick was eliminated pre-merge |
 
-Replacement picks only earn points for stats accumulated **after they are selected** — no retroactive points.
+If there are more players than the cast can support, the group is split into balanced sub-drafts so everyone still gets 4 picks. Replacement picks appear on your roster but don't earn points — they keep you engaged after losing a pick early.
 
 ### Sole Survivor Pick
 
@@ -72,21 +71,14 @@ Each player predicts the overall winner. Points are awarded based on how many co
 
 ### Scoring Components
 
-All point values are configurable per season via the admin panel. The default config:
+All point values are configurable per season via the admin panel. The default config (optimized via scoring analysis):
 
 | Component | Default | Description |
 | --------- | ------- | ----------- |
-| Pre-merge tribal | 0.5 | Per tribal council survived (before merge) |
-| Post-merge tribal | 1.0 | Per tribal council survived (after merge) |
-| Jury | 2 | Bonus for making the jury |
-| Merge | 2 | Bonus for reaching the merge |
-| Final Tribal Council | 3 | Bonus for reaching FTC |
-| 1st / 2nd / 3rd | 15 / 5 / 2 | Placement bonuses |
-| Individual immunity | 3 | Per individual immunity win |
-| Tribal immunity | 1 | Per tribal immunity win |
-| Idol found / played | 2 / 3 | Hidden immunity idol events |
-| Advantage found / played | 1 / 2 | Other advantage events |
-| Fire challenge win | 3 | Won the final 4 fire-making challenge |
+| Progressive tribal | 0.5 base | Each tribal survived earns points, increasing in the finale phase (+0.5/tribal) |
+| Jury | 3 | Bonus for making the jury |
+| 1st / 2nd / 3rd | 5 / 1.5 / 1 | Placement bonuses |
+| Idol / advantage found | 0.5 / 0.5 | Finding hidden immunity idols or advantages |
 | Sole Survivor streak | 1 | Per episode in correct winner streak |
 
 ## Scoring Analysis
@@ -102,15 +94,13 @@ python analyze_scoring.py --samples 50000 --cores 14 --export-json ...   # Custo
 
 Uses two-phase optimization: Phase 1 broad sweep via stratified random sampling, then Phase 2 iterative neighborhood refinement (top 50 configs, ±2 param steps, 2 rounds).
 
-Each configuration is scored on:
+Each configuration is scored on 12 metrics including:
 - **Draft skill correlation** -- does drafting higher-lasting survivors correlate with winning?
-- **Longevity share** -- % of total points from tribal survival
-- **Rank volatility** -- how much player positions shuffle each elimination
 - **Comeback rate** -- how often the midpoint leader does NOT win
 - **Suspense** -- % of the season where the eventual winner is not in 1st
-- **Late-game drama** -- gap between 1st and 2nd at 75% through the season
-- **Midpoint competitiveness** -- players within striking distance at the halfway mark
-- **Recovery** -- can a player who loses a pick early still compete?
+- **Blowout rate** -- how often 1st place scores more than double last place
+- **Finale competitiveness** -- players within striking distance entering the finale
+- **Rank volatility**, **late-game drama**, **midpoint competitiveness**, **recovery**, **longevity share**, **final spread**, **non-draft impact**
 
 The admin panel has a "Load Recommended Config" button to apply the analysis results with one click.
 

@@ -141,12 +141,36 @@ Tailscale state is persisted in `ts-state/` and `ts-config/` volumes so the node
 ## Updating
 
 ```bash
+cd /path/to/survivor-fantasy
+docker compose down
 git pull
 docker compose build
 docker compose up -d
 ```
 
 The SQLite database is preserved across rebuilds since it lives in the mounted `data/` volume.
+
+### Re-seeding the database
+
+If the schema has changed (new columns, etc.), you'll need to re-seed:
+
+```bash
+# Copy pick JSON files into the running container (they aren't in the Docker image
+# because they're added after build — *.xlsx is in .dockerignore but JSONs need
+# to be present at /app/picks/ inside the container)
+docker compose cp picks/season45.json survivor-fantasy:/app/picks/
+docker compose cp picks/season46.json survivor-fantasy:/app/picks/
+docker compose cp picks/season47_snakedraft.json survivor-fantasy:/app/picks/
+docker compose cp picks/season49_snakedraft.json survivor-fantasy:/app/picks/
+
+# Re-seed (downloads fresh survivoR data + generates images)
+docker compose exec survivor-fantasy python seed.py --picks-dir ./picks
+
+# Restart to pick up the new DB
+docker compose restart survivor-fantasy
+```
+
+If you don't need images (faster), add `--no-scrape`. If pick files are already inside the container from a previous build, skip the `cp` steps.
 
 ## Auto-Refresh
 
