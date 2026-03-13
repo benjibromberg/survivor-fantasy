@@ -14,7 +14,7 @@ LEGACY_CONFIG = {
     'replacement_deduction': True,
 }
 
-# Default scoring config — optimized via analyze_scoring.py (run 4, 29k configs)
+# Default scoring config — optimized via analyze_scoring.py (run 5, 29k configs)
 DEFAULT_CONFIG = {
     # Flat tribal rates (used when tribal_base is None)
     'tribal_val': 0.5,
@@ -22,32 +22,32 @@ DEFAULT_CONFIG = {
     # Progressive tribal values (overrides flat rates when tribal_base is set)
     'tribal_base': 0.5,        # starting value of first tribal (None = use flat system)
     'tribal_step': 0,          # per-tribal increase during pre-merge
-    'post_merge_step': 0.5,    # per-tribal increase during post-merge
-    'finale_step': 3,          # per-tribal increase during finale
+    'post_merge_step': 0,      # per-tribal increase during post-merge
+    'finale_step': 0.5,        # per-tribal increase during finale
     'finale_size': 5,          # players remaining when finale begins
     # Milestones
     'jury_val': 3,
     'merge_val': 0,
-    'final_tribal_val': 3,
+    'final_tribal_val': 0,
     # Placement
-    'first_val': 8,
-    'second_val': 4,
-    'third_val': 2,
+    'first_val': 5,
+    'second_val': 1.5,
+    'third_val': 1,
     # Individual performance
     'individual_immunity_val': 0,
     'tribal_immunity_val': 0,
-    'idol_found_val': 0,
-    'advantage_found_val': 1,
+    'idol_found_val': 0.5,
+    'advantage_found_val': 0.5,
     'idol_play_val': 0,
     'advantage_play_val': 0,
     # Milestones
-    'fire_win_val': 2,
+    'fire_win_val': 0,
     # Sole Survivor pick (points per tribal survived, only if your pick wins)
     'sole_survivor_val': 1,
     # Pick type modifiers
     'wildcard_multiplier': 0.5,
-    'replacement_multiplier': 0.5,  # for pmr_w
-    'replacement_deduction': True,  # subtract pre-merge tribals for replacements
+    'replacement_multiplier': 0,    # for pmr_w
+    'replacement_deduction': False,  # subtract pre-merge tribals for replacements
 }
 
 # For the admin UI — descriptions for each config key

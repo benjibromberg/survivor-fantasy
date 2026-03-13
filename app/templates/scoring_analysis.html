@@ -720,15 +720,20 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
 
     if (data.top10 && data.top10[0]) {
         const bm = data.top10[0].metrics;
+        const rec = data.recommended || {};
 
-        // Progressive tribal
+        // Progressive tribal — find best among progressive values (skip None/flat)
         const tb = data.param_impact.tribal_base;
         if (tb) {
-            const best = tb.values[tb.avg.indexOf(Math.max(...tb.avg))];
-            findings.push(['Progressive Tribal',
-                `Progressive tribal scoring (base ${best}) consistently outperforms flat tribal rates. `
-                + `Surviving each tribal council is worth more as the game goes on, `
-                + `rewarding players whose picks last deep into the season.`]);
+            // Filter out None (flat mode, often n=1) to find best progressive base
+            const progIdx = tb.values.map((v, i) => [v, i]).filter(([v]) => v !== 'None');
+            if (progIdx.length > 0) {
+                const bestProg = progIdx.reduce((a, b) => tb.avg[a[1]] >= tb.avg[b[1]] ? a : b);
+                findings.push(['Progressive Tribal',
+                    `Progressive tribal scoring (base ${bestProg[0]}) outperforms flat tribal rates. `
+                    + `Surviving each tribal council is worth more as the game goes on, `
+                    + `rewarding players whose picks last deep into the season.`]);
+            }
         }
 
         // Longevity
@@ -762,30 +767,70 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
 
         // Blowout rate
         if (bm.blowout_rate !== undefined) {
-            findings.push(['Blowouts Are Rare',
-                `Only ${(bm.blowout_rate * 100).toFixed(0)}% of games end with 1st place scoring `
-                + `more than double last place. Most games finish close enough that every player `
-                + `stays engaged through the finale.`]);
+            const pct = (bm.blowout_rate * 100).toFixed(0);
+            if (bm.blowout_rate < 0.3) {
+                findings.push(['Blowouts Are Rare',
+                    `Only ${pct}% of games end with 1st place scoring more than double last place. `
+                    + `Most games finish close enough that every player stays engaged through the finale.`]);
+            } else {
+                findings.push(['Blowout Reduction',
+                    `${pct}% of games still end with 1st place scoring more than double last place, `
+                    + `but this is a significant improvement over legacy scoring. `
+                    + `Balanced sub-drafts and progressive tribals keep more games competitive.`]);
+            }
         }
-    }
 
-    // Individual immunity
-    const ii = data.param_impact.individual_immunity_val;
-    if (ii) {
-        findings.push(['Individual Performance',
-            `Immunity wins, idol finds, and idol plays all optimize to 0 points. `
-            + `These events are too rare and random in new-era Survivor to meaningfully `
-            + `differentiate scoring configs. Only advantage finds (1 pt) survived.`]);
-    }
+        // Individual performance — build dynamically from recommended config
+        const perfParams = [
+            ['individual_immunity_val', 'individual immunity wins'],
+            ['tribal_immunity_val', 'tribal immunity wins'],
+            ['idol_found_val', 'idol finds'],
+            ['advantage_found_val', 'advantage finds'],
+            ['idol_play_val', 'idol plays'],
+            ['advantage_play_val', 'advantage plays'],
+        ];
+        const active = perfParams.filter(([k]) => rec[k] > 0);
+        const inactive = perfParams.filter(([k]) => rec[k] === 0);
+        if (inactive.length > 0) {
+            let detail;
+            if (active.length === 0) {
+                detail = `All individual performance bonuses (immunity wins, idol finds, advantage plays) `
+                    + `optimize to 0 points. These events are too rare and random in new-era Survivor `
+                    + `to meaningfully differentiate scoring.`;
+            } else {
+                const activeDesc = active.map(([k, label]) => `${label} (${rec[k]} pt)`).join(' and ');
+                const inactiveDesc = inactive.map(([, label]) => label).join(', ');
+                detail = `Most individual performance bonuses (${inactiveDesc}) optimize to 0 points &mdash; `
+                    + `too rare and random in new-era Survivor to matter. Only ${activeDesc} survived.`;
+            }
+            findings.push(['Individual Performance', detail]);
+        }
 
-    // Wildcard
-    const wc = data.param_impact.wildcard_multiplier;
-    if (wc) {
-        const best = wc.values[wc.avg.indexOf(Math.max(...wc.avg))];
-        findings.push(['Full-Value Wildcards',
-            `Wildcards and replacements work best at full points (${best}x). `
-            + `Replacement picks are already balanced by the pre-merge tribal deduction &mdash; `
-            + `halving their points on top of that makes them nearly worthless.`]);
+        // Wildcard & replacement — build dynamically from param impact
+        const wc = data.param_impact.wildcard_multiplier;
+        const rm = data.param_impact.replacement_multiplier;
+        if (wc) {
+            const wcBest = wc.values[wc.avg.indexOf(Math.max(...wc.avg))];
+            const wcPct = (parseFloat(wcBest) * 100).toFixed(0);
+            findings.push(['Wildcard Scoring',
+                `Wildcards score best at ${wcPct}% of full points (${wcBest}x multiplier). `
+                + `This matches the original gameplay intent &mdash; wildcards add strategic depth `
+                + `without overshadowing the draft.`]);
+        }
+        if (rm) {
+            const rmBest = rm.values[rm.avg.indexOf(Math.max(...rm.avg))];
+            if (parseFloat(rmBest) === 0) {
+                findings.push(['Replacements Don\'t Score',
+                    `Replacement picks optimize to 0 points. The data suggests that replacement picks `
+                    + `are best used as a consolation mechanic (staying engaged after losing a pick) `
+                    + `rather than a scoring opportunity. Their late entry means they rarely accumulate `
+                    + `enough points to meaningfully affect the standings.`]);
+            } else {
+                const rmPct = (parseFloat(rmBest) * 100).toFixed(0);
+                findings.push(['Replacement Scoring',
+                    `Replacements work best at ${rmPct}% of full points (${rmBest}x multiplier).`]);
+            }
+        }
     }
 
     // Rankings

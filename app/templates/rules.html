@@ -38,23 +38,27 @@
     <h3>Eligibility</h3>
     <ul>
         <li>You are only eligible for a replacement if one of your picks was eliminated <strong>before the merge episode</strong>.</li>
-        <li>If a <strong>drafted</strong> player was eliminated pre-merge, you may pick a <strong>full-points replacement</strong> (Replacement).</li>
-        <li>If only your <strong>Wildcard</strong> was eliminated pre-merge (and no draft picks were), you may pick a <strong>half-points replacement</strong> (Replacement &frac12; pts).</li>
+        <li>If a <strong>drafted</strong> player was eliminated pre-merge, you may pick a <strong>full-strength replacement</strong> (Replacement).</li>
+        <li>If only your <strong>Wildcard</strong> was eliminated pre-merge (and no draft picks were), you may pick a <strong>wildcard-strength replacement</strong> (Replacement &frac12; pts).</li>
         <li>If none of your picks were eliminated pre-merge, you are <strong>not eligible</strong> for any replacement.</li>
     </ul>
 
     <h3>Scoring</h3>
+    {% if config.get('replacement_multiplier', 0.5) == 0 %}
+    <p>Replacement picks <strong>do not earn points</strong> this season. Our <a href="{{ url_for('main.scoring_analysis') }}">scoring analysis</a> found that replacement picks rarely accumulate enough post-merge points to meaningfully affect the standings. Instead, replacements serve as a <strong>stay-in-the-game</strong> mechanic &mdash; you still get to root for a castaway even after losing one of your picks early.</p>
+    <p>Replacements still appear on your roster and their game stats are tracked, but their point contribution is zero.</p>
+    {% else %}
     <p>Replacements only earn points for what their castaway does <strong>from the time they are picked onward</strong>. There are no retroactive points&mdash;stats accumulated before the replacement was selected do not count.</p>
     <ul>
         <li><strong>Replacement</strong> (for a drafted pick): earns full points, but only from post-selection stats.</li>
-        <li><strong>Replacement &frac12; pts</strong> (for a Wildcard): earns half points, only from post-selection stats.</li>
+        <li><strong>Replacement &frac12; pts</strong> (for a Wildcard): earns {{ "%.0f"|format(config.get('replacement_multiplier', 0.5) * 100) }}% points, only from post-selection stats.</li>
     </ul>
-
     <details>
         <summary>Example</summary>
         <p>The merge happens at Episode 8. Your drafted castaway is eliminated in Episode 9, making you eligible for a Replacement. You pick a new castaway who has already survived 9 tribals and won 1 individual immunity.</p>
         <p>Those existing stats <strong>don't count</strong>. Your Replacement only earns points for tribals survived, immunities won, and other achievements <strong>after you selected them</strong>. If they go on to survive 4 more tribals and win the game, you earn points for those 4 tribals plus any placement/milestone bonuses earned after selection.</p>
     </details>
+    {% endif %}
 </article>
 
 <!-- Sole Survivor Pick -->
@@ -182,6 +186,13 @@
                 <td>Half ({{ "%.0f"|format(config.wildcard_multiplier * 100) }}%)</td>
                 <td>After the first elimination</td>
             </tr>
+            {% if config.get('replacement_multiplier', 0.5) == 0 %}
+            <tr>
+                <td><strong>Replacement</strong></td>
+                <td>0 pts (roster only)</td>
+                <td>After merge, if a pick was eliminated pre-merge</td>
+            </tr>
+            {% else %}
             <tr>
                 <td><strong>Replacement</strong></td>
                 <td>Full (100%), post-selection stats only</td>
@@ -189,9 +200,10 @@
             </tr>
             <tr>
                 <td><strong>Replacement &frac12; pts</strong></td>
-                <td>Half ({{ "%.0f"|format(config.get('replacement_multiplier', 0.5) * 100) }}%), post-selection stats only</td>
+                <td>{{ "%.0f"|format(config.get('replacement_multiplier', 0.5) * 100) }}%, post-selection stats only</td>
                 <td>After merge, if only your Wildcard was eliminated pre-merge</td>
             </tr>
+            {% endif %}
         </tbody>
     </table>
 </article>
