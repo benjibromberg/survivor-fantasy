@@ -3,70 +3,113 @@
 {% block content %}
 <hgroup>
     <h1>Scoring Analysis</h1>
-    <p>We tested <strong id="total-configs">10,000+</strong> scoring configurations across
-    9 modern US Survivor seasons (41–49) with 3,150 simulated random drafts (4–10 players each)
+    <p>We tested <strong id="total-configs">...</strong> scoring configurations across
+    9 modern US Survivor seasons (41&ndash;49), each evaluated against
+    <strong id="total-scenarios">...</strong> simulated random drafts (4&ndash;10 players each),
     to find settings that are fun, fair, and competitive.</p>
 </hgroup>
+
+<!-- TL;DR -->
+<article id="tldr-section" style="display: none;">
+    <header><h2>The Bottom Line</h2></header>
+    <div class="tldr-grid" id="tldr-grid"></div>
+    <p id="tldr-detail" style="margin-top: 1rem; color: #9aa5b1;"></p>
+</article>
 
 <!-- Methodology -->
 <article>
     <header><h2>How We Tested</h2></header>
-    <p>For each scoring configuration, we simulated <strong>3,150 random snake drafts</strong>
-    (50 drafts × 7 player counts × 9 seasons) and tracked full leaderboard trajectories
-    episode-by-episode. Wildcards are picked after the first elimination and can overlap other
-    players' draft picks. Sub-drafts ensure every player gets at least 4 picks.</p>
+    <p>For each scoring configuration, we simulated random snake drafts
+    across 7 player counts (4&ndash;10) and 9 seasons, then tracked full leaderboard trajectories
+    episode-by-episode. Every player drafts exactly 4 castaways. When there are too many
+    players for one pool, balanced sub-drafts split the group so everyone still gets 4 picks
+    (castaways can be shared across sub-drafts). Wildcards are picked after the first
+    elimination and can overlap other players' draft picks.</p>
 
-    <p>Each configuration was scored on eight metrics, combined into a single
-    <strong>composite fun/fairness score</strong> (higher = better). Drama and volatility
-    metrics are weighted most heavily:</p>
+    <p>Each configuration was scored on twelve metrics, combined into a single
+    <strong>composite fun/fairness score</strong> (higher = better):</p>
 
     <table>
         <thead><tr><th>Metric</th><th>What It Measures</th><th>Goal</th><th>Weight</th></tr></thead>
         <tbody>
-            <tr><td><strong>Rank Volatility</strong></td>
-                <td>Average rank positions each player moves per elimination step</td>
-                <td>Higher = more shuffling</td><td>3.0</td></tr>
+            <tr><td><strong>Draft Skill</strong></td>
+                <td>Correlation between drafting longer-lasting survivors and winning the league</td>
+                <td>Higher = skill matters</td><td>2.0</td></tr>
+            <tr><td><strong>Longevity Share</strong></td>
+                <td>% of total points from tribal survival</td>
+                <td>50&ndash;80% sweet spot</td><td>2.0</td></tr>
             <tr><td><strong>Comeback Rate</strong></td>
                 <td>How often the leader at 50% does NOT end up winning</td>
-                <td>Higher = comebacks happen</td><td>2.5</td></tr>
+                <td>Higher = comebacks happen</td><td>2.0</td></tr>
             <tr><td><strong>Suspense</strong></td>
                 <td>% of steps where the eventual winner is NOT in 1st place</td>
                 <td>Higher = late takeover</td><td>2.0</td></tr>
             <tr><td><strong>Late-Game Drama</strong></td>
                 <td>Gap between 1st and 2nd place at 75% through the season</td>
                 <td>Smaller = more suspense</td><td>1.5</td></tr>
+            <tr><td><strong>Rank Volatility</strong></td>
+                <td>Average rank positions each player moves per elimination step</td>
+                <td>Higher = more shuffling</td><td>1.5</td></tr>
+            <tr><td><strong>Non-Draft Impact</strong></td>
+                <td>% of total points from wildcards and Sole Survivor picks</td>
+                <td>10&ndash;35% range</td><td>1.5</td></tr>
             <tr><td><strong>Midpoint Competitiveness</strong></td>
                 <td>% of players within 20% of the leader at the halfway mark</td>
                 <td>Higher = more engaged</td><td>1.0</td></tr>
+            <tr><td><strong>Finale Competitiveness</strong></td>
+                <td>% of players within 20% of the leader entering the finale</td>
+                <td>Higher = more engaged</td><td>1.0</td></tr>
             <tr><td><strong>Recovery</strong></td>
                 <td>Average final rank of players who lose a pick in the first 3 boots</td>
-                <td>Lower = easier comeback</td><td>0.5</td></tr>
+                <td>Lower = easier comeback</td><td>-1.0</td></tr>
             <tr><td><strong>Final Spread</strong></td>
                 <td>Gap between 1st and last place at the end</td>
-                <td>Smaller = fairer</td><td>0.5</td></tr>
-            <tr><td><strong>Non-Draft Impact</strong></td>
-                <td>% of total points from wildcards and Sole Survivor picks</td>
-                <td>Moderate (15–25%)</td><td>0.5</td></tr>
+                <td>Smaller = fairer</td><td>1.0</td></tr>
+            <tr><td><strong>Blowout Rate</strong></td>
+                <td>How often 1st place scores more than double last place</td>
+                <td>Lower = fairer</td><td>-1.0</td></tr>
         </tbody>
     </table>
 
-    <p><small>Parameter space was covered using stratified random sampling
-    with all point values snapped to 0.5 increments.</small></p>
+    <p><small>Configs with high variance across drafts are penalized (consistency penalty
+    on comeback rate, suspense, draft skill, and final spread standard deviations).
+    Parameter space covered using two-phase optimization: stratified random sampling
+    (25,000 configs) followed by iterative neighborhood refinement of top results.
+    All point values snapped to 0.5 increments.</small></p>
 </article>
 
 <!-- Score Distribution -->
 <article>
     <header><h2>Score Distribution</h2></header>
-    <p>How all tested configurations scored. The current default is marked.</p>
+    <p>How all tested configurations scored. The current default and legacy configs are marked.</p>
     <canvas id="histogram-chart" style="max-height: 300px;"></canvas>
 </article>
 
-<!-- Season Leaderboard Timelines -->
+<!-- Game Health: Legacy vs Recommended -->
 <article>
-    <header><h2>Example Leaderboards</h2></header>
-    <p>Simulated 6-player snake drafts on select modern seasons, scored with the recommended config.
-    Each player's last pick is a wildcard.</p>
-    <div id="timeline-charts"></div>
+    <header><h2>Game Health by Season</h2></header>
+    <p>Aggregate stats across all simulated drafts for each season.
+    Where available, legacy scoring stats are shown alongside the recommended config
+    so you can see exactly what changes.</p>
+    <div id="season-health-grid" class="season-health-grid"></div>
+</article>
+
+<!-- Closeness Throughout the Game -->
+<article>
+    <header><h2>How Close Are Games?</h2></header>
+    <p>The gap between 1st and 2nd place throughout the season, across 50 simulated 6-player drafts.
+    The shaded band shows the 25th&ndash;75th percentile range; the line is the median.
+    A narrow band near the bottom means games are consistently close.</p>
+    <div id="percentile-charts"></div>
+</article>
+
+<!-- Side-by-Side: Legacy vs Recommended -->
+<article>
+    <header><h2>Legacy vs Recommended</h2></header>
+    <p>Same 6-player draft, same elimination order, different scoring.
+    Each draft was selected as the median outcome across 50 random drafts
+    (not cherry-picked for drama or dominance).</p>
+    <div id="comparison-charts"></div>
 </article>
 
 <!-- Parameter Impact -->
@@ -78,15 +121,18 @@
 
     <div class="param-chart-grid">
         <div class="param-group">
-            <h3>Survival Points</h3>
-            <canvas id="chart-tribal_val"></canvas>
-            <canvas id="chart-post_merge_tribal_val"></canvas>
+            <h3>Progressive Tribal Survival</h3>
+            <canvas id="chart-tribal_base"></canvas>
+            <canvas id="chart-tribal_step"></canvas>
+            <canvas id="chart-post_merge_step"></canvas>
+            <canvas id="chart-finale_step"></canvas>
         </div>
         <div class="param-group">
             <h3>Milestones</h3>
             <canvas id="chart-jury_val"></canvas>
             <canvas id="chart-merge_val"></canvas>
             <canvas id="chart-final_tribal_val"></canvas>
+            <canvas id="chart-fire_win_val"></canvas>
         </div>
         <div class="param-group">
             <h3>Placement</h3>
@@ -107,7 +153,6 @@
             <canvas id="chart-wildcard_multiplier"></canvas>
             <canvas id="chart-replacement_multiplier"></canvas>
             <canvas id="chart-replacement_deduction"></canvas>
-            <canvas id="chart-sole_survivor_val"></canvas>
         </div>
     </div>
 </article>
@@ -142,11 +187,14 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script>
 const PARAM_LABELS = {
-    'tribal_val': 'Pre-Merge Tribal',
-    'post_merge_tribal_val': 'Post-Merge Tribal',
+    'tribal_base': 'Tribal Base Value',
+    'tribal_step': 'Pre-Merge Step',
+    'post_merge_step': 'Post-Merge Step',
+    'finale_step': 'Finale Step',
     'jury_val': 'Jury Bonus',
     'merge_val': 'Merge Bonus',
     'final_tribal_val': 'Final Tribal Bonus',
+    'fire_win_val': 'Fire Challenge Win',
     'first_val': '1st Place (Winner Bonus)',
     'placement_ratio': '2nd:3rd as % of 1st',
     'individual_immunity_val': 'Individual Immunity',
@@ -158,8 +206,12 @@ const PARAM_LABELS = {
     'wildcard_multiplier': 'Wildcard Multiplier',
     'replacement_multiplier': 'Replacement Multiplier',
     'replacement_deduction': 'Replacement Deduction',
-    'sole_survivor_val': 'Sole Survivor (per ep)',
 };
+
+const timelineColors = [
+    '#e85d26', '#f4a261', '#fca311', '#2d6a4f',
+    '#4ea8de', '#a78bfa', '#ef4444', '#10b981',
+];
 
 const chartDefaults = {
     responsive: true,
@@ -179,16 +231,171 @@ const chartDefaults = {
     },
 };
 
+// ── Helpers ──────────────────────────────────────────────────────
+function pctCI(avg, se) {
+    const m = (avg || 0) * 100;
+    const s = (se || 0) * 100;
+    const v = m.toFixed(0);
+    const lo = Math.max(0, m - 3 * s).toFixed(0);
+    const hi = Math.min(100, m + 3 * s).toFixed(0);
+    return `${v}% <span class="ci-bands">(3\u03C3: ${lo}\u2013${hi}%)</span>`;
+}
+
+function pctVal(avg) {
+    return ((avg || 0) * 100).toFixed(0) + '%';
+}
+
+// Format a metric comparison: "Recommended: X% (Legacy: Y%)" or just "X%" if no legacy
+function cmpMetric(recAvg, recSE, legAvg) {
+    const rec = pctCI(recAvg, recSE);
+    if (legAvg != null) {
+        const leg = pctVal(legAvg);
+        const delta = ((recAvg || 0) - (legAvg || 0)) * 100;
+        const sign = delta >= 0 ? '+' : '';
+        return `${rec} <span class="legacy-cmp">(was ${leg}, ${sign}${delta.toFixed(0)}pp)</span>`;
+    }
+    return rec;
+}
+
+// Gap metric (higher raw = bigger gap between 1st and last)
+function cmpGap(recAvg, recSE, legAvg) {
+    const recM = (recAvg || 0) * 100;
+    const recSEv = (recSE || 0) * 100;
+    const lo = Math.max(0, recM - 3 * recSEv).toFixed(0);
+    const hi = Math.min(100, recM + 3 * recSEv).toFixed(0);
+    let s = `${recM.toFixed(0)}% <span class="ci-bands">(3\u03C3: ${lo}\u2013${hi}%)</span>`;
+    if (legAvg != null) {
+        const legM = (legAvg || 0) * 100;
+        const delta = recM - legM;
+        const sign = delta >= 0 ? '+' : '';
+        s += ` <span class="legacy-cmp">(was ${legM.toFixed(0)}%, ${sign}${delta.toFixed(0)}pp)</span>`;
+    }
+    return s;
+}
+
 fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
 .then(r => r.json())
 .then(data => {
     document.getElementById('total-configs').textContent = data.total_configs.toLocaleString();
+    if (data.n_scenarios) {
+        document.getElementById('total-scenarios').textContent = data.n_scenarios.toLocaleString();
+    }
+
+    // ── TL;DR Summary ─────────────────────────────────────────────
+    if (data.top10 && data.top10[0]) {
+        const bm = data.top10[0].metrics;
+        const tldrSection = document.getElementById('tldr-section');
+        const tldrGrid = document.getElementById('tldr-grid');
+        const tldrDetail = document.getElementById('tldr-detail');
+
+        const cards = [];
+        if (bm.comeback_rate != null) {
+            cards.push({
+                value: `${(bm.comeback_rate * 100).toFixed(0)}%`,
+                label: 'Comeback Rate',
+                detail: 'Halftime leader loses',
+            });
+        }
+        if (bm.suspense != null) {
+            cards.push({
+                value: `${(bm.suspense * 100).toFixed(0)}%`,
+                label: 'Suspense',
+                detail: 'Season without a clear leader',
+            });
+        }
+        if (bm.draft_skill_correlation != null) {
+            cards.push({
+                value: bm.draft_skill_correlation.toFixed(2),
+                label: 'Draft Skill',
+                detail: 'Good picks still win',
+            });
+        }
+        if (bm.blowout_rate != null) {
+            cards.push({
+                value: `${(bm.blowout_rate * 100).toFixed(0)}%`,
+                label: 'Blowout Rate',
+                detail: 'Games with 2x score gap',
+            });
+        }
+
+        if (cards.length > 0) {
+            tldrSection.style.display = '';
+            cards.forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'tldr-card';
+                div.innerHTML = `
+                    <span class="tldr-value">${c.value}</span>
+                    <span class="tldr-label">${c.label}</span>
+                    <span class="tldr-detail">${c.detail}</span>
+                `;
+                tldrGrid.appendChild(div);
+            });
+
+            const parts = [];
+            if (bm.comeback_rate != null)
+                parts.push(`the halftime leader loses ${(bm.comeback_rate * 100).toFixed(0)}% of the time`);
+            if (bm.suspense != null)
+                parts.push(`the winner spends ${(bm.suspense * 100).toFixed(0)}% of the season outside 1st place`);
+            if (bm.final_spread != null)
+                parts.push(`the average 1st-to-last gap is ${(bm.final_spread * 100).toFixed(0)}%`);
+            if (parts.length > 0) {
+                tldrDetail.innerHTML = `Across ${data.total_configs.toLocaleString()} configs tested, `
+                    + `the recommended scoring produces games where ${parts.join(', ')}.`;
+            }
+        }
+    }
 
     // ── Histogram ──────────────────────────────────────────────────
+    const histLabels = data.histogram.labels;
+
+    function findBin(score) {
+        if (score == null) return -1;
+        for (let i = histLabels.length - 1; i >= 0; i--) {
+            if (score >= histLabels[i]) return i;
+        }
+        return 0;
+    }
+
+    const markerLines = {
+        id: 'markerLines',
+        afterDraw(chart) {
+            const markers = [
+                { score: data.legacy_composite, label: 'Legacy', color: '#9aa5b1' },
+                { score: data.default_composite, label: 'Default', color: '#4ea8de' },
+                { score: data.top10?.[0]?.composite, label: 'Recommended', color: '#fca311' },
+            ].filter(m => m.score != null);
+
+            const ctx = chart.ctx;
+            const xAxis = chart.scales.x;
+            const yAxis = chart.scales.y;
+
+            markers.forEach(m => {
+                const binIdx = findBin(m.score);
+                if (binIdx < 0) return;
+                const x = xAxis.getPixelForValue(binIdx);
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.setLineDash([6, 3]);
+                ctx.strokeStyle = m.color;
+                ctx.lineWidth = 2;
+                ctx.moveTo(x, yAxis.top);
+                ctx.lineTo(x, yAxis.bottom);
+                ctx.stroke();
+
+                ctx.fillStyle = m.color;
+                ctx.font = 'bold 11px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(m.label, x, yAxis.top - 6);
+                ctx.restore();
+            });
+        },
+    };
+
     new Chart(document.getElementById('histogram-chart'), {
         type: 'bar',
         data: {
-            labels: data.histogram.labels.map(v => v.toFixed(2)),
+            labels: histLabels.map(v => v.toFixed(2)),
             datasets: [{
                 data: data.histogram.counts,
                 backgroundColor: 'rgba(232, 93, 38, 0.6)',
@@ -196,11 +403,12 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
                 borderWidth: 1,
             }],
         },
+        plugins: [markerLines],
         options: {
             ...chartDefaults,
+            layout: { padding: { top: 20, right: 10 } },
             plugins: {
                 ...chartDefaults.plugins,
-                annotation: data.default_rank ? {} : undefined,
                 tooltip: {
                     callbacks: {
                         title: (items) => `Score: ${items[0].label}`,
@@ -216,44 +424,109 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
         },
     });
 
-    // ── Season Timeline Line Charts ──────────────────────────────────
-    const timelineColors = [
-        '#e85d26', '#f4a261', '#fca311', '#2d6a4f',
-        '#4ea8de', '#a78bfa', '#ef4444', '#10b981',
-    ];
-    const container = document.getElementById('timeline-charts');
+    // ── Season Health Stats ───────────────────────────────────────
+    if (data.season_health) {
+        const grid = document.getElementById('season-health-grid');
+        const hasLegacy = data.legacy_health && Object.keys(data.legacy_health).length > 0;
 
-    if (data.timelines && data.timelines.length > 0) {
-        data.timelines.forEach((timeline, ti) => {
+        for (const [snum, stats] of Object.entries(data.season_health)) {
+            const leg = hasLegacy ? data.legacy_health[snum] : null;
+            const card = document.createElement('div');
+            card.className = 'season-health-card';
+
+            const comeback = cmpMetric(stats.avg_comeback_rate, stats.se_comeback_rate,
+                                       leg?.avg_comeback_rate);
+            const suspense = cmpMetric(stats.avg_suspense, stats.se_suspense,
+                                       leg?.avg_suspense);
+            const midComp = cmpMetric(stats.avg_midpoint_competitive_pct,
+                                      stats.se_midpoint_competitive_pct,
+                                      leg?.avg_midpoint_competitive_pct);
+            const finaleComp = cmpMetric(stats.avg_finale_competitive_pct,
+                                         stats.se_finale_competitive_pct,
+                                         leg?.avg_finale_competitive_pct);
+            const spread = cmpGap(stats.avg_final_spread, stats.se_final_spread,
+                                   leg?.avg_final_spread);
+
+            // Blowout rate (lower is better)
+            const blowoutRec = ((stats.avg_blowout_rate || 0) * 100).toFixed(0);
+            let blowout = `${blowoutRec}%`;
+            if (leg?.avg_blowout_rate != null) {
+                const blowoutLeg = ((leg.avg_blowout_rate || 0) * 100).toFixed(0);
+                const delta = ((stats.avg_blowout_rate || 0) - (leg.avg_blowout_rate || 0)) * 100;
+                const sign = delta >= 0 ? '+' : '';
+                blowout += ` <span class="legacy-cmp">(was ${blowoutLeg}%, ${sign}${delta.toFixed(0)}pp)</span>`;
+            }
+
+            card.innerHTML = `
+                <h3>Season ${snum}</h3>
+                <p class="health-subtitle">Averaged across ${stats.n_drafts} simulated drafts</p>
+                <ul class="health-facts">
+                    <li>In <strong>${comeback}</strong> of games, the halftime leader didn't win</li>
+                    <li>The winner spent <strong>${suspense}</strong> of the season outside 1st place</li>
+                    <li><strong>${midComp}</strong> of players in contention at the merge</li>
+                    <li><strong>${finaleComp}</strong> of players still in contention entering the finale</li>
+                    <li>Average gap between 1st and last place: <strong>${spread}</strong></li>
+                    <li><strong>${blowout}</strong> of games ended in a blowout (1st &gt; 2x last)</li>
+                </ul>
+            `;
+            grid.appendChild(card);
+        }
+    }
+
+    // ── Percentile Band Charts ────────────────────────────────────
+    if (data.percentile_bands && data.percentile_bands.length > 0) {
+        const container = document.getElementById('percentile-charts');
+        data.percentile_bands.forEach((band) => {
             const wrapper = document.createElement('div');
             wrapper.style.marginBottom = '2rem';
-            wrapper.innerHTML = `<h3 style="color: var(--fire-glow); margin-bottom: 0.5rem;">${timeline.season}</h3>`;
+            wrapper.innerHTML = `<h3 style="color: var(--fire-glow); margin-bottom: 0.5rem;">${band.season} <small style="color: #9aa5b1; font-weight: normal;">(${band.n_drafts} drafts)</small></h3>`;
             const canvas = document.createElement('canvas');
-            canvas.style.maxHeight = '350px';
+            canvas.style.maxHeight = '300px';
             wrapper.appendChild(canvas);
             container.appendChild(wrapper);
 
-            const datasets = timeline.datasets.map((ds, i) => ({
-                label: ds.name,
-                data: ds.points,
-                borderColor: timelineColors[i % timelineColors.length],
-                backgroundColor: timelineColors[i % timelineColors.length] + '22',
-                tension: 0.3,
-                pointRadius: 3,
-                pointHoverRadius: 6,
-                borderWidth: 2,
-            }));
-
             new Chart(canvas, {
                 type: 'line',
-                data: { labels: timeline.labels, datasets },
+                data: {
+                    labels: band.labels,
+                    datasets: [
+                        {
+                            label: '75th percentile',
+                            data: band.p75,
+                            borderColor: 'transparent',
+                            backgroundColor: 'rgba(232, 93, 38, 0.15)',
+                            fill: true,
+                            pointRadius: 0,
+                            tension: 0.3,
+                        },
+                        {
+                            label: 'Median gap',
+                            data: band.median,
+                            borderColor: '#e85d26',
+                            backgroundColor: 'rgba(232, 93, 38, 0.15)',
+                            fill: '-1',
+                            pointRadius: 3,
+                            pointHoverRadius: 6,
+                            borderWidth: 2,
+                            tension: 0.3,
+                        },
+                        {
+                            label: '25th percentile',
+                            data: band.p25,
+                            borderColor: 'rgba(232, 93, 38, 0.4)',
+                            borderDash: [4, 4],
+                            backgroundColor: 'transparent',
+                            fill: false,
+                            pointRadius: 0,
+                            borderWidth: 1,
+                            tension: 0.3,
+                        },
+                    ],
+                },
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
+                    interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: {
                             display: true,
@@ -262,15 +535,19 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
                         },
                         tooltip: {
                             callbacks: {
-                                label: (item) => `${item.dataset.label}: ${item.raw} pts`,
+                                label: (item) => `${item.dataset.label}: ${(item.raw * 100).toFixed(0)}%`,
                             },
                         },
                     },
                     scales: {
                         y: {
                             grid: { color: 'rgba(255,255,255,0.08)' },
-                            ticks: { color: '#9aa5b1' },
-                            title: { display: true, text: 'Points', color: '#9aa5b1' },
+                            ticks: {
+                                color: '#9aa5b1',
+                                callback: (v) => (v * 100).toFixed(0) + '%',
+                            },
+                            title: { display: true, text: 'Gap (1st vs 2nd, % of leader)', color: '#9aa5b1' },
+                            min: 0,
                         },
                         x: {
                             grid: { display: false },
@@ -278,6 +555,110 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
                         },
                     },
                 },
+            });
+        });
+    }
+
+    // ── Comparison Timelines (Legacy vs Recommended) ──────────────
+    if (data.comparison_timelines && data.comparison_timelines.length > 0) {
+        const container = document.getElementById('comparison-charts');
+        data.comparison_timelines.forEach((comp) => {
+            const section = document.createElement('div');
+            section.className = 'comparison-section';
+            section.innerHTML = `<h3 style="color: var(--fire-glow); margin-bottom: 0.5rem;">${comp.season}</h3>`;
+
+            const grid = document.createElement('div');
+            grid.className = 'comparison-grid';
+
+            // Find shared Y-axis max
+            const allPts = [
+                ...comp.legacy.datasets.flatMap(d => d.points),
+                ...comp.recommended.datasets.flatMap(d => d.points),
+            ];
+            const yMax = Math.ceil(Math.max(...allPts) / 10) * 10;
+
+            // Legacy chart
+            const legDiv = document.createElement('div');
+            legDiv.innerHTML = '<p style="text-align:center; margin-bottom:0.25rem; color:#9aa5b1;"><strong>Legacy Scoring</strong></p>';
+            const legCanvas = document.createElement('canvas');
+            legCanvas.style.maxHeight = '300px';
+            legDiv.appendChild(legCanvas);
+            grid.appendChild(legDiv);
+
+            // Recommended chart
+            const recDiv = document.createElement('div');
+            recDiv.innerHTML = '<p style="text-align:center; margin-bottom:0.25rem; color:var(--fire-glow);"><strong>Recommended Scoring</strong></p>';
+            const recCanvas = document.createElement('canvas');
+            recCanvas.style.maxHeight = '300px';
+            recDiv.appendChild(recCanvas);
+            grid.appendChild(recDiv);
+
+            section.appendChild(grid);
+            container.appendChild(section);
+
+            const chartOpts = (maxY) => ({
+                responsive: true,
+                maintainAspectRatio: true,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: { color: '#e8d5b7', usePointStyle: true, padding: 8, font: { size: 11 } },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (item) => `${item.dataset.label}: ${item.raw} pts`,
+                        },
+                    },
+                },
+                scales: {
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.08)' },
+                        ticks: { color: '#9aa5b1' },
+                        title: { display: true, text: 'Points', color: '#9aa5b1' },
+                        max: maxY,
+                        min: 0,
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#9aa5b1', maxRotation: 45, font: { size: 10 } },
+                    },
+                },
+            });
+
+            // Legacy: muted colors
+            const legDatasets = comp.legacy.datasets.map((ds, i) => ({
+                label: ds.name,
+                data: ds.points,
+                borderColor: timelineColors[i % timelineColors.length] + '88',
+                backgroundColor: 'transparent',
+                tension: 0.3,
+                pointRadius: 2,
+                borderWidth: 1.5,
+            }));
+
+            new Chart(legCanvas, {
+                type: 'line',
+                data: { labels: comp.labels, datasets: legDatasets },
+                options: chartOpts(yMax),
+            });
+
+            // Recommended: full colors
+            const recDatasets = comp.recommended.datasets.map((ds, i) => ({
+                label: ds.name,
+                data: ds.points,
+                borderColor: timelineColors[i % timelineColors.length],
+                backgroundColor: 'transparent',
+                tension: 0.3,
+                pointRadius: 2,
+                borderWidth: 2,
+            }));
+
+            new Chart(recCanvas, {
+                type: 'line',
+                data: { labels: comp.labels, datasets: recDatasets },
+                options: chartOpts(yMax),
             });
         });
     }
@@ -317,7 +698,7 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
                         callbacks: {
                             label: (item) => {
                                 const idx = item.dataIndex;
-                                return `Score: ${item.raw.toFixed(3)} +/- ${info.std[idx].toFixed(3)} (n=${info.n[idx]})`;
+                                return `Score: ${item.raw.toFixed(3)} \u00B1 ${info.std[idx].toFixed(3)} (n=${info.n[idx]})`;
                             },
                         },
                     },
@@ -337,40 +718,82 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
     // ── Key Findings ────────────────────────────────────────────────
     const findings = [];
 
-    // Best config drama metrics
     if (data.top10 && data.top10[0]) {
         const bm = data.top10[0].metrics;
-        if (bm.comeback_rate !== undefined) {
-            findings.push(['Comebacks', `Best config: ${((bm.comeback_rate || 0) * 100).toFixed(0)}% of the time, the midpoint leader does NOT win.`]);
+
+        // Progressive tribal
+        const tb = data.param_impact.tribal_base;
+        if (tb) {
+            const best = tb.values[tb.avg.indexOf(Math.max(...tb.avg))];
+            findings.push(['Progressive Tribal',
+                `Progressive tribal scoring (base ${best}) consistently outperforms flat tribal rates. `
+                + `Surviving each tribal council is worth more as the game goes on, `
+                + `rewarding players whose picks last deep into the season.`]);
         }
+
+        // Longevity
+        if (bm.longevity_share !== undefined) {
+            findings.push(['Survival Dominates',
+                `${(bm.longevity_share * 100).toFixed(0)}% of total points come from tribal survival. `
+                + `This creates the strongest correlation between drafting well and winning the league.`]);
+        }
+
+        // Comebacks
+        if (bm.comeback_rate !== undefined) {
+            findings.push(['Comebacks Happen',
+                `${(bm.comeback_rate * 100).toFixed(0)}% of the time, the midpoint leader does NOT win. `
+                + `The finale acceleration keeps things close enough that early leads don't lock in the result.`]);
+        }
+
+        // Suspense
         if (bm.suspense !== undefined) {
-            findings.push(['Suspense', `The eventual winner is NOT in 1st place for ${((bm.suspense || 0) * 100).toFixed(0)}% of the season.`]);
+            findings.push(['Late Takeovers',
+                `The eventual winner is NOT in 1st place for ${(bm.suspense * 100).toFixed(0)}% of the season. `
+                + `Leads change hands regularly throughout the game.`]);
+        }
+
+        // Draft skill
+        if (bm.draft_skill_correlation !== undefined) {
+            findings.push(['Skill Matters',
+                `Draft quality correlates with final standing at ${bm.draft_skill_correlation.toFixed(2)} `
+                + `(Spearman's rho). Picking longer-lasting survivors reliably predicts league success, `
+                + `but doesn't guarantee it.`]);
+        }
+
+        // Blowout rate
+        if (bm.blowout_rate !== undefined) {
+            findings.push(['Blowouts Are Rare',
+                `Only ${(bm.blowout_rate * 100).toFixed(0)}% of games end with 1st place scoring `
+                + `more than double last place. Most games finish close enough that every player `
+                + `stays engaged through the finale.`]);
         }
     }
+
+    // Individual immunity
+    const ii = data.param_impact.individual_immunity_val;
+    if (ii) {
+        findings.push(['Individual Performance',
+            `Immunity wins, idol finds, and idol plays all optimize to 0 points. `
+            + `These events are too rare and random in new-era Survivor to meaningfully `
+            + `differentiate scoring configs. Only advantage finds (1 pt) survived.`]);
+    }
+
     // Wildcard
     const wc = data.param_impact.wildcard_multiplier;
     if (wc) {
         const best = wc.values[wc.avg.indexOf(Math.max(...wc.avg))];
-        findings.push(['Wildcards', `Best at ${best}x. Wildcards create late-game volatility as they can overlap other players' picks.`]);
+        findings.push(['Full-Value Wildcards',
+            `Wildcards and replacements work best at full points (${best}x). `
+            + `Replacement picks are already balanced by the pre-merge tribal deduction &mdash; `
+            + `halving their points on top of that makes them nearly worthless.`]);
     }
-    // Replacement
-    const rep = data.param_impact.replacement_multiplier;
-    if (rep) {
-        const best = rep.values[rep.avg.indexOf(Math.max(...rep.avg))];
-        findings.push(['Replacements', `${best === '0' ? 'Disabled (0x)' : best + 'x'} works best for drama.`]);
-    }
-    // Individual immunity
-    const ii = data.param_impact.individual_immunity_val;
-    if (ii) {
-        const best = ii.values[ii.avg.indexOf(Math.max(...ii.avg))];
-        findings.push(['Individual Immunity', `Best at ${best} pts. High immunity rewards create exciting late-game swings.`]);
-    }
-    // Default rank
+
+    // Rankings
     if (data.default_rank) {
-        findings.push(['Current Default', `Ranked #${data.default_rank} of ${data.total_configs} configs tested.`]);
+        findings.push(['Current Default', `Ranked #${data.default_rank.toLocaleString()} of ${data.total_configs.toLocaleString()} configs tested.`]);
     }
     if (data.legacy_rank) {
-        findings.push(['Legacy (pre-site)', `Ranked #${data.legacy_rank} of ${data.total_configs} configs tested.`]);
+        findings.push(['Legacy (pre-site)', `Ranked #${data.legacy_rank.toLocaleString()} of ${data.total_configs.toLocaleString()} configs tested.`]);
     }
 
     const tbody = document.getElementById('findings-table');
@@ -385,11 +808,11 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
         const topDiv = document.getElementById('top-configs');
         const table = document.createElement('table');
         table.innerHTML = `<thead><tr>
-            <th>#</th><th>Score</th><th>Volatility</th><th>Comeback</th>
-            <th>Suspense</th><th>Late Gap</th><th>Mid Comp</th>
+            <th>#</th><th>Score</th><th>Draft Skill</th><th>Longevity</th>
+            <th>Comeback</th><th>Suspense</th><th>Non-Draft</th>
             <th>Key Differences</th>
         </tr></thead>`;
-        const tbody = document.createElement('tbody');
+        const tBody = document.createElement('tbody');
         data.top10.slice(0, 5).forEach((cfg, i) => {
             const m = cfg.metrics;
             const diffs = Object.entries(cfg.diffs || {})
@@ -399,35 +822,46 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
             tr.innerHTML = `
                 <td><strong>${i + 1}</strong></td>
                 <td><strong>${cfg.composite.toFixed(3)}</strong></td>
-                <td>${(m.rank_volatility || 0).toFixed(3)}</td>
+                <td>${(m.draft_skill_correlation || 0).toFixed(2)}</td>
+                <td>${((m.longevity_share || 0) * 100).toFixed(0)}%</td>
                 <td>${((m.comeback_rate || 0) * 100).toFixed(0)}%</td>
                 <td>${((m.suspense || 0) * 100).toFixed(0)}%</td>
-                <td>${((m.late_game_gap || 0) * 100).toFixed(0)}%</td>
-                <td>${((m.midpoint_competitive_pct || 0) * 100).toFixed(0)}%</td>
+                <td>${((m.non_draft_pct || 0) * 100).toFixed(0)}%</td>
                 <td><small>${diffs}</small></td>
             `;
-            tbody.appendChild(tr);
+            tBody.appendChild(tr);
         });
-        table.appendChild(tbody);
+        table.appendChild(tBody);
         topDiv.appendChild(table);
     }
 
     // ── Recommended Config ──────────────────────────────────────────
-    document.getElementById('recommended-config').textContent = JSON.stringify(data.recommended, null, 2);
+    if (data.recommended) {
+        const configDiv = document.getElementById('recommended-config');
+        const lines = Object.entries(data.recommended).map(([k, v]) => {
+            const label = PARAM_LABELS[k] || k;
+            return `${label}: ${v}`;
+        });
+        configDiv.textContent = lines.join('\n');
+    }
 
-    const best = data.top10[0];
+    const best = data.top10 && data.top10[0];
     if (best) {
         const metricsDiv = document.getElementById('recommended-metrics');
         const m = best.metrics;
         metricsDiv.innerHTML = `
             <p>
             <strong>Composite: ${best.composite.toFixed(3)}</strong><br>
-            Rank volatility: ${(m.rank_volatility || 0).toFixed(3)} &middot;
+            Draft skill: ${(m.draft_skill_correlation || 0).toFixed(2)} &middot;
+            Longevity: ${((m.longevity_share || 0) * 100).toFixed(0)}% &middot;
             Comeback rate: ${((m.comeback_rate || 0) * 100).toFixed(0)}% &middot;
             Suspense: ${((m.suspense || 0) * 100).toFixed(0)}% &middot;
+            Rank volatility: ${(m.rank_volatility || 0).toFixed(3)} &middot;
             Late-game gap: ${((m.late_game_gap || 0) * 100).toFixed(0)}% &middot;
             Midpoint competitive: ${((m.midpoint_competitive_pct || 0) * 100).toFixed(0)}% &middot;
             Recovery: ${(m.early_loser_avg_rank || 0).toFixed(2)} &middot;
+            Final spread: ${((m.final_spread || 0) * 100).toFixed(0)}% &middot;
+            Blowout rate: ${((m.blowout_rate || 0) * 100).toFixed(0)}% &middot;
             Non-draft impact: ${((m.non_draft_pct || 0) * 100).toFixed(0)}%
             </p>
         `;
@@ -436,6 +870,97 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
 </script>
 
 <style>
+.tldr-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    text-align: center;
+}
+.tldr-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem 0.5rem;
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    background: var(--card-bg);
+}
+.tldr-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--fire-glow);
+    line-height: 1.1;
+}
+.tldr-label {
+    font-size: 0.9rem;
+    color: var(--sand-light, #e8d5b7);
+    margin-top: 0.25rem;
+}
+.tldr-detail {
+    font-size: 0.75rem;
+    color: #9aa5b1;
+    margin-top: 0.15rem;
+}
+.season-health-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1rem;
+}
+.season-health-card {
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    background: var(--card-bg);
+}
+.season-health-card h3 {
+    margin: 0 0 0.25rem 0;
+    color: var(--fire-glow);
+    font-size: 1.1rem;
+}
+.health-subtitle {
+    margin: 0 0 0.5rem 0;
+    color: #9aa5b1;
+    font-size: 0.85rem;
+}
+.health-facts {
+    margin: 0;
+    padding-left: 1.25rem;
+    list-style: none;
+}
+.health-facts li {
+    padding: 0.3rem 0;
+    font-size: 0.9rem;
+    color: var(--sand-light, #e8d5b7);
+    line-height: 1.4;
+    list-style: '\25B8\0020';
+}
+.health-facts li::marker {
+    color: var(--fire-glow);
+}
+.health-facts li strong {
+    color: var(--fire-glow);
+}
+.ci-bands {
+    color: #9aa5b1;
+    font-size: 0.8em;
+}
+.legacy-cmp {
+    color: #9aa5b1;
+    font-size: 0.8em;
+}
+.comparison-section {
+    margin-bottom: 2.5rem;
+}
+.comparison-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+@media (max-width: 768px) {
+    .comparison-grid {
+        grid-template-columns: 1fr;
+    }
+}
 .param-chart-grid {
     display: grid;
     gap: 2rem;

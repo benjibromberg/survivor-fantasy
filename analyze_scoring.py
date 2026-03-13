@@ -23,6 +23,7 @@ import sys
 import time
 from collections import defaultdict
 
+import numpy as np
 import pandas as pd
 
 from app.data import SURVIVOR_DATA_FILE, download_survivor_data, get_idol_ids, get_fire_winners
@@ -65,8 +66,8 @@ PARAM_GRID = {
     'idol_play_val': [0, 0.5, 1],
     'advantage_play_val': [0, 0.5, 1],
     # Pick type modifiers
-    'wildcard_multiplier': [0, 0.25, 0.5, 0.75, 1.0],
-    'replacement_multiplier': [0, 0.25, 0.5, 0.75, 1.0],
+    'wildcard_multiplier': [0, 0.25, 0.5],
+    'replacement_multiplier': [0, 0.25, 0.5],
     'replacement_deduction': [True, False],
     # Sole Survivor streak
     # sole_survivor_val excluded from optimization — tuned separately as a
@@ -348,8 +349,12 @@ def load_all_seasons(season_numbers=None):
 
 # ── Draft simulation ────────────────────────────────────────────────────────
 
-def snake_draft(survivors, n_players, rng):
-    """Snake draft survivors among n_players. Returns {pid: [SimSurvivor]}."""
+def snake_draft(survivors, n_players, rng, max_picks=None):
+    """Snake draft survivors among n_players. Returns {pid: [SimSurvivor]}.
+
+    If max_picks is set, each player takes at most that many picks (remaining
+    survivors go undrafted).
+    """
     available = list(survivors)
     rng.shuffle(available)
     picks = {i: [] for i in range(n_players)}
@@ -359,29 +364,41 @@ def snake_draft(survivors, n_players, rng):
         for p in order:
             if not available:
                 break
+            if max_picks and len(picks[p]) >= max_picks:
+                continue
             picks[p].append(available.pop())
+        # Stop if everyone is full
+        if max_picks and all(len(picks[p]) >= max_picks for p in picks):
+            break
         round_num += 1
     return picks
 
 
 def simulate_draft(survivors, n_players, min_picks=MIN_PICKS_PER_PLAYER, rng=None):
-    """Draft with sub-drafts if needed to ensure min_picks per player."""
-    picks_each = len(survivors) // n_players
-    if picks_each >= min_picks:
-        return snake_draft(survivors, n_players, rng)
+    """Draft with sub-drafts if needed to ensure min_picks per player.
 
-    # Sub-drafts: split players into groups small enough for min_picks each
-    max_per_group = max(2, len(survivors) // min_picks)
+    Every player always drafts exactly min_picks survivors.  When there are
+    too many players for one pool (n_players * min_picks > len(survivors)),
+    players are split into balanced sub-groups that each draft the full
+    survivor pool independently (survivors can be shared across groups).
+    """
+    if n_players * min_picks <= len(survivors):
+        return snake_draft(survivors, n_players, rng, max_picks=min_picks)
+
+    # Sub-drafts: balanced groups so each group can supply min_picks per member
+    max_per_group = len(survivors) // min_picks
+    n_groups = -(-n_players // max_per_group)  # ceil division
+    base_size = n_players // n_groups
+    remainder = n_players % n_groups
+    groups = [base_size + (1 if i < remainder else 0) for i in range(n_groups)]
+
     all_picks = {}
     pid = 0
-    remaining = n_players
-    while remaining > 0:
-        group = min(max_per_group, remaining)
-        sub = snake_draft(survivors, group, rng)
-        for local_id in range(group):
+    for group_size in groups:
+        sub = snake_draft(survivors, group_size, rng, max_picks=min_picks)
+        for local_id in range(group_size):
             all_picks[pid] = sub[local_id]
             pid += 1
-        remaining -= group
     return all_picks
 
 
@@ -1049,11 +1066,25 @@ def evaluate_config(config, scenarios):
                 gap = (late_scores[0] - late_scores[1]) / late_scores[0]
                 metrics['late_game_gap'].append(gap)
 
+        # Competitiveness entering the finale (finale_size players remain)
+        finale_size = fast_config.get('finale_size', 5)
+        finale_elim = max(merge_thresh, season.num_players - finale_size)
+        finale_lb = timeline_lbs.get(finale_elim, {})
+        if finale_lb:
+            finale_scores = sorted(finale_lb.values(), reverse=True)
+            if finale_scores[0] > 0:
+                threshold = finale_scores[0] * 0.8
+                competitive = sum(1 for s in finale_scores if s >= threshold)
+                metrics['finale_competitive_pct'].append(competitive / n_players)
+
         # Final spread
         final_scores = sorted(final_lb.values(), reverse=True)
         if final_scores[0] > 0:
             spread = (final_scores[0] - final_scores[-1]) / final_scores[0]
             metrics['final_spread'].append(spread)
+            # Blowout: 1st place scored more than 2x last place
+            metrics['blowout_rate'].append(
+                1.0 if final_scores[0] > 2 * final_scores[-1] else 0.0)
 
         # Non-draft impact and longevity share (SS excluded — tuned separately)
         for user_id, pick_results in final_breakdowns.items():
@@ -1101,10 +1132,16 @@ def evaluate_config(config, scenarios):
                 rho = 1 - 6 * d_sq_sum / (n_r * (n_r ** 2 - 1))
                 metrics['draft_skill_correlation'].append(rho)
 
-    # Average all metrics
+    # Average and std dev for all metrics
     result = {}
     for key, values in metrics.items():
-        result[key] = sum(values) / len(values) if values else 0
+        if values:
+            mean = sum(values) / len(values)
+            result[key] = mean
+            result[f'{key}_std'] = (sum((v - mean) ** 2 for v in values) / len(values)) ** 0.5
+        else:
+            result[key] = 0
+            result[f'{key}_std'] = 0
 
     # Composite score — balance draft skill, engagement mechanics, and game health
     norm_volatility = min(result.get('rank_volatility', 0) / 2.0, 1.0)
@@ -1124,6 +1161,16 @@ def evaluate_config(config, scenarios):
     if non_draft < 0.10:
         non_draft_score -= (0.10 - non_draft) * 2.0  # penalize below 10%
 
+    # Consistency penalty: penalize configs with high variance across drafts.
+    # A config that reliably produces good games is better than one that
+    # averages well but swings wildly depending on the draft.
+    consistency_penalty = (
+        result.get('comeback_rate_std', 0) * 1.0
+        + result.get('suspense_std', 0) * 1.0
+        + result.get('draft_skill_correlation_std', 0) * 0.5
+        + result.get('final_spread_std', 0) * 0.5
+    )
+
     result['composite'] = (
         result.get('draft_skill_correlation', 0) * 2.0    # good drafting wins (higher = better)
         + longevity_score * 2.0                             # tribals important but not everything
@@ -1132,9 +1179,12 @@ def evaluate_config(config, scenarios):
         + (1 - result.get('late_game_gap', 1)) * 1.5       # close at 75%
         + norm_volatility * 1.5                             # standings shift
         + result.get('midpoint_competitive_pct', 0) * 1.0  # bunched at midpoint
+        + result.get('finale_competitive_pct', 0) * 1.0    # still in contention at finale
         + result.get('early_loser_avg_rank', 1) * -1.0     # recovery (lower = better)
         + (1 - result.get('final_spread', 1)) * 1.0        # final closeness
+        - result.get('blowout_rate', 0) * 1.0              # penalize frequent blowouts
         + non_draft_score * 1.5                             # wildcards/SS picks matter
+        - consistency_penalty                                # prefer reliable outcomes
     )
     return result
 
@@ -1176,8 +1226,19 @@ def print_metrics(metrics):
           f'  (1st-2nd gap at 75%)')
     print(f'  Final spread:         {metrics.get("final_spread", 0):.0%}'
           f'  (1st-last gap)')
+    print(f'  Blowout rate:         {metrics.get("blowout_rate", 0):.0%}'
+          f'  (1st > 2x last)')
     print(f'  Non-draft impact:     {metrics.get("non_draft_pct", 0):.0%}'
           f'  (pts from wildcard/SS)')
+    # Consistency (std devs)
+    cb_std = metrics.get('comeback_rate_std', 0)
+    su_std = metrics.get('suspense_std', 0)
+    ds_std = metrics.get('draft_skill_correlation_std', 0)
+    fs_std = metrics.get('final_spread_std', 0)
+    penalty = cb_std * 1.0 + su_std * 1.0 + ds_std * 0.5 + fs_std * 0.5
+    print(f'  Consistency penalty:  {penalty:.3f}'
+          f'  (comeback σ={cb_std:.2f}, suspense σ={su_std:.2f},'
+          f' draft_skill σ={ds_std:.2f}, spread σ={fs_std:.2f})')
 
 
 def print_config_result(rank, config, metrics, label=None):
@@ -1241,9 +1302,364 @@ def build_season_timelines(seasons, recommended_config, seed=99):
     return timelines
 
 
+def _score_timeline(season, scoring, picks_by_user, ss_streaks, max_elim):
+    """Score a draft across all elimination steps. Returns {uid: [scores...]}."""
+    steps = list(range(0, max_elim + 1))
+    series = {uid: [] for uid in picks_by_user}
+    for step in steps:
+        lb = calculate_leaderboard(
+            season, scoring, season.survivors, picks_by_user, ss_streaks,
+            as_of=step, include_ss=(step == max_elim))
+        for uid in picks_by_user:
+            series[uid].append(round(lb.get(uid, 0), 1))
+    return series
+
+
+def build_comparison_timelines(seasons, recommended_config, n_candidates=50,
+                               seed=42):
+    """Build side-by-side legacy vs recommended timelines for the same drafts.
+
+    Tries n_candidates random drafts per season and picks the one whose
+    suspense (% of steps where the eventual winner is NOT leading) is closest
+    to the median across all candidates.  This avoids cherry-picking a
+    runaway-leader outlier or an unrealistically close game.
+    """
+    scoring_rec = ClassicScoring(**recommended_config)
+    scoring_leg = ClassicScoring(**LEGACY_CONFIG)
+    rng = random.Random(seed)
+    comparisons = []
+
+    for season in seasons:
+        max_elim = max(s.voted_out_order for s in season.survivors
+                       if s.voted_out_order)
+
+        # Generate many candidate drafts and measure suspense for each
+        candidates = []
+        for _ in range(n_candidates):
+            draft = simulate_draft(season.survivors, 6, rng=rng)
+            picks_by_user = {}
+            for pid, survs in draft.items():
+                picks_by_user[pid] = [SimPick(s, 'draft') for s in survs]
+            assign_extra_picks(season, picks_by_user, rng)
+            ss_streaks = compute_ss_streaks(season, picks_by_user, rng)
+
+            series_rec = _score_timeline(
+                season, scoring_rec, picks_by_user, ss_streaks, max_elim)
+
+            # Quick suspense: % of steps where leader != final winner
+            final_scores = {uid: series_rec[uid][-1] for uid in series_rec}
+            winner_uid = max(final_scores, key=final_scores.get)
+            leaders = []
+            for step_idx in range(len(series_rec[winner_uid])):
+                step_scores = {uid: series_rec[uid][step_idx]
+                               for uid in series_rec}
+                leaders.append(max(step_scores, key=step_scores.get))
+            not_leading = sum(1 for l in leaders if l != winner_uid)
+            suspense = not_leading / max(len(leaders), 1)
+
+            candidates.append((suspense, picks_by_user, ss_streaks))
+
+        # Pick the draft closest to median suspense
+        suspense_values = sorted(c[0] for c in candidates)
+        median_suspense = suspense_values[len(suspense_values) // 2]
+        best = min(candidates, key=lambda c: abs(c[0] - median_suspense))
+        _, picks_by_user, ss_streaks = best
+
+        steps = list(range(0, max_elim + 1))
+        labels = ['Sole Survivor' if s == season.num_players else
+                  (f'Elim {s}' if s > 0 else 'Start') for s in steps]
+
+        series_rec = _score_timeline(
+            season, scoring_rec, picks_by_user, ss_streaks, max_elim)
+        series_leg = _score_timeline(
+            season, scoring_leg, picks_by_user, ss_streaks, max_elim)
+
+        # Sort by recommended final score
+        sorted_uids = sorted(picks_by_user.keys(),
+                             key=lambda u: series_rec[u][-1], reverse=True)
+
+        def make_datasets(series):
+            return [{'name': f'Player {uid + 1}', 'points': series[uid]}
+                    for uid in sorted_uids]
+
+        comparisons.append({
+            'season': f'Season {season.number}',
+            'labels': labels,
+            'recommended': {'datasets': make_datasets(series_rec)},
+            'legacy': {'datasets': make_datasets(series_leg)},
+        })
+
+    return comparisons
+
+
+def build_percentile_bands(seasons, recommended_config, n_drafts=50, seed=42):
+    """Build 25th/50th/75th percentile bands for 1st-2nd gap across many drafts."""
+    scoring = ClassicScoring(**recommended_config)
+    rng = random.Random(seed)
+    bands = []
+
+    for season in seasons:
+        max_elim = max(s.voted_out_order for s in season.survivors if s.voted_out_order)
+        steps = list(range(0, max_elim + 1))
+
+        # Collect gap at each step across many drafts
+        gap_by_step = {step: [] for step in steps}
+
+        for _ in range(n_drafts):
+            draft = simulate_draft(season.survivors, 6, rng=rng)
+            picks_by_user = {}
+            for pid, survs in draft.items():
+                picks_by_user[pid] = [SimPick(s, 'draft') for s in survs]
+            assign_extra_picks(season, picks_by_user, rng)
+            ss_streaks = compute_ss_streaks(season, picks_by_user, rng)
+
+            for step in steps:
+                lb = calculate_leaderboard(
+                    season, scoring, season.survivors, picks_by_user, ss_streaks,
+                    as_of=step, include_ss=(step == max_elim))
+                scores = sorted(lb.values(), reverse=True)
+                if len(scores) >= 2 and scores[0] > 0:
+                    gap = (scores[0] - scores[1]) / scores[0]
+                else:
+                    gap = 0.0
+                gap_by_step[step].append(gap)
+
+        # Compute percentiles
+        p25, p50, p75 = [], [], []
+        for step in steps:
+            vals = gap_by_step[step]
+            p25.append(round(float(np.percentile(vals, 25)), 3))
+            p50.append(round(float(np.percentile(vals, 50)), 3))
+            p75.append(round(float(np.percentile(vals, 75)), 3))
+
+        bands.append({
+            'season': f'Season {season.number}',
+            'labels': ['Sole Survivor' if s == season.num_players else
+                       (f'Elim {s}' if s > 0 else 'Start') for s in steps],
+            'p25': p25,
+            'median': p50,
+            'p75': p75,
+            'n_drafts': n_drafts,
+        })
+
+    return bands
+
+
+def build_season_health_stats(recommended_config, scenarios):
+    """Compute aggregate game health metrics per season for a given config."""
+    expanded = expand_config(recommended_config)
+    # Run evaluate_config on just this config's scenarios, grouped by season
+    season_metrics = defaultdict(lambda: defaultdict(list))
+
+    scoring = ClassicScoring(**expanded)
+    fast_config = scoring.config
+
+    for season, survivors, picks_by_user, ss_streaks, max_elim, n_players in scenarios:
+        snum = season.number
+        elim_to_ep = _build_elim_to_episode(survivors)
+
+        # Quick forward walk to collect per-step leaders and rankings
+        orig_state = {}
+        for s in survivors:
+            orig_state[s.id] = (
+                s.voted_out_order, s.made_jury, s.won_fire,
+                {f: getattr(s, f) for f in _STAT_FIELDS},
+            )
+            s.voted_out_order = 0
+            s.made_jury = False
+            s.won_fire = False
+            for f in _STAT_FIELDS:
+                setattr(s, f, 0)
+
+        surv_by_elim = sorted(
+            [s for s in survivors if orig_state[s.id][0] and orig_state[s.id][0] > 0],
+            key=lambda s: orig_state[s.id][0])
+        merge_thresh = season.merge_threshold
+        tribal_table = _build_tribal_table(fast_config, season)
+        picked_sids = set()
+        replacement_sids = set()
+        for picks in picks_by_user.values():
+            for pick in picks:
+                picked_sids.add(pick.survivor.id)
+                if pick.pick_type in ('pmr_w', 'pmr_d'):
+                    replacement_sids.add(pick.survivor.id)
+        picked_survivors = [s for s in survivors if s.id in picked_sids]
+        surv_map = {s.id: s for s in survivors}
+
+        wildcard_mult = fast_config.get('wildcard_multiplier', 0.5)
+        replacement_mult = fast_config.get('replacement_multiplier', 0.5)
+        repl_deduction = fast_config.get('replacement_deduction', True)
+        pre_jury = season.num_players - season.left_at_jury
+        merge_ep = elim_to_ep.get(merge_thresh, 0)
+
+        n_fin = season.n_finalists
+        fire_elim = season.num_players - n_fin
+        finalist_threshold = season.num_players - n_fin
+
+        leaders = []
+        all_rankings = []
+        timeline_lbs = {}
+        elim_idx = 0
+
+        for elim in range(1, max_elim + 1):
+            while elim_idx < len(surv_by_elim) and orig_state[surv_by_elim[elim_idx].id][0] == elim:
+                s = surv_by_elim[elim_idx]
+                s.voted_out_order = orig_state[s.id][0]
+                if s.voted_out_order > merge_thresh and s.voted_out_order <= finalist_threshold:
+                    s.made_jury = True
+                else:
+                    s.made_jury = orig_state[s.id][1]
+                elim_idx += 1
+
+            if elim >= fire_elim:
+                for s in survivors:
+                    s.won_fire = orig_state[s.id][2]
+
+            target_episode = elim_to_ep.get(elim, 0)
+            if target_episode > 0:
+                for s in survivors:
+                    if s.episode_stats:
+                        ep_data = s.episode_stats.get(target_episode, {})
+                        for ep_key, attr in _EP_KEY_MAP.items():
+                            setattr(s, attr, ep_data.get(ep_key, 0))
+
+            base_scores = {}
+            for s in picked_survivors:
+                base_scores[s.id] = _fast_score_total(s, fast_config, season, tribal_table)
+
+            repl_scores = {}
+            if elim >= merge_thresh and replacement_sids:
+                for sid in replacement_sids:
+                    s = surv_map[sid]
+                    stat_ov = _compute_sim_stat_overrides(s, merge_ep)
+                    if stat_ov:
+                        repl_scores[sid] = _fast_score_total(
+                            s, fast_config, season, tribal_table,
+                            stat_overrides=stat_ov, is_replacement=True)
+
+            lb = {}
+            for user_id, picks in picks_by_user.items():
+                total = 0
+                for pick in picks:
+                    if pick.pick_type == 'wildcard' and elim == 0:
+                        continue
+                    if pick.pick_type in ('pmr_w', 'pmr_d') and elim < merge_thresh:
+                        continue
+                    sid = pick.survivor.id
+                    if pick.pick_type in ('pmr_w', 'pmr_d'):
+                        if sid in repl_scores:
+                            base = repl_scores[sid]
+                        else:
+                            base = base_scores.get(sid, 0)
+                            if repl_deduction:
+                                base -= pre_jury
+                        mult = replacement_mult if pick.pick_type == 'pmr_w' else 1.0
+                    elif pick.pick_type == 'wildcard':
+                        base = base_scores.get(sid, 0)
+                        mult = wildcard_mult
+                    else:
+                        base = base_scores.get(sid, 0)
+                        mult = 1.0
+                    total += base * mult
+                lb[user_id] = total
+
+            timeline_lbs[elim] = lb
+            if lb:
+                ranking = rank_users(lb)
+                all_rankings.append({uid: i for i, uid in enumerate(ranking)})
+                leaders.append(ranking[0])
+
+        # Restore
+        for s in survivors:
+            if s.id in orig_state:
+                s.voted_out_order, s.made_jury, s.won_fire, saved = orig_state[s.id]
+                for f, val in saved.items():
+                    setattr(s, f, val)
+
+        # Compute scenario metrics
+        zero_ss = {uid: 0 for uid in picks_by_user}
+        final_lb, _ = calculate_leaderboard(
+            season, scoring, survivors, picks_by_user, zero_ss,
+            elim_to_episode=elim_to_ep, return_breakdowns=True)
+        final_ranking = rank_users(final_lb)
+        winner_id = final_ranking[0] if final_ranking else None
+
+        lead_changes = sum(1 for i in range(1, len(leaders)) if leaders[i] != leaders[i - 1])
+        season_metrics[snum]['lead_changes'].append(
+            lead_changes / max(len(leaders) - 1, 1))
+
+        if len(all_rankings) >= 2:
+            total_rc = 0
+            n_tr = 0
+            for i in range(1, len(all_rankings)):
+                prev, curr = all_rankings[i - 1], all_rankings[i]
+                for uid in prev:
+                    if uid in curr:
+                        total_rc += abs(prev[uid] - curr[uid])
+                        n_tr += 1
+            if n_tr > 0:
+                season_metrics[snum]['rank_volatility'].append(total_rc / n_tr)
+
+        mid_idx = len(leaders) // 2
+        if mid_idx > 0 and leaders and winner_id is not None:
+            season_metrics[snum]['comeback_rate'].append(
+                0.0 if leaders[mid_idx] == winner_id else 1.0)
+
+        if leaders and winner_id is not None:
+            not_leading = sum(1 for l in leaders if l != winner_id)
+            season_metrics[snum]['suspense'].append(not_leading / len(leaders))
+
+        mid_lb = timeline_lbs.get(max_elim // 2, {})
+        if mid_lb:
+            mid_scores = sorted(mid_lb.values(), reverse=True)
+            if mid_scores[0] > 0:
+                threshold = mid_scores[0] * 0.8
+                competitive = sum(1 for s in mid_scores if s >= threshold)
+                season_metrics[snum]['midpoint_competitive_pct'].append(
+                    competitive / n_players)
+
+        final_scores = sorted(final_lb.values(), reverse=True)
+        if len(final_scores) >= 2 and final_scores[0] > 0:
+            season_metrics[snum]['final_spread'].append(
+                (final_scores[0] - final_scores[-1]) / final_scores[0])
+            season_metrics[snum]['blowout_rate'].append(
+                1.0 if final_scores[0] > 2 * final_scores[-1] else 0.0)
+
+        # Competitiveness entering the finale
+        finale_size = fast_config.get('finale_size', 5)
+        finale_elim = max(season.merge_threshold, season.num_players - finale_size)
+        finale_lb = timeline_lbs.get(finale_elim, {})
+        if finale_lb:
+            finale_scores = sorted(finale_lb.values(), reverse=True)
+            if finale_scores[0] > 0:
+                threshold = finale_scores[0] * 0.8
+                competitive = sum(1 for s in finale_scores if s >= threshold)
+                season_metrics[snum]['finale_competitive_pct'].append(
+                    competitive / n_players)
+
+    # Average and CI bands (1σ, 2σ, 3σ standard errors) per season
+    result = {}
+    for snum, mdict in sorted(season_metrics.items()):
+        entry = {'n_drafts': len(mdict.get('lead_changes', []))}
+        for key, vals in mdict.items():
+            if vals:
+                mean = sum(vals) / len(vals)
+                std = (sum((v - mean) ** 2 for v in vals) / len(vals)) ** 0.5
+                se = std / len(vals) ** 0.5
+                entry[f'avg_{key}'] = round(mean, 3)
+                entry[f'se_{key}'] = round(se, 4)
+            else:
+                entry[f'avg_{key}'] = 0
+                entry[f'se_{key}'] = 0
+        result[str(snum)] = entry
+    return result
+
+
 # ── Chart data ──────────────────────────────────────────────────────────────
 
-def build_chart_data(results, timelines=None):
+def build_chart_data(results, timelines=None, comparison_timelines=None,
+                     percentile_bands=None, season_health=None,
+                     legacy_health=None, n_scenarios=None):
     """Build JSON for the web analysis page."""
     # Per-parameter impact
     param_impact = {}
@@ -1294,32 +1710,43 @@ def build_chart_data(results, timelines=None):
             'metrics': {k: round(v, 3) for k, v in metrics.items()},
         })
 
-    # Default rank
+    # Default rank + composite
     default_rank = None
+    default_composite = None
     for i, (config, metrics) in enumerate(results):
         expanded = expand_config(config)
         if all(expanded.get(k) == DEFAULT_CONFIG.get(k) for k in DEFAULT_CONFIG):
             default_rank = i + 1
+            default_composite = round(metrics['composite'], 3)
             break
 
-    # Legacy rank
+    # Legacy rank + composite
     legacy_rank = None
+    legacy_composite = None
     for i, (config, metrics) in enumerate(results):
         expanded = expand_config(config)
         if all(expanded.get(k) == LEGACY_CONFIG.get(k) for k in LEGACY_CONFIG
                if k in expanded):
             legacy_rank = i + 1
+            legacy_composite = round(metrics['composite'], 3)
             break
 
     return {
         'total_configs': len(results),
+        'n_scenarios': n_scenarios or 0,
         'param_impact': param_impact,
         'histogram': {'labels': hist_labels, 'counts': hist_counts},
         'top10': top10,
         'default_rank': default_rank,
+        'default_composite': default_composite,
         'legacy_rank': legacy_rank,
+        'legacy_composite': legacy_composite,
         'recommended': expand_config(results[0][0]),
         'timelines': timelines or [],
+        'comparison_timelines': comparison_timelines or [],
+        'percentile_bands': percentile_bands or [],
+        'season_health': season_health or {},
+        'legacy_health': legacy_health or {},
     }
 
 
@@ -1360,10 +1787,29 @@ def main():
         seasons = load_all_seasons(season_numbers)
 
         best_expanded = expand_config(results[0][0])
-        print(f'Building timelines for seasons {TIMELINE_SEASONS}...')
         timeline_seasons = [s for s in seasons if s.number in TIMELINE_SEASONS]
+
+        print(f'Building visualizations for seasons {TIMELINE_SEASONS}...')
         timelines = build_season_timelines(timeline_seasons, best_expanded)
-        export = build_chart_data(results, timelines)
+        comparisons = build_comparison_timelines(timeline_seasons, best_expanded)
+        print('Building percentile bands (50 drafts per season)...')
+        pct_bands = build_percentile_bands(timeline_seasons, best_expanded)
+
+        print('Computing per-season health stats...')
+        drafts_per = 3 if args.quick else DRAFTS_PER_PLAYER_COUNT
+        scenarios = generate_scenarios(seasons, drafts_per=drafts_per)
+        health = build_season_health_stats(results[0][0], scenarios)
+        legacy_cfg = {k: LEGACY_CONFIG.get(k, DEFAULT_CONFIG.get(k))
+                      for k in PARAM_GRID if k in LEGACY_CONFIG or k in DEFAULT_CONFIG}
+        leg_health = build_season_health_stats(legacy_cfg, scenarios)
+
+        export = build_chart_data(
+            results, timelines,
+            comparison_timelines=comparisons,
+            percentile_bands=pct_bands,
+            season_health=health,
+            legacy_health=leg_health,
+            n_scenarios=len(scenarios))
         with open(args.export_json, 'w') as f:
             json.dump(export, f, indent=2)
         print(f'Exported chart data to {args.export_json}')
@@ -1562,10 +2008,27 @@ def main():
 
     # ── Export JSON ──────────────────────────────────────────────────
     if args.export_json:
-        print(f'\nBuilding timelines for seasons {TIMELINE_SEASONS}...')
         timeline_seasons = [s for s in seasons if s.number in TIMELINE_SEASONS]
+
+        print(f'\nBuilding visualizations for seasons {TIMELINE_SEASONS}...')
         timelines = build_season_timelines(timeline_seasons, best_expanded)
-        export = build_chart_data(results, timelines)
+        comparisons = build_comparison_timelines(timeline_seasons, best_expanded)
+        print('Building percentile bands (50 drafts per season)...')
+        pct_bands = build_percentile_bands(timeline_seasons, best_expanded)
+
+        print('Computing per-season health stats...')
+        health = build_season_health_stats(best_config, scenarios)
+        legacy_cfg = {k: LEGACY_CONFIG.get(k, DEFAULT_CONFIG.get(k))
+                      for k in PARAM_GRID if k in LEGACY_CONFIG or k in DEFAULT_CONFIG}
+        leg_health = build_season_health_stats(legacy_cfg, scenarios)
+
+        export = build_chart_data(
+            results, timelines,
+            comparison_timelines=comparisons,
+            percentile_bands=pct_bands,
+            season_health=health,
+            legacy_health=leg_health,
+            n_scenarios=len(scenarios))
         with open(args.export_json, 'w') as f:
             json.dump(export, f, indent=2)
         print(f'Exported chart data to {args.export_json}')

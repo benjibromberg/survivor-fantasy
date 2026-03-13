@@ -2,6 +2,7 @@ from .base import ScoringSystem, PointBreakdown
 
 # Legacy scoring (pre-site): flat tribals, merge bonus, placement only
 LEGACY_CONFIG = {
+    'tribal_base': None,  # flat mode
     'tribal_val': 1, 'post_merge_tribal_val': 1,
     'jury_val': 0, 'merge_val': 1, 'final_tribal_val': 0,
     'first_val': 7, 'second_val': 3, 'third_val': 1,
@@ -13,34 +14,34 @@ LEGACY_CONFIG = {
     'replacement_deduction': True,
 }
 
-# Default scoring config — everything has a non-zero value
+# Default scoring config — optimized via analyze_scoring.py (run 4, 29k configs)
 DEFAULT_CONFIG = {
     # Flat tribal rates (used when tribal_base is None)
     'tribal_val': 0.5,
     'post_merge_tribal_val': 1,
     # Progressive tribal values (overrides flat rates when tribal_base is set)
-    'tribal_base': None,       # starting value of first tribal (None = use flat system)
+    'tribal_base': 0.5,        # starting value of first tribal (None = use flat system)
     'tribal_step': 0,          # per-tribal increase during pre-merge
-    'post_merge_step': 0,      # per-tribal increase during post-merge
-    'finale_step': 0,          # per-tribal increase during finale
+    'post_merge_step': 0.5,    # per-tribal increase during post-merge
+    'finale_step': 3,          # per-tribal increase during finale
     'finale_size': 5,          # players remaining when finale begins
     # Milestones
-    'jury_val': 2,
-    'merge_val': 2,
+    'jury_val': 3,
+    'merge_val': 0,
     'final_tribal_val': 3,
     # Placement
-    'first_val': 15,
-    'second_val': 5,
+    'first_val': 8,
+    'second_val': 4,
     'third_val': 2,
     # Individual performance
-    'individual_immunity_val': 3,
-    'tribal_immunity_val': 1,
-    'idol_found_val': 2,
+    'individual_immunity_val': 0,
+    'tribal_immunity_val': 0,
+    'idol_found_val': 0,
     'advantage_found_val': 1,
-    'idol_play_val': 3,
-    'advantage_play_val': 2,
+    'idol_play_val': 0,
+    'advantage_play_val': 0,
     # Milestones
-    'fire_win_val': 3,
+    'fire_win_val': 2,
     # Sole Survivor pick (points per tribal survived, only if your pick wins)
     'sole_survivor_val': 1,
     # Pick type modifiers

@@ -60,7 +60,7 @@ class TestPointBreakdown:
 class TestFlatTribalPoints:
     def test_pre_merge_only(self):
         season = make_season(num_players=18, left_at_jury=8)  # merge at 10
-        scoring = ClassicScoring(tribal_val=1, post_merge_tribal_val=2)
+        scoring = ClassicScoring(tribal_base=None, tribal_val=1, post_merge_tribal_val=2)
         # Eliminated 5th (4 tribals survived, all pre-merge)
         surv = make_survivor(voted_out_order=5)
         bd = scoring.calculate_survivor_points(surv, season)
@@ -69,7 +69,7 @@ class TestFlatTribalPoints:
 
     def test_post_merge(self):
         season = make_season(num_players=18, left_at_jury=8)  # merge at 10
-        scoring = ClassicScoring(tribal_val=1, post_merge_tribal_val=2)
+        scoring = ClassicScoring(tribal_base=None, tribal_val=1, post_merge_tribal_val=2)
         # Eliminated 13th (12 tribals: 10 pre + 2 post)
         surv = make_survivor(voted_out_order=13)
         bd = scoring.calculate_survivor_points(surv, season)
@@ -78,14 +78,14 @@ class TestFlatTribalPoints:
 
     def test_first_boot_zero_tribals(self):
         season = make_season()
-        scoring = ClassicScoring(tribal_val=1)
+        scoring = ClassicScoring(tribal_base=None, tribal_val=1)
         surv = make_survivor(voted_out_order=1)
         bd = scoring.calculate_survivor_points(surv, season)
         assert bd.items.get('pre_merge_tribal', 0) == 0
 
     def test_in_game_uses_current_tribal_count(self):
         season = make_season(num_players=18, left_at_jury=8)
-        scoring = ClassicScoring(tribal_val=0.5, post_merge_tribal_val=1)
+        scoring = ClassicScoring(tribal_base=None, tribal_val=0.5, post_merge_tribal_val=1)
         # Still in game (voted_out_order=0); tribals_survived = max(voted_out_order) in season = 18
         surv = make_survivor(voted_out_order=0)
         # current_tribal_count = max voted_out_order among survivors = 18 (all assigned)
@@ -144,7 +144,7 @@ class TestProgressiveTribalPoints:
         scoring_prog = ClassicScoring(
             tribal_base=1.5, tribal_step=0, post_merge_step=0, finale_step=0,
         )
-        scoring_flat = ClassicScoring(tribal_val=1.5, post_merge_tribal_val=1.5)
+        scoring_flat = ClassicScoring(tribal_base=None, tribal_val=1.5, post_merge_tribal_val=1.5)
         surv = make_survivor(voted_out_order=15)  # 14 tribals
         bd_prog = scoring_prog.calculate_survivor_points(surv, season)
         bd_flat = scoring_flat.calculate_survivor_points(surv, season)
@@ -157,7 +157,7 @@ class TestProgressiveTribalPoints:
     def test_progressive_dispatches_on_tribal_base(self):
         """tribal_base=None → flat mode, tribal_base set → progressive."""
         season = make_season()
-        flat = ClassicScoring(tribal_val=1)
+        flat = ClassicScoring(tribal_base=None, tribal_val=1)
         prog = ClassicScoring(tribal_base=1, tribal_step=0)
         bd_flat = flat._compute_tribal_points(4, season)
         bd_prog = prog._compute_tribal_points(4, season)
@@ -326,14 +326,14 @@ class TestPerformanceBonuses:
 class TestScorePick:
     def test_draft_full_points(self):
         season = make_season()
-        scoring = ClassicScoring(tribal_val=1, first_val=0, merge_val=0, jury_val=0)
+        scoring = ClassicScoring(tribal_base=None, tribal_val=1, first_val=0, merge_val=0, jury_val=0)
         surv = make_survivor(voted_out_order=5)
         pts, bd = scoring.score_pick(surv, season, 'draft')
         assert pts == bd.total
 
     def test_wildcard_half_points(self):
         season = make_season()
-        scoring = ClassicScoring(tribal_val=1, wildcard_multiplier=0.5,
+        scoring = ClassicScoring(tribal_base=None, tribal_val=1, wildcard_multiplier=0.5,
                                  first_val=0, merge_val=0, jury_val=0)
         surv = make_survivor(voted_out_order=5)
         pts, bd = scoring.score_pick(surv, season, 'wildcard')
@@ -341,7 +341,7 @@ class TestScorePick:
 
     def test_wildcard_custom_multiplier(self):
         season = make_season()
-        scoring = ClassicScoring(tribal_val=1, wildcard_multiplier=0.75,
+        scoring = ClassicScoring(tribal_base=None, tribal_val=1, wildcard_multiplier=0.75,
                                  first_val=0, merge_val=0, jury_val=0)
         surv = make_survivor(voted_out_order=5)
         pts, _ = scoring.score_pick(surv, season, 'wildcard')
@@ -352,7 +352,7 @@ class TestScorePick:
         """pmr_d with stat_overrides: uses overridden stats, strips pre-merge tribal & merge."""
         season = make_season(num_players=18, left_at_jury=8)  # merge at 10
         scoring = ClassicScoring(
-            tribal_val=1, post_merge_tribal_val=2,
+            tribal_base=None, tribal_val=1, post_merge_tribal_val=2,
             individual_immunity_val=3,
             first_val=0, merge_val=5, jury_val=0,
         )
@@ -378,7 +378,7 @@ class TestScorePick:
     def test_pmr_w_applies_replacement_multiplier(self):
         season = make_season(num_players=18, left_at_jury=8)
         scoring = ClassicScoring(
-            tribal_val=1, replacement_multiplier=0.5,
+            tribal_base=None, tribal_val=1, replacement_multiplier=0.5,
             first_val=0, merge_val=0, jury_val=0,
         )
         surv = make_survivor(voted_out_order=15)
@@ -393,7 +393,7 @@ class TestScorePick:
         """Without stat_overrides, falls back to flat deduction."""
         season = make_season(num_players=18, left_at_jury=8)
         scoring = ClassicScoring(
-            tribal_val=1, replacement_deduction=True,
+            tribal_base=None, tribal_val=1, replacement_deduction=True,
             first_val=0, merge_val=0, jury_val=0,
         )
         surv = make_survivor(voted_out_order=15)
@@ -405,7 +405,7 @@ class TestScorePick:
         """pmr_d without stat_overrides and replacement_deduction=False: full points."""
         season = make_season(num_players=18, left_at_jury=8)
         scoring = ClassicScoring(
-            tribal_val=1, replacement_deduction=False,
+            tribal_base=None, tribal_val=1, replacement_deduction=False,
             first_val=0, merge_val=0, jury_val=0,
         )
         surv = make_survivor(voted_out_order=15)
