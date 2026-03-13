@@ -110,14 +110,10 @@
         <span class="lb-win-pct lb-win-projected">{{ "%.0f"|format(projected_win_pcts.get(entry.user.id, 0)) }}% win</span>
         {% endif %}
         <span class="lb-points">{{ "%.2f"|format(entry.total_points) }} pts</span>
-    </header>
-    {% if entry.warnings %}
-    <div class="lb-warnings">
         {% for warning in entry.warnings %}
         <span class="lb-warning">{{ warning }}</span>
         {% endfor %}
-    </div>
-    {% endif %}
+    </header>
 
     {# Group picks by type for visual separation #}
     {% set draft_picks = entry.picks|selectattr('pick_type_raw', 'eq', 'draft')|list %}
@@ -449,9 +445,6 @@ const confChart = new Chart(document.getElementById('confessional-chart'), {
                      {% if surv.tribe_color %}style="border-color: {{ surv.tribe_color|contrast }};"{% endif %}>
                 {% endif %}
                 <span class="stat-name">{{ surv.name }}</span>
-                {% if surv.tribe %}
-                <span class="stat-tribe" {% if surv.tribe_color %}style="color: {{ surv.tribe_color|contrast }};"{% endif %}>{{ surv.tribe }}</span>
-                {% endif %}
                 <span class="stat-value">{{ row.value }}</span>
             </{% if surv.stats_url %}a{% else %}div{% endif %}>
             {% endfor %}

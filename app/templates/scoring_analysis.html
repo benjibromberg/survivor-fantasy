@@ -135,9 +135,12 @@
             <canvas id="chart-fire_win_val"></canvas>
         </div>
         <div class="param-group">
-            <h3>Placement</h3>
+            <h3>Placement &amp; Pick Type Modifiers</h3>
             <canvas id="chart-first_val"></canvas>
             <canvas id="chart-placement_ratio"></canvas>
+            <canvas id="chart-wildcard_multiplier"></canvas>
+            <canvas id="chart-draft_replacement_multiplier"></canvas>
+            <canvas id="chart-wc_replacement_multiplier"></canvas>
         </div>
         <div class="param-group">
             <h3>Performance</h3>
@@ -147,12 +150,6 @@
             <canvas id="chart-idol_play_val"></canvas>
             <canvas id="chart-advantage_found_val"></canvas>
             <canvas id="chart-advantage_play_val"></canvas>
-        </div>
-        <div class="param-group">
-            <h3>Pick Type Modifiers</h3>
-            <canvas id="chart-wildcard_multiplier"></canvas>
-            <canvas id="chart-draft_replacement_multiplier"></canvas>
-            <canvas id="chart-wc_replacement_multiplier"></canvas>
         </div>
     </div>
 </article>
@@ -685,7 +682,7 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
             },
             options: {
                 ...chartDefaults,
-                aspectRatio: 2,
+                aspectRatio: 3,
                 plugins: {
                     ...chartDefaults.plugins,
                     title: {
@@ -1010,23 +1007,24 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
 }
 .param-chart-grid {
     display: grid;
-    gap: 2rem;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
 }
 .param-group {
     border: 1px solid var(--card-border);
     border-radius: 8px;
-    padding: 1rem;
+    padding: 0.75rem;
     background: var(--card-bg);
 }
 .param-group h3 {
     margin-top: 0;
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
     color: var(--fire-glow);
-    font-size: 1rem;
+    font-size: 0.9rem;
 }
 .param-group canvas {
-    margin-bottom: 1rem;
-    max-height: 200px;
+    margin-bottom: 0.5rem;
+    max-height: 120px;
 }
 #recommended-config {
     background: var(--card-bg);

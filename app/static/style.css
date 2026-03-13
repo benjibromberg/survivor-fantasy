@@ -599,8 +599,8 @@ nav a:hover {
 }
 
 .lb-pick-img {
-    width: 40px;
-    height: 40px;
+    width: 80px;
+    height: 80px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
@@ -787,7 +787,7 @@ a.lb-pick:hover .lb-pick-name {
 
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 1rem;
 }
 
@@ -807,15 +807,16 @@ a.lb-pick:hover .lb-pick-name {
 
 .stat-rows {
     padding: 0.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
+    display: grid;
+    grid-template-columns: 1.5rem 32px 1fr auto;
+    gap: 0.25rem 0.5rem;
 }
 
 .stat-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
     align-items: center;
-    gap: 0.5rem;
     padding: 0.4rem 0.6rem;
     border-radius: 6px;
     text-decoration: none;
@@ -856,14 +857,17 @@ a.stat-row:hover {
     font-family: var(--font-tribal);
     font-weight: 600;
     color: var(--sand-light);
-    flex: 1;
     letter-spacing: 0.02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .stat-tribe {
     font-size: 0.75em;
     text-transform: uppercase;
     opacity: 0.6;
+    justify-self: center;
 }
 
 .stat-value {
@@ -872,8 +876,8 @@ a.stat-row:hover {
     color: var(--torch-gold);
     font-size: 1.2em;
     letter-spacing: 0.03em;
-    min-width: 2rem;
     text-align: right;
+    white-space: nowrap;
 }
 
 /* --- Predictions page --- */
@@ -1110,6 +1114,10 @@ small {
 /* --- Mobile responsive --- */
 
 @media (max-width: 576px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
     /* Stack header: rank + name on top, points below */
     .lb-header {
         flex-wrap: wrap;
@@ -1139,8 +1147,8 @@ small {
     }
 
     .lb-pick-img {
-        width: 32px;
-        height: 32px;
+        width: 56px;
+        height: 56px;
     }
 
     .lb-pick-name {
