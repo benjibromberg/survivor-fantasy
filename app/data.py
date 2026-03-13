@@ -466,6 +466,7 @@ NAME_TO_SITE = {
     'jelinsky': 'david',
     'tk': 'terran',
     'sol': 'solomon',
+    'j. maya': 'janani',
 }
 
 
