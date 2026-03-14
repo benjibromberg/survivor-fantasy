@@ -14,7 +14,7 @@ LEGACY_CONFIG = {
     'replacement_deduction': True,
 }
 
-# Default scoring config — optimized via analyze_scoring.py (run 5, 29k configs)
+# Default scoring config — optimized via analyze_scoring.py (run 6, 103k configs)
 DEFAULT_CONFIG = {
     # Flat tribal rates (used when tribal_base is None)
     'tribal_val': 0.5,
@@ -23,30 +23,30 @@ DEFAULT_CONFIG = {
     'tribal_base': 0.5,        # starting value of first tribal (None = use flat system)
     'tribal_step': 0,          # per-tribal increase during pre-merge
     'post_merge_step': 0,      # per-tribal increase during post-merge
-    'finale_step': 0.5,        # per-tribal increase during finale
+    'finale_step': 0,          # per-tribal increase during finale
     'finale_size': 5,          # players remaining when finale begins
     # Milestones
     'jury_val': 3,
     'merge_val': 0,
-    'final_tribal_val': 0,
+    'final_tribal_val': 2,
     # Placement
     'first_val': 5,
-    'second_val': 1.5,
-    'third_val': 1,
+    'second_val': 0,
+    'third_val': 0,
     # Individual performance
     'individual_immunity_val': 0,
     'tribal_immunity_val': 0,
-    'idol_found_val': 0.5,
+    'idol_found_val': 0,
     'advantage_found_val': 0.5,
-    'idol_play_val': 0,
+    'idol_play_val': 1,
     'advantage_play_val': 0,
     # Milestones
-    'fire_win_val': 0,
+    'fire_win_val': 2,
     # Sole Survivor pick (points per tribal survived, only if your pick wins)
     'sole_survivor_val': 1,
     # Pick type modifiers
     'wildcard_multiplier': 0.5,
-    'draft_replacement_multiplier': 0,   # for pmr_d
+    'draft_replacement_multiplier': 1,   # for pmr_d
     'wc_replacement_multiplier': 0,      # for pmr_w
     'replacement_deduction': True,  # always deduct pre-merge tribals for replacements
 }
