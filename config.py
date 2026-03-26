@@ -4,7 +4,11 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
+    _secret = os.environ.get('SECRET_KEY')
+    _is_prod = os.environ.get('DEV_LOGIN', '1') == '0'
+    if not _secret and _is_prod:
+        raise RuntimeError('SECRET_KEY must be set in production (add to .env)')
+    SECRET_KEY = _secret or 'dev-secret-only'
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         'DATABASE_URL',
         f'sqlite:///{os.path.join(basedir, "survivor_fantasy.db")}'

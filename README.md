@@ -14,6 +14,7 @@ Built for the modern era of Survivor (seasons 41+) where idols, advantages, and 
 - **Scoring analysis tool** that tested 25,000+ configurations across 9 modern seasons to find the most fun/fair settings
 - **Auto-refresh** from the [survivoR](https://github.com/doehm/survivoR) open-source dataset (daily at 8am EST)
 - **Finale celebration** with champion banner, ember animations, lit/snuffed torches, and Sole Survivor highlight
+- **Character Journey Cards** with auto-generated narrative highlights (immunity wins, idol finds, votes survived, tribe swaps, merge) as compact badges + toggleable journey timeline on each pick pill
 - **Winner badges** showing past season wins on player names across all leaderboards
 - **Survivor-themed design** with Survivant logo font, Cinzel headings, Bebas Neue stats, tiki torch SVGs, and Tribal Council color palette
 - **Auto-generated sidebar TOC** with scroll-based active section highlighting
@@ -46,7 +47,7 @@ GITHUB_CLIENT_SECRET=your_oauth_app_secret
 ADMIN_GITHUB_USERNAME=your_github_username
 
 # Optional
-SECRET_KEY=change-me-in-production
+SECRET_KEY=your-random-secret          # Required in production (app errors on startup if missing)
 DEV_LOGIN=0          # Set to 1 to enable dev login (default: 1 locally, 0 in Docker)
 TS_AUTHKEY=tskey-... # Tailscale auth key for Docker deployment
 ```
@@ -129,6 +130,7 @@ app/
   routes.py            # Public leaderboard, timeline, scoring compare, rules + admin routes
   auth.py              # GitHub OAuth + dev login
   data.py              # survivoR dataset refresh (stats, tribes, episodes, bios, images)
+  highlights.py        # Character Journey Cards (auto-generated narrative events + badges)
   predictions.py       # Win probability simulations (frozen + projected modes, cached)
   scheduler.py         # Daily auto-refresh (8am EST)
   scoring/
