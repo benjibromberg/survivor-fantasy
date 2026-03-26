@@ -104,7 +104,7 @@ class TestImmunityWins:
 # ── Tribal immunity wins ─────────────────────────────────────────────────
 
 class TestTribalImmunity:
-    def test_tribal_immunity_event(self):
+    def test_single_tribal_immunity(self):
         s = SimSurvivor(id=1, name='Test', voted_out_order=0, made_jury=False,
                         episode_stats=ep_stats(
                             {'tribe': 'Nami'},
@@ -114,6 +114,51 @@ class TestTribalImmunity:
         ti = [e for e in events if e.event_type == TRIBAL_IMMUNITY]
         assert len(ti) == 1
         assert ti[0].text == 'Won tribal immunity'
+
+    def test_multiple_tribal_immunity_aggregated(self):
+        """Multiple tribal immunity wins on same tribe aggregate into one event."""
+        s = SimSurvivor(id=1, name='Test', voted_out_order=0, made_jury=False,
+                        episode_stats=ep_stats(
+                            {'tribe': 'Nami'},
+                            {'ti': 1},
+                            {'ti': 1},
+                            {'ti': 1},
+                        ))
+        events, _ = generate_highlights(s, make_season(), None)
+        ti = [e for e in events if e.event_type == TRIBAL_IMMUNITY]
+        assert len(ti) == 1
+        assert ti[0].text == 'Won 3x tribal immunity'
+        assert ti[0].detail_text == 'Ep 2–4'
+
+    def test_tribal_immunity_flushed_at_swap(self):
+        """Tribal immunity aggregate flushes when tribe changes."""
+        s = SimSurvivor(id=1, name='Test', voted_out_order=0, made_jury=False,
+                        episode_stats=ep_stats(
+                            {'tribe': 'Nami'},
+                            {'ti': 1},
+                            {'ti': 1},
+                            {'tribe': 'Belo'},
+                            {'ti': 1},
+                        ))
+        events, _ = generate_highlights(s, make_season(), None)
+        ti = [e for e in events if e.event_type == TRIBAL_IMMUNITY]
+        assert len(ti) == 2  # One per tribe phase
+        assert ti[0].text == 'Won 2x tribal immunity'
+        assert ti[1].text == 'Won tribal immunity'
+
+    def test_tribal_immunity_flushed_at_merge(self):
+        """Tribal immunity aggregate flushes at merge."""
+        s = SimSurvivor(id=1, name='Test', voted_out_order=0, made_jury=False,
+                        episode_stats=ep_stats(
+                            {'tribe': 'Nami'},
+                            {'ti': 1},
+                            {'ti': 1},
+                            {'tribe': 'Merged'},
+                        ))
+        events, _ = generate_highlights(s, make_season(), merge_episode=4)
+        ti = [e for e in events if e.event_type == TRIBAL_IMMUNITY]
+        assert len(ti) == 1
+        assert ti[0].text == 'Won 2x tribal immunity'
 
 
 # ── Idol found / played ──────────────────────────────────────────────────

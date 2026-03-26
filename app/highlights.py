@@ -65,8 +65,25 @@ def generate_highlights(survivor, season, merge_episode, as_of_episode=None):
 
     # Track aggregates for detail text
     total_ii = 0
-    total_ti = 0
     total_votes_survived = 0
+    # Tribal immunity: aggregate per tribe phase, flush on swap/merge/end
+    ti_phase_count = 0
+    ti_phase_start = None
+    ti_phase_end = None
+
+    def _flush_tribal_immunity():
+        """Emit aggregated tribal immunity event for the current tribe phase."""
+        nonlocal ti_phase_count, ti_phase_start, ti_phase_end
+        if ti_phase_count > 0:
+            if ti_phase_count == 1:
+                text = 'Won tribal immunity'
+            else:
+                text = f'Won {ti_phase_count}x tribal immunity'
+            ep_range = f'Ep {ti_phase_start}–{ti_phase_end}' if ti_phase_start != ti_phase_end else None
+            events.append(Event(ti_phase_end, TRIBAL_IMMUNITY, text, ep_range))
+        ti_phase_count = 0
+        ti_phase_start = None
+        ti_phase_end = None
 
     prev = {}
     for ep in episodes:
@@ -91,11 +108,13 @@ def generate_highlights(survivor, season, merge_episode, as_of_episode=None):
                 detail = f'{_ordinal(total_ii)} win this season'
             events.append(Event(ep, IMMUNITY, 'Won individual immunity', detail))
 
-        # Tribal immunity win
+        # Tribal immunity win (aggregated per tribe phase)
         ti_delta = cur.get('ti', 0) - prev.get('ti', 0)
         if ti_delta > 0:
-            total_ti += ti_delta
-            events.append(Event(ep, TRIBAL_IMMUNITY, 'Won tribal immunity', None))
+            ti_phase_count += ti_delta
+            if ti_phase_start is None:
+                ti_phase_start = ep
+            ti_phase_end = ep
 
         # Idol found
         idol_delta = cur.get('idol', 0) - prev.get('idol', 0)
@@ -131,14 +150,16 @@ def generate_highlights(survivor, season, merge_episode, as_of_episode=None):
                 f'Survived {votes_delta} vote{"s" if votes_delta != 1 else ""}',
                 detail))
 
-        # Tribe swap
+        # Tribe swap — flush tribal immunity aggregate before recording swap
         cur_tribe = cur.get('tribe', '')
         prev_tribe = prev.get('tribe', '')
         if cur_tribe and prev_tribe and cur_tribe != prev_tribe:
+            _flush_tribal_immunity()
             events.append(Event(ep, TRIBE, f'Swapped to {cur_tribe}', None))
 
-        # Merge
+        # Merge — flush tribal immunity before merge (tribal challenges end at merge)
         if merge_episode and ep == merge_episode:
+            _flush_tribal_immunity()
             still_in = (survivor.voted_out_order == 0 or
                         (survivor.elimination_episode is not None and
                          survivor.elimination_episode >= ep))
@@ -146,6 +167,9 @@ def generate_highlights(survivor, season, merge_episode, as_of_episode=None):
                 events.append(Event(ep, MERGE, 'Made the merge', None))
 
         prev = cur
+
+    # Flush any remaining tribal immunity from the last phase
+    _flush_tribal_immunity()
 
     # --- Terminal events ---
     # Gate on elimination_episode (never modified by _apply_as_of), not voted_out_order

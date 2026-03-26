@@ -767,7 +767,7 @@ nav a:hover {
 }
 
 .journey-dot-immunity       { background: var(--torch-gold); }
-.journey-dot-tribal_immunity { background: var(--fire-glow); opacity: 0.7; }
+.journey-dot-tribal_immunity { background: #d4a03c; }
 .journey-dot-idol           { background: var(--fire-bright); }
 .journey-dot-advantage      { background: #5b8fb9; }
 .journey-dot-votes          { background: #c0392b; }
