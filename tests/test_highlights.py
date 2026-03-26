@@ -378,6 +378,22 @@ class TestTerminalEvents:
         assert fire[0].text == 'Won fire-making challenge'
         assert fire[0].episode == 12  # Fire loser's elimination ep
 
+    def test_fire_making_loser(self):
+        """4th place finisher lost fire — should say 'Lost fire-making' not 'Voted out'."""
+        fire_loser = SimSurvivor(id=1, name='Rizo', voted_out_order=15,
+                                 made_jury=False, elimination_episode=12,
+                                 episode_stats=ep_stats({'tribe': 'Nami'}))
+        season = make_season(num_players=18, n_finalists=3,
+                             survivors=[fire_loser])
+        events, _ = generate_highlights(fire_loser, season, None)
+        # Should NOT have "Voted out"
+        voted_out = [e for e in events if e.event_type == ELIMINATION]
+        assert len(voted_out) == 0
+        # Should have "Lost fire-making challenge"
+        fire = [e for e in events if e.event_type == FIRE and 'Lost' in e.text]
+        assert len(fire) == 1
+        assert fire[0].text == 'Lost fire-making challenge — 4th place'
+
 
 # ── as_of_episode filtering ──────────────────────────────────────────────
 

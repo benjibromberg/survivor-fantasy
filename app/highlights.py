@@ -213,7 +213,14 @@ def _add_terminal_events(events, survivor, season, as_of_episode):
     elif survivor.voted_out_order > 0:
         place = _ordinal(num_players - survivor.voted_out_order + 1) if num_players else None
         place_text = f' — {place} place' if place else ''
-        events.append(Event(elim_ep, ELIMINATION, f'Voted out{place_text}', None))
+        # Fire loser: eliminated by losing fire-making challenge, not voted out
+        n_finalists = season.n_finalists
+        is_fire_loser = (n_finalists and num_players and
+                         survivor.voted_out_order == num_players - n_finalists)
+        if is_fire_loser:
+            events.append(Event(elim_ep, FIRE, f'Lost fire-making challenge{place_text}', None))
+        else:
+            events.append(Event(elim_ep, ELIMINATION, f'Voted out{place_text}', None))
 
     if survivor.made_jury:
         events.append(Event(elim_ep, JURY, 'Became a jury member', None))
