@@ -123,6 +123,9 @@ class SimSurvivor:
         self.elimination_episode = elimination_episode
         self.episode_stats = episode_stats or {}
 
+    def get_episode_stats(self):
+        return self.episode_stats
+
 
 class SimSeason:
     def __init__(self, number, name, num_players, left_at_jury, n_finalists, survivors):

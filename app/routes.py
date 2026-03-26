@@ -198,6 +198,7 @@ def _build_leaderboard(season):
             pick_details.append({
                 'survivor': survivor.name,
                 'full_name': survivor.full_name,
+                'survivor_obj': survivor,
                 'survivor_image': survivor.image_url,
                 'tribe_color': survivor.tribe_color,
                 'tribe': survivor.tribe,
@@ -601,6 +602,29 @@ def leaderboard(season_id):
     # Restore original state
     if restore:
         restore()
+
+    # Generate journey highlights for each pick (AFTER restore — reads episode_stats
+    # JSON which is immutable, and gates terminal events on elimination_episode).
+    # Do NOT move this into _build_leaderboard() — that function is also called in a
+    # loop for past_winner_badges, which would waste O(N × survivors × episodes) work.
+    from .highlights import generate_highlights
+    # Build elim → episode mapping for as_of conversion
+    elim_to_episode = {}
+    for s in season.survivors:
+        if s.voted_out_order and s.voted_out_order > 0 and s.elimination_episode:
+            elim_to_episode[s.voted_out_order] = s.elimination_episode
+    target_episode = elim_to_episode.get(effective_as_of, 0) if as_of is not None else None
+    for entry in leaderboard_data:
+        for pick in entry['picks']:
+            surv = pick.get('survivor_obj')
+            if surv:
+                events, badges = generate_highlights(
+                    surv, season, merge_ep, as_of_episode=target_episode)
+                pick['journey_events'] = events
+                pick['journey_badges'] = badges
+            else:
+                pick['journey_events'] = []
+                pick['journey_badges'] = []
 
     # Season progression chart (show up to effective_as_of)
     progression_datasets = []

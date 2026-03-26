@@ -685,9 +685,116 @@ nav a:hover {
 /* Expand pill border-radius when any detail is shown */
 .show-pts .lb-pick,
 .show-stats .lb-pick,
-.show-bio .lb-pick {
+.show-bio .lb-pick,
+.show-journey .lb-pick {
     border-radius: 1rem;
     padding: 0.5rem 1rem 0.5rem 0.35rem;
+}
+
+/* ── Journey badges (always visible) ───────────────────────────── */
+.lb-pick-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.lb-badge {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.6em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+.lb-badge-immunity    { background: rgba(252,163,17,0.15); color: var(--torch-gold); }
+.lb-badge-tribal_immunity { background: rgba(252,163,17,0.1); color: var(--fire-glow); }
+.lb-badge-idol        { background: rgba(232,93,38,0.15); color: var(--fire-bright); }
+.lb-badge-merge       { background: rgba(45,106,79,0.2); color: var(--palm-green); }
+.lb-badge-votes       { background: rgba(192,57,43,0.15); color: #e07070; }
+.lb-badge-advantage   { background: rgba(91,143,185,0.15); color: #5b8fb9; }
+.lb-badge-fire        { background: rgba(232,93,38,0.15); color: var(--fire-bright); }
+
+/* ── Journey timeline (toggled by "Journey" switch) ────────────── */
+.lb-pick-journey {
+    display: none;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--ocean-surface);
+}
+
+.show-journey .lb-pick-journey {
+    display: block;
+}
+
+.journey-events {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    position: relative;
+    padding-left: 18px;
+}
+
+/* Vertical timeline line */
+.journey-events::before {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 6px;
+    bottom: 6px;
+    width: 1px;
+    background: var(--ocean-surface);
+}
+
+.journey-event {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    position: relative;
+}
+
+.journey-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 2px;
+    position: absolute;
+    left: -17px;
+}
+
+.journey-dot-immunity       { background: var(--torch-gold); }
+.journey-dot-tribal_immunity { background: var(--fire-glow); opacity: 0.7; }
+.journey-dot-idol           { background: var(--fire-bright); }
+.journey-dot-advantage      { background: #5b8fb9; }
+.journey-dot-votes          { background: #c0392b; }
+.journey-dot-tribe          { background: #5b8fb9; }
+.journey-dot-merge          { background: var(--palm-green); }
+.journey-dot-elimination    { background: var(--text-dim); }
+.journey-dot-winner         { background: var(--torch-gold); }
+.journey-dot-jury           { background: var(--fire-glow); }
+.journey-dot-fire           { background: var(--fire-bright); }
+
+.journey-ep {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.65em;
+    font-weight: 700;
+    color: var(--fire-glow);
+    min-width: 30px;
+    flex-shrink: 0;
+}
+
+.journey-text {
+    font-size: 0.72em;
+    color: var(--text-light);
+    line-height: 1.4;
+}
+
+.journey-detail {
+    color: var(--text-dim);
 }
 
 .lb-breakdown-item {

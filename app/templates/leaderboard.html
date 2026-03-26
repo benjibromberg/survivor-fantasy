@@ -78,6 +78,10 @@
             <input type="checkbox" id="bio-toggle" role="switch">
             <span>Bio</span>
         </label>
+        <label class="toolbar-toggle">
+            <input type="checkbox" id="journey-toggle" role="switch">
+            <span>Journey</span>
+        </label>
         {% if win_pcts %}
         <label class="toolbar-toggle" title="Projected: estimates future immunity wins, idols, and advantages based on historical rates">
             <input type="checkbox" id="pred-toggle" role="switch">
@@ -163,6 +167,26 @@
                 {% if pick.bio_line %}
                 <div class="lb-pick-bio-detail">{{ pick.bio_line }}</div>
                 {% endif %}
+                {% if pick.journey_badges %}
+                <div class="lb-pick-badges">
+                    {% for badge in pick.journey_badges %}
+                    <span class="lb-badge lb-badge-{{ badge.css_class }}">{{ badge.label }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if pick.journey_events %}
+                <div class="lb-pick-journey">
+                    <div class="journey-events">
+                        {% for event in pick.journey_events %}
+                        <div class="journey-event">
+                            <div class="journey-dot journey-dot-{{ event.event_type }}"></div>
+                            <span class="journey-ep">Ep {{ event.episode }}</span>
+                            <span class="journey-text">{{ event.text }}{% if event.detail_text %} <span class="journey-detail">&mdash; {{ event.detail_text }}</span>{% endif %}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </{% if pick.stats_url %}a{% else %}div{% endif %}>
         {% endfor %}
@@ -213,6 +237,26 @@
                 {% endif %}
                 {% if pick.bio_line %}
                 <div class="lb-pick-bio-detail">{{ pick.bio_line }}</div>
+                {% endif %}
+                {% if pick.journey_badges and pick.pick_type_raw != 'sole_survivor' %}
+                <div class="lb-pick-badges">
+                    {% for badge in pick.journey_badges %}
+                    <span class="lb-badge lb-badge-{{ badge.css_class }}">{{ badge.label }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if pick.journey_events and pick.pick_type_raw != 'sole_survivor' %}
+                <div class="lb-pick-journey">
+                    <div class="journey-events">
+                        {% for event in pick.journey_events %}
+                        <div class="journey-event">
+                            <div class="journey-dot journey-dot-{{ event.event_type }}"></div>
+                            <span class="journey-ep">Ep {{ event.episode }}</span>
+                            <span class="journey-text">{{ event.text }}{% if event.detail_text %} <span class="journey-detail">&mdash; {{ event.detail_text }}</span>{% endif %}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
                 {% endif %}
             </div>
         </{% if pick.stats_url %}a{% else %}div{% endif %}>
@@ -483,6 +527,16 @@ if (bioToggle) {
     bioToggle.addEventListener('change', function() {
         document.body.classList.toggle('show-bio', this.checked);
         localStorage.setItem('lb-bio', this.checked ? '1' : '0');
+    });
+}
+const journeyToggle = document.getElementById('journey-toggle');
+if (journeyToggle) {
+    const show = localStorage.getItem('lb-journey') === '1';
+    journeyToggle.checked = show;
+    document.body.classList.toggle('show-journey', show);
+    journeyToggle.addEventListener('change', function() {
+        document.body.classList.toggle('show-journey', this.checked);
+        localStorage.setItem('lb-journey', this.checked ? '1' : '0');
     });
 }
 const predToggle = document.getElementById('pred-toggle');
