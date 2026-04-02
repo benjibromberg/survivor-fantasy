@@ -11,7 +11,18 @@ from .models import db, Season, Survivor, Pick, User, SoleSurvivorPick
 logger = logging.getLogger(__name__)
 
 SURVIVOR_DATA_URL = 'https://github.com/doehm/survivoR/raw/refs/heads/master/dev/xlsx/survivoR.xlsx'
-SURVIVOR_DATA_FILE = 'survivoR.xlsx'
+
+# Store survivoR.xlsx alongside the database so Docker's appuser can write it.
+# In Docker: DATABASE_URL=sqlite:////app/data/survivor_fantasy.db → /app/data/survivoR.xlsx
+# Locally:   default DB is ./survivor_fantasy.db → ./survivoR.xlsx (unchanged behavior)
+def _data_dir():
+    db_url = os.environ.get('DATABASE_URL', '')
+    if db_url.startswith('sqlite:///'):
+        db_path = db_url.replace('sqlite:///', '', 1)
+        return os.path.dirname(db_path) or '.'
+    return '.'
+
+SURVIVOR_DATA_FILE = os.path.join(_data_dir(), 'survivoR.xlsx')
 
 
 def _build_nickname_map():
