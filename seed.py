@@ -327,6 +327,7 @@ SEASON_PICK_FILES = {
     46: 'season46.json',
     47: 'season47_snakedraft.json',
     49: 'season49_snakedraft.json',
+    50: 'season50_snakedraft.json',
 }
 
 
