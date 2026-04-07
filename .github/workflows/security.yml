@@ -106,6 +106,14 @@ jobs:
           image: survivor-fantasy:latest
           args: --file=Dockerfile --sarif-file-output=snyk.sarif
 
+      - name: Sanitize SARIF
+        if: always() && hashFiles('snyk.sarif') != ''
+        run: |
+          # Snyk container scan emits null security-severity values on some rules,
+          # which GitHub Code Scanning rejects. Replace nulls with "0.0".
+          jq '(.runs[].tool.driver.rules[]?.properties."security-severity") |= (if . == null then "0.0" else . end)' snyk.sarif > snyk-fixed.sarif
+          mv snyk-fixed.sarif snyk.sarif
+
       - name: Upload SARIF to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@5c8a8a642e79153f5d047b10ec1cba1d1cc65699 # v3
         if: always()
