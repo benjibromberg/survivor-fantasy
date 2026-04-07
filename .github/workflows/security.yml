@@ -109,9 +109,9 @@ jobs:
       - name: Sanitize SARIF
         if: always() && hashFiles('snyk.sarif') != ''
         run: |
-          # Snyk container scan emits null security-severity values on some rules,
-          # which GitHub Code Scanning rejects. Replace nulls with "0.0".
-          jq '(.runs[].tool.driver.rules[]?.properties."security-severity") |= (if . == null then "0.0" else . end)' snyk.sarif > snyk-fixed.sarif
+          # Snyk container scan emits null security-severity values on some rules
+          # (in both driver and extensions), which GitHub Code Scanning rejects.
+          jq 'walk(if type == "object" and has("security-severity") and .["security-severity"] == null then .["security-severity"] = "0.0" else . end)' snyk.sarif > snyk-fixed.sarif
           mv snyk-fixed.sarif snyk.sarif
 
       - name: Upload SARIF to GitHub Code Scanning
