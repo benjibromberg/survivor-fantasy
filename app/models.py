@@ -33,6 +33,7 @@ class Season(db.Model):
     num_episodes = db.Column(db.Integer, default=13)
     left_at_jury = db.Column(db.Integer, nullable=True)
     n_finalists = db.Column(db.Integer, nullable=True)
+    merge_episode_num = db.Column(db.Integer, nullable=True)  # from tribe_status='Merged'
     scoring_system = db.Column(db.String(50), default='Classic')
     scoring_config = db.Column(db.Text, default='{}')
     survivors = db.relationship('Survivor', backref='season', lazy=True)
@@ -50,8 +51,32 @@ class Season(db.Model):
 
     @property
     def current_tribal_count(self):
+        """Number of distinct elimination days so far (for still-in-game survivors).
+
+        Falls back to max(voted_out_order) when day_voted_out data is unavailable.
+        """
+        days = {s.day_voted_out for s in self.survivors
+                if s.voted_out_order and s.day_voted_out}
+        if days:
+            return len(days)
+        # Fallback for seasons without day data
         voted = [s.voted_out_order for s in self.survivors if s.voted_out_order]
         return max(voted) if voted else 0
+
+    def compute_tribals_survived(self, survivor):
+        """Number of distinct elimination days before this survivor's elimination day.
+
+        Same-day boots get identical tribal counts. Falls back to voted_out_order - 1
+        when day_voted_out data is unavailable.
+        """
+        if survivor.voted_out_order and survivor.voted_out_order > 0:
+            if survivor.day_voted_out:
+                elim_days = {s.day_voted_out for s in self.survivors
+                             if s.voted_out_order and s.voted_out_order > 0
+                             and s.day_voted_out}
+                return len([d for d in elim_days if d < survivor.day_voted_out])
+            return survivor.voted_out_order - 1
+        return self.current_tribal_count
 
     def get_scoring_config(self):
         try:
@@ -94,6 +119,7 @@ class Survivor(db.Model):
     jury_votes_received = db.Column(db.Integer)  # finalists only
     performance_score = db.Column(db.Float)  # survivoR overall score
     elimination_episode = db.Column(db.Integer)  # episode eliminated in (null = still in)
+    day_voted_out = db.Column(db.Integer)  # game day eliminated (null = still in)
     episode_stats = db.Column(db.Text)  # JSON: {ep: {conf, ii, ti, idol, adv, adv_play, votes, ...}}
     won_fire = db.Column(db.Boolean, default=False)  # won final 4 fire challenge
     # Bio from survivoR Castaway Details

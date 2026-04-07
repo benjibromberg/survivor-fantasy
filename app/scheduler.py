@@ -28,8 +28,10 @@ def refresh_active_seasons(app):
         active = Season.query.filter_by(is_active=True).all()
         for season in active:
             try:
-                count = refresh_season(season)
+                count, day_warnings = refresh_season(season)
                 logger.info(f'Auto-refresh: updated {count} survivors for season {season.number}')
+                for w in day_warnings:
+                    logger.warning(f'Season {season.number} day data: {w}')
             except Exception as e:
                 logger.error(f'Auto-refresh failed for season {season.number}: {e}')
 

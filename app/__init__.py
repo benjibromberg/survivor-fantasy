@@ -23,12 +23,24 @@ def _add_missing_columns():
         'sit_outs': 'INTEGER DEFAULT 0',
         'jury_votes_received': 'INTEGER',
         'performance_score': 'REAL',
+        'day_voted_out': 'INTEGER',
     }
     with db.engine.begin() as conn:
         for col, col_type in new_cols.items():
             if col not in survivor_cols:
                 conn.execute(
                     sqlalchemy.text(f'ALTER TABLE survivor ADD COLUMN {col} {col_type}')
+                )
+    # Season table columns
+    season_cols = {c['name'] for c in inspector.get_columns('season')}
+    season_new = {
+        'merge_episode_num': 'INTEGER',
+    }
+    with db.engine.begin() as conn:
+        for col, col_type in season_new.items():
+            if col not in season_cols:
+                conn.execute(
+                    sqlalchemy.text(f'ALTER TABLE season ADD COLUMN {col} {col_type}')
                 )
 
 

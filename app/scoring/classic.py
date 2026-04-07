@@ -182,10 +182,7 @@ class ClassicScoring(ScoringSystem):
         # None means merge hasn't happened yet — treat all tribals as pre-merge
         merge_threshold = season.merge_threshold if season.merge_threshold is not None else season.num_players
 
-        if survivor.voted_out_order and survivor.voted_out_order > 0:
-            tribals = survivor.voted_out_order - 1
-        else:
-            tribals = season.current_tribal_count
+        tribals = season.compute_tribals_survived(survivor)
 
         # Tribal survival points (flat or progressive)
         breakdown.items.update(self._compute_tribal_points(tribals, season))

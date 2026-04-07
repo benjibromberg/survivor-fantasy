@@ -162,7 +162,7 @@ def generate_highlights(survivor, season, merge_episode, as_of_episode=None):
             _flush_tribal_immunity()
             still_in = (survivor.voted_out_order == 0 or
                         (survivor.elimination_episode is not None and
-                         survivor.elimination_episode >= ep))
+                         survivor.elimination_episode > ep))
             if still_in:
                 events.append(Event(ep, MERGE, 'Made the merge', None))
 

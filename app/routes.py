@@ -350,6 +350,7 @@ def _apply_as_of(season, as_of):
             'made_jury': s.made_jury,
             'result': s.result,
             'won_fire': s.won_fire,
+            'day_voted_out': s.day_voted_out,
             **{f: getattr(s, f) for f in stat_fields},
         }
 
@@ -378,6 +379,7 @@ def _apply_as_of(season, as_of):
             s.voted_out_order = 0
             s.made_jury = False
             s.result = None
+            s.day_voted_out = None
         elif (jury_threshold is not None and finalist_threshold is not None
               and s.voted_out_order > 0
               and s.voted_out_order > jury_threshold
@@ -537,23 +539,8 @@ def leaderboard(season_id):
             'milestone': None,
         })
 
-    # Detect merge: first episode where all remaining players share one tribe
-    all_eps = set()
-    for s in season.survivors:
-        for ep in s.get_episode_stats():
-            all_eps.add(int(ep))
-    merge_ep = None
-    for ep in sorted(all_eps):
-        tribes = set()
-        for s in season.survivors:
-            ep_data = s.get_episode_stats().get(str(ep), {})
-            tribe = ep_data.get('tribe', '')
-            still_in = s.voted_out_order == 0 or (s.elimination_episode and s.elimination_episode >= ep)
-            if still_in and tribe:
-                tribes.add(tribe)
-        if len(tribes) == 1 and ep > 1:
-            merge_ep = ep
-            break
+    # Merge episode from survivoR tribe_status data (set during refresh)
+    merge_ep = season.merge_episode_num
 
     # Assign milestones to timeline points
     for pt in timeline_points:
@@ -1235,8 +1222,10 @@ def admin_seasons():
             # Auto-fetch from survivoR
             try:
                 download_survivor_data()
-                count = refresh_season(season)
+                count, day_warnings = refresh_season(season)
                 flash(f'Season {number} created with {count} survivors!', 'success')
+                for w in day_warnings:
+                    flash(f'Data warning: {w}', 'error')
 
                 # Generate images unless unchecked
                 if 'fetch_images' in request.form:
@@ -1334,8 +1323,10 @@ def admin_refresh(season_id):
 
     try:
         download_survivor_data()
-        count = refresh_season(season)
+        count, day_warnings = refresh_season(season)
         flash(f'Refreshed {count} survivors from survivoR dataset!', 'success')
+        for w in day_warnings:
+            flash(f'Data warning: {w}', 'error')
     except Exception as e:
         db.session.rollback()
         flash(f'Refresh failed: {e}', 'error')

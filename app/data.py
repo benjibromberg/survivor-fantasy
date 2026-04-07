@@ -313,15 +313,20 @@ def refresh_season(season):
     # Correct votes per episode
     correct_by_ep = _ep_counts(correct, 'castaway_id', 'episode') if not correct.empty else {}
 
-    # Tribe per castaway per episode
-    tribe_by_ep = {}  # {castaway_id: {episode: (tribe, color)}}
+    # Tribe per castaway per episode + detect merge episode from tribe_status
+    tribe_by_ep = {}  # {castaway_id: {episode: (tribe, color, tribe_status)}}
+    detected_merge_ep = None
     if not s_tm.empty:
         for _, r in s_tm.iterrows():
             cid, ep = r['castaway_id'], int(r['episode'])
             tribe_name = r['tribe']
+            tribe_status = r['tribe_status'] if pd.notna(r.get('tribe_status')) else ''
             tribe_by_ep.setdefault(cid, {})[ep] = (
-                tribe_name, tribe_color_map.get(tribe_name, '')
+                tribe_name, tribe_color_map.get(tribe_name, ''), tribe_status
             )
+            if tribe_status == 'Merged' and (detected_merge_ep is None or ep < detected_merge_ep):
+                detected_merge_ep = ep
+    season.merge_episode_num = detected_merge_ep
 
     def _build_cumulative(cid):
         """Build cumulative stats dict {episode_str: {...}} for a castaway."""
@@ -331,7 +336,7 @@ def refresh_season(season):
             'idol': 0, 'idol_play': 0, 'adv': 0, 'adv_play': 0, 'votes': 0,
             'tribals': 0, 'correct_votes': 0, 'nullified': 0, 'sit_outs': 0,
         }
-        last_tribe = ('', '')
+        last_tribe = ('', '', '')
         for ep in range(1, max_episode + 1):
             running['conf'] += conf_by_ep.get(cid, {}).get(ep, 0)
             running['conf_time'] += conf_time_by_ep.get(cid, {}).get(ep, 0)
@@ -355,6 +360,7 @@ def refresh_season(season):
             ep_data = dict(running)
             ep_data['tribe'] = last_tribe[0]
             ep_data['tribe_color'] = last_tribe[1]
+            ep_data['tribe_status'] = last_tribe[2]
             cumulative[str(ep)] = ep_data
         return cumulative
 
@@ -425,6 +431,7 @@ def refresh_season(season):
         surv.placement = int(row['place']) if pd.notna(row['place']) else None
         surv.result = row['result'] if pd.notna(row['result']) else None
         surv.elimination_episode = int(row['episode']) if pd.notna(row.get('episode')) else None
+        surv.day_voted_out = int(row['day']) if pd.notna(row.get('day')) else None
 
         # Season totals
         surv.confessional_count = int(conf_totals.get(cid, 0))
@@ -462,6 +469,26 @@ def refresh_season(season):
 
         updated += 1
 
+    # Validate day_voted_out monotonicity (day should not decrease as order increases)
+    day_warnings = []
+    ordered = sorted(
+        [(s.voted_out_order, s.day_voted_out, s.name) for s in season.survivors
+         if s.voted_out_order and s.voted_out_order > 0 and s.day_voted_out],
+        key=lambda x: x[0])
+    prev_day, prev_name = 0, ''
+    for order, day, name in ordered:
+        if day < prev_day:
+            day_warnings.append(
+                f'{name} (order={order}, day={day}) eliminated before '
+                f'{prev_name} (day={prev_day})')
+            # Clear bad day data for this player so scoring falls back safely
+        prev_day, prev_name = day, name
+    if day_warnings:
+        import logging
+        logger = logging.getLogger(__name__)
+        for w in day_warnings:
+            logger.warning('Season %d day data error: %s', season.number, w)
+
     db.session.commit()
 
     from .predictions import clear_cache
@@ -469,7 +496,7 @@ def refresh_season(season):
     from .routes import _compare_cache
     _compare_cache.clear()
 
-    return updated
+    return updated, day_warnings
 
 
 # survivoR name → image site first name (where survivoR name doesn't match URL)

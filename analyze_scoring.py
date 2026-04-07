@@ -103,12 +103,13 @@ class SimSurvivor:
     __slots__ = ('id', 'name', 'voted_out_order', 'made_jury',
                  'individual_immunity_wins', 'tribal_immunity_wins',
                  'idols_found', 'idols_played', 'advantages_found', 'advantages_played',
-                 'won_fire', 'elimination_episode', 'episode_stats')
+                 'won_fire', 'elimination_episode', 'episode_stats', 'day_voted_out')
 
     def __init__(self, id, name, voted_out_order, made_jury,
                  individual_immunity_wins=0, tribal_immunity_wins=0,
                  idols_found=0, idols_played=0, advantages_found=0, advantages_played=0,
-                 won_fire=False, elimination_episode=None, episode_stats=None):
+                 won_fire=False, elimination_episode=None, episode_stats=None,
+                 day_voted_out=None):
         self.id = id
         self.name = name
         self.voted_out_order = voted_out_order
@@ -122,6 +123,7 @@ class SimSurvivor:
         self.won_fire = won_fire
         self.elimination_episode = elimination_episode
         self.episode_stats = episode_stats or {}
+        self.day_voted_out = day_voted_out
 
     def get_episode_stats(self):
         return self.episode_stats
@@ -144,8 +146,22 @@ class SimSeason:
 
     @property
     def current_tribal_count(self):
+        days = {s.day_voted_out for s in self.survivors
+                if s.voted_out_order and s.day_voted_out}
+        if days:
+            return len(days)
         voted = [s.voted_out_order for s in self.survivors if s.voted_out_order]
         return max(voted) if voted else 0
+
+    def compute_tribals_survived(self, survivor):
+        if survivor.voted_out_order and survivor.voted_out_order > 0:
+            if survivor.day_voted_out:
+                elim_days = {s.day_voted_out for s in self.survivors
+                             if s.voted_out_order and s.voted_out_order > 0
+                             and s.day_voted_out}
+                return len([d for d in elim_days if d < survivor.day_voted_out])
+            return survivor.voted_out_order - 1
+        return self.current_tribal_count
 
 
 class SimPick:
@@ -316,6 +332,7 @@ def load_all_seasons(season_numbers=None):
             ap = int(adv_played_s.get(cid, 0)) if cid else 0
 
             elim_ep = int(row['episode']) if pd.notna(row.get('episode')) else None
+            day_out = int(row['day']) if pd.notna(row.get('day')) else None
 
             # Build per-episode cumulative stats for scoring-relevant fields
             ep_stats = {}
@@ -338,6 +355,7 @@ def load_all_seasons(season_numbers=None):
                 advantages_found=af, advantages_played=ap,
                 won_fire=(snum, cid) in fire_winner_set if cid else False,
                 elimination_episode=elim_ep, episode_stats=ep_stats,
+                day_voted_out=day_out,
             ))
 
         max_order = max((s.voted_out_order for s in survs), default=0)
@@ -637,10 +655,7 @@ def _fast_score_total(survivor, config, season, tribal_table,
     For timeline scoring where breakdowns aren't needed.
     """
     elim_order = survivor.voted_out_order or 0
-    if elim_order > 0:
-        tribals = elim_order - 1
-    else:
-        tribals = season.current_tribal_count
+    tribals = season.compute_tribals_survived(survivor)
 
     tribal_total, pre_merge_tribal = tribal_table[tribals]
     total = tribal_total
@@ -882,11 +897,13 @@ def evaluate_config(config, scenarios):
             orig_state[s.id] = (
                 s.voted_out_order, s.made_jury, s.won_fire,
                 {f: getattr(s, f) for f in _STAT_FIELDS},
+                s.day_voted_out,
             )
             # Reset to pre-game state
             s.voted_out_order = 0
             s.made_jury = False
             s.won_fire = False
+            s.day_voted_out = None
             for f in _STAT_FIELDS:
                 setattr(s, f, 0)
 
@@ -924,10 +941,11 @@ def evaluate_config(config, scenarios):
         finalist_threshold = season.num_players - n_fin
 
         for elim in range(1, max_elim + 1):
-            # Reveal this elimination: set the survivor's real voted_out_order
+            # Reveal this elimination: set the survivor's real voted_out_order + day
             while elim_idx < len(surv_by_elim) and orig_state[surv_by_elim[elim_idx].id][0] == elim:
                 s = surv_by_elim[elim_idx]
                 s.voted_out_order = orig_state[s.id][0]
+                s.day_voted_out = orig_state[s.id][4]
                 # Force jury for post-merge boots; exclude finalists and winner
                 if (s.voted_out_order > merge_thresh
                         and s.voted_out_order <= finalist_threshold):
@@ -1003,7 +1021,7 @@ def evaluate_config(config, scenarios):
         # Restore original state before final leaderboard scoring
         for s in survivors:
             if s.id in orig_state:
-                s.voted_out_order, s.made_jury, s.won_fire, saved_stats = orig_state[s.id]
+                s.voted_out_order, s.made_jury, s.won_fire, saved_stats, s.day_voted_out = orig_state[s.id]
                 for f, val in saved_stats.items():
                     setattr(s, f, val)
 
@@ -1468,10 +1486,12 @@ def build_season_health_stats(recommended_config, scenarios):
             orig_state[s.id] = (
                 s.voted_out_order, s.made_jury, s.won_fire,
                 {f: getattr(s, f) for f in _STAT_FIELDS},
+                s.day_voted_out,
             )
             s.voted_out_order = 0
             s.made_jury = False
             s.won_fire = False
+            s.day_voted_out = None
             for f in _STAT_FIELDS:
                 setattr(s, f, 0)
 
@@ -1509,6 +1529,7 @@ def build_season_health_stats(recommended_config, scenarios):
             while elim_idx < len(surv_by_elim) and orig_state[surv_by_elim[elim_idx].id][0] == elim:
                 s = surv_by_elim[elim_idx]
                 s.voted_out_order = orig_state[s.id][0]
+                s.day_voted_out = orig_state[s.id][4]
                 if s.voted_out_order > merge_thresh and s.voted_out_order <= finalist_threshold:
                     s.made_jury = True
                 else:
@@ -1575,7 +1596,7 @@ def build_season_health_stats(recommended_config, scenarios):
         # Restore
         for s in survivors:
             if s.id in orig_state:
-                s.voted_out_order, s.made_jury, s.won_fire, saved = orig_state[s.id]
+                s.voted_out_order, s.made_jury, s.won_fire, saved, s.day_voted_out = orig_state[s.id]
                 for f, val in saved.items():
                     setattr(s, f, val)
 

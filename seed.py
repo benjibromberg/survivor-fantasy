@@ -127,6 +127,7 @@ def build_season_from_survivor_db(season_number, ref_data):
         version_season = row['version_season'] if pd.notna(row.get('version_season')) else None
         result = row['result'] if pd.notna(row.get('result')) else None
         elimination_episode = int(row['episode']) if pd.notna(row.get('episode')) else None
+        day_voted_out = int(row['day']) if pd.notna(row.get('day')) else None
 
         # Bio data
         details = details_by_id.get(cid)
@@ -151,6 +152,7 @@ def build_season_from_survivor_db(season_number, ref_data):
             occupation=occupation,
             personality_type=personality_type,
             elimination_episode=elimination_episode,
+            day_voted_out=day_voted_out,
         )
         db.session.add(surv)
         db.session.flush()
@@ -403,8 +405,10 @@ def main():
         # Enrich all seasons with episode_stats, elimination_episode, etc.
         print('\nRunning refresh_season for per-episode data...')
         for season in Season.query.all():
-            refresh_season(season)
+            _, day_warnings = refresh_season(season)
             print(f'  {season.name}: refreshed')
+            for w in day_warnings:
+                print(f'    WARNING: {w}')
 
         # Mark active season
         if active_season is None:
