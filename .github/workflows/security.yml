@@ -107,12 +107,15 @@ jobs:
           args: --file=Dockerfile --sarif-file-output=snyk.sarif
 
       - name: Sanitize SARIF
-        if: always() && hashFiles('snyk.sarif') != ''
+        if: always()
         run: |
-          # Snyk container scan emits null security-severity values on some rules
-          # (in both driver and extensions), which GitHub Code Scanning rejects.
-          jq 'walk(if type == "object" and has("security-severity") and .["security-severity"] == null then .["security-severity"] = "0.0" else . end)' snyk.sarif > snyk-fixed.sarif
-          mv snyk-fixed.sarif snyk.sarif
+          # Snyk container scan emits "undefined" and "null" security-severity
+          # values for license findings, which GitHub Code Scanning rejects.
+          # See https://github.com/github/codeql-action/issues/2187
+          if [ -f snyk.sarif ]; then
+            sed -i 's/"security-severity": "undefined"/"security-severity": "0"/g' snyk.sarif
+            sed -i 's/"security-severity": "null"/"security-severity": "0"/g' snyk.sarif
+          fi
 
       - name: Upload SARIF to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@5c8a8a642e79153f5d047b10ec1cba1d1cc65699 # v3
