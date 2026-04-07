@@ -1010,6 +1010,23 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
     grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
 }
+@media (max-width: 576px) {
+    .param-chart-grid {
+        grid-template-columns: 1fr;
+    }
+}
+@media (max-width: 576px) {
+    .season-health-grid {
+        grid-template-columns: 1fr;
+    }
+    .tldr-grid {
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 0.5rem;
+    }
+    .tldr-value {
+        font-size: 1.5rem;
+    }
+}
 .param-group {
     border: 1px solid var(--card-border);
     border-radius: 8px;
@@ -1033,6 +1050,13 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
     padding: 1rem;
     color: var(--fire-glow);
     overflow-x: auto;
+}
+#top-configs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+#top-configs table {
+    min-width: 500px;
 }
 </style>
 {% endblock %}

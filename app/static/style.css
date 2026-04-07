@@ -59,6 +59,15 @@ body {
     background: var(--night-sky);
     color: var(--text-light);
     margin: 0;
+    overflow-x: hidden;
+}
+
+/* Ensure main container respects viewport on mobile */
+main.container {
+    max-width: 100%;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    box-sizing: border-box;
 }
 
 h1, h2 {
@@ -736,6 +745,7 @@ nav a:hover {
     gap: 5px;
     position: relative;
     padding-left: 18px;
+    overflow: hidden;
 }
 
 /* Vertical timeline line */
@@ -1218,6 +1228,78 @@ small {
     letter-spacing: 0.03em;
 }
 
+/* Table scroll wrapper — horizontal scroll on overflow */
+.table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Auto-scroll for all tables in articles on mobile */
+article > table,
+section > table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* --- Nav mobile compact --- */
+@media (max-width: 640px) {
+    nav {
+        padding: 0.5rem 0.5rem;
+        position: relative;
+    }
+
+    .logo-torch {
+        width: 16px;
+        height: auto;
+    }
+
+    .logo-text {
+        font-size: 1em;
+        letter-spacing: 0.02em;
+    }
+
+    .site-logo {
+        gap: 0.25rem;
+    }
+
+    .nav-links {
+        gap: 0;
+    }
+
+    .nav-btn {
+        font-size: 0.78em !important;
+        padding: 0.2rem 0.3rem;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+    }
+
+    .nav-dropdown-trigger {
+        padding: 0.2rem 0.3rem !important;
+    }
+
+    /* Dropdown: anchor to right edge of nav on mobile */
+    .nav-dropdown-wrap {
+        position: static;
+    }
+
+    #seasons-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        left: auto;
+        margin-top: 0.25rem;
+    }
+}
+
+/* --- Tablet responsive (576-768px) --- */
+
+@media (max-width: 768px) and (min-width: 577px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
 /* --- Mobile responsive --- */
 
 @media (max-width: 576px) {
@@ -1246,16 +1328,21 @@ small {
         font-size: 1.1em;
     }
 
-    /* Pick pills: show image only on very small screens, full info on tap */
+    /* Pick pills: smaller on mobile */
     .lb-pick {
         padding: 0.25rem 0.5rem 0.25rem 0.25rem;
         gap: 0.35rem;
         font-size: 0.8em;
+        max-width: 100%;
+    }
+
+    .lb-picks {
+        gap: 0.35rem;
     }
 
     .lb-pick-img {
-        width: 56px;
-        height: 56px;
+        width: 48px;
+        height: 48px;
     }
 
     .lb-pick-name {
@@ -1293,10 +1380,10 @@ small {
         grid-template-columns: 1fr;
     }
 
-    /* Logo: smaller on mobile */
+    /* Logo: slightly smaller on mobile */
     .logo-text {
-        font-size: 1.15em;
-        letter-spacing: 0.04em;
+        font-size: 1em;
+        letter-spacing: 0.02em;
     }
 
     /* Toolbar: stack on mobile */
@@ -1306,6 +1393,9 @@ small {
 
     .toolbar-toggles {
         margin-left: 0;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        width: 100%;
     }
 
     /* TOC: position above toggle on mobile */
@@ -1847,6 +1937,12 @@ small {
         flex-direction: column;
     }
 
+    .progression-chart-wrap {
+        flex: none;
+        height: 250px;
+        width: 100%;
+    }
+
     .progression-standings {
         width: 100%;
         flex-direction: row;
@@ -1857,6 +1953,10 @@ small {
     .prog-row {
         flex: 1 1 auto;
         min-width: 140px;
+    }
+
+    .chart-card .chart-wrap {
+        height: 220px;
     }
 }
 
@@ -1870,7 +1970,9 @@ small {
     }
 
     .finale-stats {
-        gap: 1rem;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
     }
 
     .finale-stat-value {
