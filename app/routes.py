@@ -104,6 +104,25 @@ def _build_leaderboard(season):
              .distinct().all())
     leaderboard_data = []
 
+    # Build display results for same-day eliminations (e.g. "T-5th voted out")
+    _result_display = {}
+    day_groups = {}
+    for s in season.survivors:
+        if s.voted_out_order and s.voted_out_order > 0 and s.day_voted_out:
+            day_groups.setdefault(s.day_voted_out, []).append(s)
+    for day, survs in day_groups.items():
+        if len(survs) > 1:
+            # Exclude finalists/winner (placement is genuinely distinct)
+            non_final = [s for s in survs if s.result and 'voted out' in s.result.lower()]
+            if len(non_final) > 1:
+                min_order = min(s.voted_out_order for s in non_final)
+                # Find the ordinal from the lowest-order player's result
+                base_result = next(s.result for s in non_final
+                                   if s.voted_out_order == min_order)
+                tied_result = f'Tied {base_result}'
+                for s in non_final:
+                    _result_display[s.id] = tied_result
+
     # Wildcards are picked after episode 1; replacements after the merge
     current_elim_count = season.current_tribal_count
     merge_elim = season.merge_threshold  # None if merge data unknown
@@ -203,7 +222,7 @@ def _build_leaderboard(season):
                 'tribe_color': survivor.tribe_color,
                 'tribe': survivor.tribe,
                 'stats_url': survivor.stats_url,
-                'result': survivor.result,
+                'result': _result_display.get(survivor.id, survivor.result),
                 'pick_type': PICK_TYPE_LABELS.get(pick.pick_type, pick.pick_type),
                 'pick_type_raw': pick.pick_type,
                 'base_points': breakdown.total,
@@ -232,7 +251,7 @@ def _build_leaderboard(season):
                     'tribe_color': survivor.tribe_color,
                     'tribe': survivor.tribe,
                     'stats_url': survivor.stats_url,
-                    'result': survivor.result,
+                    'result': _result_display.get(survivor.id, survivor.result),
                     'pick_type': f'SS Pick ({ss_streak} ep streak)',
                     'pick_type_raw': 'sole_survivor',
                     'base_points': ss_bonus,

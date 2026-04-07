@@ -108,6 +108,18 @@
     <p>This season uses <strong>progressive tribal values</strong>&mdash;later tribals are worth more than earlier ones. Detailed phase breakdowns will appear once merge data is available.</p>
     {% endif %}
 
+    <h3>Same-Day Tribals</h3>
+    <p>Tribal survival is counted per <strong>tribal council survived</strong>, but when multiple players are eliminated on the same day (double or triple tribal councils), they are all credited with the same number of tribals survived. This ensures fair scoring when the show sends two or three players home in one night.</p>
+    <details>
+        <summary>Example: Double Tribal</summary>
+        <p>In a season where 5 tribals have occurred, a <strong>double tribal</strong> sends two players home on the same night:</p>
+        <ul>
+            <li>Both players survived <strong>5 tribals</strong> and earn identical tribal survival points.</li>
+            <li>Players still in the game after the double tribal have now survived <strong>6 tribals</strong> (the 5 before + the double tribal night).</li>
+        </ul>
+        <p>On the leaderboard, same-day eliminations are labeled as tied (e.g. "Tied 5th voted out") to indicate shared placement.</p>
+    </details>
+
     {% if active_rules %}
     <table>
         <thead><tr><th>Component</th><th>Points</th><th>How It Works</th></tr></thead>
@@ -118,8 +130,7 @@
                 <td>{{ rule.value }}</td>
                 <td>{{ rule.desc }}
                     {% if rule.key == 'tribal_val' %}
-                    <br><small>A castaway eliminated at the 10th tribal earns {{ (9 * rule.value)|round(2) }} tribal points (9 tribals survived).
-                    A castaway still in the game earns points for every tribal that has occurred so far.</small>
+                    <br><small>Points per tribal council survived. Same-day eliminations earn equal tribal points (see above).</small>
                     {% elif rule.key == 'first_val' %}
                     <br><small>The Sole Survivor earns this bonus on top of all other points.</small>
                     {% elif rule.key == 'individual_immunity_val' %}

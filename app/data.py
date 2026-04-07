@@ -225,6 +225,8 @@ def refresh_season(season):
                        for _, row in s_tc.iterrows()} if not s_tc.empty else {}
 
     # --- Per-episode incremental data ---
+    # Include Tribe Mapping episodes so episode_stats covers merge even when
+    # confessional/challenge/vote data hasn't been published yet.
     all_episodes = set()
     if not s_conf.empty:
         all_episodes.update(s_conf['episode'].dropna().astype(int))
@@ -232,6 +234,8 @@ def refresh_season(season):
         all_episodes.update(s_cr['episode'].dropna().astype(int))
     if not s_vh.empty:
         all_episodes.update(s_vh['episode'].dropna().astype(int))
+    if not s_tm.empty:
+        all_episodes.update(s_tm['episode'].dropna().astype(int))
     max_episode = max(all_episodes) if all_episodes else 0
 
     def _ep_counts(df, castaway_col, episode_col, filter_fn=None):
