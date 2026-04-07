@@ -1,3 +1,4 @@
+import os
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -7,4 +8,4 @@ app = create_app()
 
 if __name__ == '__main__':
     # host 0.0.0.0 makes it accessible on your Tailnet
-    app.run(host='0.0.0.0', port=5050, debug=True)
+    app.run(host='0.0.0.0', port=5050, debug=os.environ.get('FLASK_DEBUG', '1') == '1')

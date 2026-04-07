@@ -213,6 +213,7 @@ def load_picks_from_json(filepath, season, survivor_map):
     import json as _json
     from app.scoring.classic import DEFAULT_CONFIG, LEGACY_CONFIG
 
+    filepath = os.path.realpath(filepath)
     with open(filepath) as f:
         data = _json.load(f)
 
@@ -391,9 +392,16 @@ def main():
 
         # Load picks from JSON files if --picks-dir provided
         if picks_dir:
+            picks_dir = os.path.realpath(picks_dir)
+            if not os.path.isdir(picks_dir):
+                print(f'Error: --picks-dir {picks_dir} is not a directory')
+                sys.exit(1)
             print(f'\nLoading pick assignments from {picks_dir}...')
             for snum, filename in SEASON_PICK_FILES.items():
-                filepath = os.path.join(picks_dir, filename)
+                filepath = os.path.realpath(os.path.join(picks_dir, filename))
+                if not filepath.startswith(picks_dir):
+                    print(f'  Skipping {filename}: path escapes picks directory')
+                    continue
                 season = Season.query.filter_by(number=snum).first()
                 if not season:
                     continue

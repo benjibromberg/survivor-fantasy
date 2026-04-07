@@ -35,7 +35,7 @@ def _cache_key(season, scoring_config):
         'config': scoring_config,
     }
     raw = json.dumps(state, sort_keys=True)
-    return hashlib.md5(raw.encode()).hexdigest()
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 NEW_ERA_START = 41

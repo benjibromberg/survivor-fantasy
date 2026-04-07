@@ -1793,10 +1793,19 @@ def main():
                         help='Re-export from a saved checkpoint (skip optimization)')
     args = parser.parse_args()
 
+    # Sanitize file path arguments
+    if args.export_json:
+        args.export_json = os.path.realpath(args.export_json)
+    if args.reexport:
+        args.reexport = os.path.realpath(args.reexport)
+
     # Re-export mode: load saved results and jump to export
     if args.reexport:
         if not args.export_json:
             print('Error: --reexport requires --export-json')
+            sys.exit(1)
+        if not os.path.isfile(args.reexport):
+            print(f'Error: {args.reexport} does not exist')
             sys.exit(1)
         print(f'Loading results from {args.reexport}...')
         with open(args.reexport) as f:

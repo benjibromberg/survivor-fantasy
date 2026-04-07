@@ -888,7 +888,7 @@ def _compare_cache_key(season):
     )
     config = season.scoring_config or '{}'
     raw = f'{season.id}:{state}:{picks}:{config}'
-    return hashlib.md5(raw.encode()).hexdigest()
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 def _build_compare_data(season):
