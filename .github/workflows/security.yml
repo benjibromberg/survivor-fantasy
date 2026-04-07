@@ -1,0 +1,113 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 13 * * *" # Daily at 8am ET (13:00 UTC)
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  snyk-code:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Snyk Code (SAST)
+        uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04 # master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: code test
+          args: --sarif-file-output=snyk.sarif
+
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@5c8a8a642e79153f5d047b10ec1cba1d1cc65699 # v3
+        if: always()
+        with:
+          sarif_file: snyk.sarif
+
+      - name: Fail on high or critical severity findings
+        if: always()
+        run: |
+          if [ ! -f snyk.sarif ]; then
+            echo "::error::No SARIF file produced — Snyk scan may have failed"
+            exit 1
+          fi
+          HIGH_COUNT=$(jq '[.runs[].results[] | select(.level == "error")] | length' snyk.sarif)
+          if [ "$HIGH_COUNT" -gt 0 ]; then
+            echo "::error::Found $HIGH_COUNT high/critical severity finding(s)"
+            exit 1
+          fi
+          echo "No high/critical findings — passed"
+
+  snyk-sca:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Snyk Open Source (SCA)
+        uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04 # master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --sarif-file-output=snyk.sarif
+
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@5c8a8a642e79153f5d047b10ec1cba1d1cc65699 # v3
+        if: always()
+        with:
+          sarif_file: snyk.sarif
+
+      - name: Fail on high or critical severity findings
+        if: always()
+        run: |
+          if [ ! -f snyk.sarif ]; then
+            echo "::error::No SARIF file produced — Snyk scan may have failed"
+            exit 1
+          fi
+          HIGH_COUNT=$(jq '[.runs[].results[] | select(.level == "error")] | length' snyk.sarif)
+          if [ "$HIGH_COUNT" -gt 0 ]; then
+            echo "::error::Found $HIGH_COUNT high/critical severity finding(s)"
+            exit 1
+          fi
+          echo "No high/critical findings — passed"
+
+  snyk-container:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Build Docker image
+        run: docker build --progress=plain -t survivor-fantasy:latest .
+
+      - name: Snyk Container Scan
+        uses: snyk/actions/docker@9adf32b1121593767fc3c057af55b55db032dc04 # master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: survivor-fantasy:latest
+          args: --file=Dockerfile --sarif-file-output=snyk.sarif
+
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@5c8a8a642e79153f5d047b10ec1cba1d1cc65699 # v3
+        if: always()
+        with:
+          sarif_file: snyk.sarif
