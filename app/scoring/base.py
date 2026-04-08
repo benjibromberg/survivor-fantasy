@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 @dataclass
 class PointBreakdown:
     """Breakdown of points by scoring category."""
+
     items: dict[str, float] = field(default_factory=dict)
 
     @property
@@ -36,14 +37,14 @@ class ScoringSystem(ABC):
 
     def apply_pick_modifier(self, points, pick_type, num_survivors, left_at_jury):
         """Apply modifier based on pick type. Override for custom behavior."""
-        if pick_type == 'draft':
+        if pick_type == "draft":
             return points
-        elif pick_type == 'wildcard':
+        elif pick_type == "wildcard":
             return points / 2
-        elif pick_type == 'pmr_w':
+        elif pick_type == "pmr_w":
             pre_jury = num_survivors - left_at_jury
             return (points - pre_jury) / 2
-        elif pick_type == 'pmr_d':
+        elif pick_type == "pmr_d":
             pre_jury = num_survivors - left_at_jury
             return points - pre_jury
         return points
@@ -61,5 +62,6 @@ class ScoringSystem(ABC):
         """
         breakdown = self.calculate_survivor_points(survivor, season)
         modified = self.apply_pick_modifier(
-            breakdown.total, pick_type, season.num_players, season.left_at_jury)
+            breakdown.total, pick_type, season.num_players, season.left_at_jury
+        )
         return modified, breakdown

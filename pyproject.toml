@@ -1,0 +1,28 @@
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "SIM108", # use ternary operator (readability preference)
+    "UP038",  # non-pep604-isinstance — tuple syntax is fine
+]
+
+[tool.ruff.lint.per-file-ignores]
+"run.py" = ["E402"]    # load_dotenv() must run before app imports
+"seed.py" = ["E402"]   # load_dotenv() must run before app imports
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
