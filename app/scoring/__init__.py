@@ -14,12 +14,12 @@ def get_scoring_system(name, config=None):
 
 # Episode-stat key -> model attribute for scoring-relevant stats
 SCORING_STAT_KEYS = {
-    'ii': 'individual_immunity_wins',
-    'ti': 'tribal_immunity_wins',
-    'idol': 'idols_found',
-    'idol_play': 'idols_played',
-    'adv': 'advantages_found',
-    'adv_play': 'advantages_played',
+    "ii": "individual_immunity_wins",
+    "ti": "tribal_immunity_wins",
+    "idol": "idols_found",
+    "idol_play": "idols_played",
+    "adv": "advantages_found",
+    "adv_play": "advantages_played",
 }
 
 
