@@ -48,11 +48,13 @@ NO_IDOLS = set()
 class TestVotesAgainst:
     def test_counts_votes_received_not_cast(self):
         """Core regression: voter A votes for target B — B gets the count, not A."""
-        vh = _vote_history([
-            ("US0001", "US0002"),  # A votes for B
-            ("US0003", "US0002"),  # C votes for B
-            ("US0002", "US0003"),  # B votes for C
-        ])
+        vh = _vote_history(
+            [
+                ("US0001", "US0002"),  # A votes for B
+                ("US0003", "US0002"),  # C votes for B
+                ("US0002", "US0003"),  # B votes for C
+            ]
+        )
         result = compute_castaway_stats(EMPTY_CONF, vh, EMPTY_CR, EMPTY_AM, NO_IDOLS)
         va = result["votes_against"]
         assert va.get("US0002") == 2  # B received 2 votes
@@ -67,31 +69,37 @@ class TestVotesAgainst:
 
     def test_unanimous_vote(self):
         """All voters target the same person."""
-        vh = _vote_history([
-            ("US0001", "US0005"),
-            ("US0002", "US0005"),
-            ("US0003", "US0005"),
-            ("US0004", "US0005"),
-        ])
+        vh = _vote_history(
+            [
+                ("US0001", "US0005"),
+                ("US0002", "US0005"),
+                ("US0003", "US0005"),
+                ("US0004", "US0005"),
+            ]
+        )
         result = compute_castaway_stats(EMPTY_CONF, vh, EMPTY_CR, EMPTY_AM, NO_IDOLS)
         assert result["votes_against"].get("US0005") == 4
 
     def test_split_vote(self):
         """Two targets receive different numbers of votes."""
-        vh = _vote_history([
-            ("US0001", "US0003"),
-            ("US0002", "US0003"),
-            ("US0003", "US0001"),
-            ("US0004", "US0001"),
-            ("US0005", "US0001"),
-        ])
+        vh = _vote_history(
+            [
+                ("US0001", "US0003"),
+                ("US0002", "US0003"),
+                ("US0003", "US0001"),
+                ("US0004", "US0001"),
+                ("US0005", "US0001"),
+            ]
+        )
         result = compute_castaway_stats(EMPTY_CONF, vh, EMPTY_CR, EMPTY_AM, NO_IDOLS)
         va = result["votes_against"]
         assert va.get("US0001") == 3
         assert va.get("US0003") == 2
 
     def test_empty_vote_history(self):
-        result = compute_castaway_stats(EMPTY_CONF, EMPTY_VH, EMPTY_CR, EMPTY_AM, NO_IDOLS)
+        result = compute_castaway_stats(
+            EMPTY_CONF, EMPTY_VH, EMPTY_CR, EMPTY_AM, NO_IDOLS
+        )
         assert result["votes_against"].empty
 
     def test_self_vote(self):
@@ -106,17 +114,21 @@ class TestVotesAgainst:
 
 class TestConfessionals:
     def test_sums_across_episodes(self):
-        conf = _confessionals([
-            ("US0001", 3),
-            ("US0001", 5),
-            ("US0002", 2),
-        ])
+        conf = _confessionals(
+            [
+                ("US0001", 3),
+                ("US0001", 5),
+                ("US0002", 2),
+            ]
+        )
         result = compute_castaway_stats(conf, EMPTY_VH, EMPTY_CR, EMPTY_AM, NO_IDOLS)
         assert result["conf_totals"].get("US0001") == 8
         assert result["conf_totals"].get("US0002") == 2
 
     def test_empty_confessionals(self):
-        result = compute_castaway_stats(EMPTY_CONF, EMPTY_VH, EMPTY_CR, EMPTY_AM, NO_IDOLS)
+        result = compute_castaway_stats(
+            EMPTY_CONF, EMPTY_VH, EMPTY_CR, EMPTY_AM, NO_IDOLS
+        )
         assert result["conf_totals"].empty
 
 
@@ -125,26 +137,32 @@ class TestConfessionals:
 
 class TestChallengeResults:
     def test_individual_immunity(self):
-        cr = _challenge_results([
-            ("US0001", 1, 0),
-            ("US0001", 1, 0),
-            ("US0002", 0, 0),
-        ])
+        cr = _challenge_results(
+            [
+                ("US0001", 1, 0),
+                ("US0001", 1, 0),
+                ("US0002", 0, 0),
+            ]
+        )
         result = compute_castaway_stats(EMPTY_CONF, EMPTY_VH, cr, EMPTY_AM, NO_IDOLS)
         assert result["indiv_imm"].get("US0001") == 2
         assert result["indiv_imm"].get("US0002", 0) == 0
 
     def test_tribal_immunity(self):
-        cr = _challenge_results([
-            ("US0001", 0, 1),
-            ("US0001", 0, 1),
-            ("US0001", 0, 1),
-        ])
+        cr = _challenge_results(
+            [
+                ("US0001", 0, 1),
+                ("US0001", 0, 1),
+                ("US0001", 0, 1),
+            ]
+        )
         result = compute_castaway_stats(EMPTY_CONF, EMPTY_VH, cr, EMPTY_AM, NO_IDOLS)
         assert result["tribal_imm"].get("US0001") == 3
 
     def test_empty_challenge_results(self):
-        result = compute_castaway_stats(EMPTY_CONF, EMPTY_VH, EMPTY_CR, EMPTY_AM, NO_IDOLS)
+        result = compute_castaway_stats(
+            EMPTY_CONF, EMPTY_VH, EMPTY_CR, EMPTY_AM, NO_IDOLS
+        )
         assert result["indiv_imm"].empty
         assert result["tribal_imm"].empty
 
@@ -155,21 +173,25 @@ class TestChallengeResults:
 class TestAdvantageMovement:
     def test_idol_found_and_played(self):
         idol_ids = {"idol_001", "idol_002"}
-        am = _advantage_movement([
-            ("US0001", "idol_001", "Found"),
-            ("US0001", "idol_001", "Played"),
-            ("US0001", "idol_002", "Found"),
-        ])
+        am = _advantage_movement(
+            [
+                ("US0001", "idol_001", "Found"),
+                ("US0001", "idol_001", "Played"),
+                ("US0001", "idol_002", "Found"),
+            ]
+        )
         result = compute_castaway_stats(EMPTY_CONF, EMPTY_VH, EMPTY_CR, am, idol_ids)
         assert result["idols_found"].get("US0001") == 2
         assert result["idols_played"].get("US0001") == 1
 
     def test_non_idol_advantage(self):
         idol_ids = {"idol_001"}
-        am = _advantage_movement([
-            ("US0001", "adv_001", "Found"),
-            ("US0001", "adv_001", "Played"),
-        ])
+        am = _advantage_movement(
+            [
+                ("US0001", "adv_001", "Found"),
+                ("US0001", "adv_001", "Played"),
+            ]
+        )
         result = compute_castaway_stats(EMPTY_CONF, EMPTY_VH, EMPTY_CR, am, idol_ids)
         assert result["adv_found"].get("US0001") == 1
         assert result["adv_played"].get("US0001") == 1
@@ -178,12 +200,14 @@ class TestAdvantageMovement:
     def test_idol_vs_advantage_separation(self):
         """Idols and non-idol advantages are counted separately."""
         idol_ids = {"idol_001"}
-        am = _advantage_movement([
-            ("US0001", "idol_001", "Found"),
-            ("US0001", "adv_001", "Found"),
-            ("US0001", "idol_001", "Played"),
-            ("US0001", "adv_001", "Played"),
-        ])
+        am = _advantage_movement(
+            [
+                ("US0001", "idol_001", "Found"),
+                ("US0001", "adv_001", "Found"),
+                ("US0001", "idol_001", "Played"),
+                ("US0001", "adv_001", "Played"),
+            ]
+        )
         result = compute_castaway_stats(EMPTY_CONF, EMPTY_VH, EMPTY_CR, am, idol_ids)
         assert result["idols_found"].get("US0001") == 1
         assert result["idols_played"].get("US0001") == 1
@@ -191,16 +215,20 @@ class TestAdvantageMovement:
         assert result["adv_played"].get("US0001") == 1
 
     def test_empty_advantage_movement(self):
-        result = compute_castaway_stats(EMPTY_CONF, EMPTY_VH, EMPTY_CR, EMPTY_AM, NO_IDOLS)
+        result = compute_castaway_stats(
+            EMPTY_CONF, EMPTY_VH, EMPTY_CR, EMPTY_AM, NO_IDOLS
+        )
         assert result["idols_found"].empty
         assert result["adv_found"].empty
 
     def test_found_keyword_matching(self):
         """'Found' matching uses str.contains, so 'Found On Ground' should count."""
         idol_ids = {"idol_001"}
-        am = _advantage_movement([
-            ("US0001", "idol_001", "Found On Ground"),
-        ])
+        am = _advantage_movement(
+            [
+                ("US0001", "idol_001", "Found On Ground"),
+            ]
+        )
         result = compute_castaway_stats(EMPTY_CONF, EMPTY_VH, EMPTY_CR, am, idol_ids)
         assert result["idols_found"].get("US0001") == 1
 
@@ -215,10 +243,12 @@ class TestFullIntegration:
         conf = _confessionals([("US0001", 5), ("US0002", 3)])
         vh = _vote_history([("US0001", "US0002"), ("US0003", "US0002")])
         cr = _challenge_results([("US0001", 1, 0), ("US0002", 0, 1)])
-        am = _advantage_movement([
-            ("US0001", "idol_001", "Found"),
-            ("US0002", "adv_001", "Found"),
-        ])
+        am = _advantage_movement(
+            [
+                ("US0001", "idol_001", "Found"),
+                ("US0002", "adv_001", "Found"),
+            ]
+        )
         result = compute_castaway_stats(conf, vh, cr, am, idol_ids)
         assert result["conf_totals"].get("US0001") == 5
         assert result["votes_against"].get("US0002") == 2
@@ -232,7 +262,13 @@ class TestFullIntegration:
             EMPTY_CONF, EMPTY_VH, EMPTY_CR, EMPTY_AM, NO_IDOLS
         )
         for key in [
-            "conf_totals", "votes_against", "indiv_imm", "tribal_imm",
-            "idols_found", "idols_played", "adv_found", "adv_played",
+            "conf_totals",
+            "votes_against",
+            "indiv_imm",
+            "tribal_imm",
+            "idols_found",
+            "idols_played",
+            "adv_found",
+            "adv_played",
         ]:
             assert result[key].empty

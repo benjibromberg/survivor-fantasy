@@ -822,7 +822,9 @@ class TestGetScoringSystem:
 
     def test_config_with_falsy_values(self):
         """Config dict with falsy values (0, 0.0) should still be applied, not treated as empty."""
-        scoring = get_scoring_system("Classic", config={"first_val": 0, "jury_val": 0.0})
+        scoring = get_scoring_system(
+            "Classic", config={"first_val": 0, "jury_val": 0.0}
+        )
         assert scoring.config["first_val"] == 0
         assert scoring.config["jury_val"] == 0.0
 
