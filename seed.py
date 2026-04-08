@@ -400,14 +400,28 @@ def generate_image_urls():
         print(f"  Season {season.number}: {matched}/{total} images")
 
 
-# Map of season number → pick JSON filename (for --picks-dir loading)
-SEASON_PICK_FILES = {
-    45: "season45.json",
-    46: "season46.json",
-    47: "season47_snakedraft.json",
-    49: "season49_snakedraft.json",
-    50: "season50_snakedraft.json",
-}
+def discover_pick_files(picks_dir):
+    """Auto-discover pick JSON files in a directory.
+
+    Scans for season*.json files and extracts the season number from the
+    filename.  When multiple files match the same season (e.g. season47.json
+    and season47_snakedraft.json), the canonical ``season{N}.json`` name wins
+    — this is the format produced by ``export_season_picks()``.
+    """
+    import glob
+    import re
+
+    files = {}
+    for path in sorted(glob.glob(os.path.join(picks_dir, "season*.json"))):
+        basename = os.path.basename(path)
+        match = re.match(r"season(\d+)", basename)
+        if not match:
+            continue
+        num = int(match.group(1))
+        # Prefer exact season{N}.json (auto-exported) over suffixed variants
+        if num not in files or basename == f"season{num}.json":
+            files[num] = path
+    return files
 
 
 def main():
@@ -444,6 +458,19 @@ def main():
 
     app = create_app()
     with app.app_context():
+        # Safety net: export all picks before dropping tables
+        try:
+            from app.data import export_all_picks
+
+            exported = export_all_picks()
+            if exported:
+                print(f"Auto-exported picks for {len(exported)} season(s) to picks/")
+                for p in exported:
+                    print(f"  {p}")
+        except Exception as e:
+            # First run or empty DB — nothing to export
+            print(f"Pick export skipped: {e}")
+
         print("Dropping and recreating all tables...")
         db.drop_all()
         db.create_all()
@@ -477,16 +504,14 @@ def main():
                 print(f"Error: --picks-dir {picks_dir} is not a directory")
                 sys.exit(1)
             print(f"\nLoading pick assignments from {picks_dir}...")
-            for snum, filename in SEASON_PICK_FILES.items():
-                filepath = os.path.realpath(os.path.join(picks_dir, filename))
+            discovered = discover_pick_files(picks_dir)
+            for snum, filepath in sorted(discovered.items()):
+                filepath = os.path.realpath(filepath)
                 if not filepath.startswith(picks_dir):
-                    print(f"  Skipping {filename}: path escapes picks directory")
+                    print(f"  Skipping {os.path.basename(filepath)}: path escapes picks directory")
                     continue
                 season = Season.query.filter_by(number=snum).first()
                 if not season:
-                    continue
-                if not os.path.exists(filepath):
-                    print(f"  Skipping season {snum}: {filepath} not found")
                     continue
                 survivor_map = {
                     s.name.lower(): s
