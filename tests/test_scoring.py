@@ -805,6 +805,35 @@ class TestGetScoringSystem:
         scoring = get_scoring_system("Classic")
         assert scoring.config["first_val"] == DEFAULT_CONFIG["first_val"]
 
+    def test_empty_dict_config_uses_defaults(self):
+        """Empty dict is not None — cls(**{}) should still produce valid defaults."""
+        scoring = get_scoring_system("Classic", config={})
+        assert scoring.config["first_val"] == DEFAULT_CONFIG["first_val"]
+
+    def test_none_config_uses_defaults(self):
+        """Explicit None should behave like omitting config."""
+        scoring = get_scoring_system("Classic", config=None)
+        assert scoring.config["first_val"] == DEFAULT_CONFIG["first_val"]
+
+    def test_non_string_name_falls_back(self):
+        """Passing a non-string (e.g. an ORM object) should fall back to ClassicScoring."""
+        scoring = get_scoring_system(42)
+        assert isinstance(scoring, ClassicScoring)
+
+    def test_config_with_falsy_values(self):
+        """Config dict with falsy values (0, 0.0) should still be applied, not treated as empty."""
+        scoring = get_scoring_system(
+            "Classic", config={"first_val": 0, "jury_val": 0.0}
+        )
+        assert scoring.config["first_val"] == 0
+        assert scoring.config["jury_val"] == 0.0
+
+    def test_partial_config_fills_defaults(self):
+        """Passing only some keys should fill the rest from defaults."""
+        scoring = get_scoring_system("Classic", config={"first_val": 99})
+        assert scoring.config["first_val"] == 99
+        assert scoring.config["jury_val"] == DEFAULT_CONFIG["jury_val"]
+
 
 # ── compute_stat_overrides ────────────────────────────────────────────────
 

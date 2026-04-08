@@ -7,7 +7,7 @@ _registry = {s.name: type(s) for s in SCORING_SYSTEMS}
 
 def get_scoring_system(name, config=None):
     cls = _registry.get(name, ClassicScoring)
-    if config:
+    if config is not None:
         return cls(**config)
     return cls()
 
