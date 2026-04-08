@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from flask_login import UserMixin
 
@@ -14,13 +14,14 @@ def load_user(user_id):
 class User(UserMixin, db.Model):
     """Represents both the admin (who logs in via GitHub) and fantasy players
     (created by admin, never log in — just names on the leaderboard)."""
+
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     display_name = db.Column(db.String(80))
     github_username = db.Column(db.String(80), unique=True, nullable=True)
     is_admin = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    picks = db.relationship('Pick', backref='user', lazy=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    picks = db.relationship("Pick", backref="user", lazy=True)
 
 
 class Season(db.Model):
@@ -33,11 +34,13 @@ class Season(db.Model):
     num_episodes = db.Column(db.Integer, default=13)
     left_at_jury = db.Column(db.Integer, nullable=True)
     n_finalists = db.Column(db.Integer, nullable=True)
-    merge_episode_num = db.Column(db.Integer, nullable=True)  # from tribe_status='Merged'
-    scoring_system = db.Column(db.String(50), default='Classic')
-    scoring_config = db.Column(db.Text, default='{}')
-    survivors = db.relationship('Survivor', backref='season', lazy=True)
-    picks = db.relationship('Pick', backref='season', lazy=True)
+    merge_episode_num = db.Column(
+        db.Integer, nullable=True
+    )  # from tribe_status='Merged'
+    scoring_system = db.Column(db.String(50), default="Classic")
+    scoring_config = db.Column(db.Text, default="{}")
+    survivors = db.relationship("Survivor", backref="season", lazy=True)
+    picks = db.relationship("Pick", backref="season", lazy=True)
 
     @property
     def merge_threshold(self):
@@ -55,8 +58,11 @@ class Season(db.Model):
 
         Falls back to max(voted_out_order) when day_voted_out data is unavailable.
         """
-        days = {s.day_voted_out for s in self.survivors
-                if s.voted_out_order and s.day_voted_out}
+        days = {
+            s.day_voted_out
+            for s in self.survivors
+            if s.voted_out_order and s.day_voted_out
+        }
         if days:
             return len(days)
         # Fallback for seasons without day data
@@ -71,9 +77,11 @@ class Season(db.Model):
         """
         if survivor.voted_out_order and survivor.voted_out_order > 0:
             if survivor.day_voted_out:
-                elim_days = {s.day_voted_out for s in self.survivors
-                             if s.voted_out_order and s.voted_out_order > 0
-                             and s.day_voted_out}
+                elim_days = {
+                    s.day_voted_out
+                    for s in self.survivors
+                    if s.voted_out_order and s.voted_out_order > 0 and s.day_voted_out
+                }
                 return len([d for d in elim_days if d < survivor.day_voted_out])
             return survivor.voted_out_order - 1
         return self.current_tribal_count
@@ -87,7 +95,7 @@ class Season(db.Model):
 
 class Survivor(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    season_id = db.Column(db.Integer, db.ForeignKey('season.id'), nullable=False)
+    season_id = db.Column(db.Integer, db.ForeignKey("season.id"), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     full_name = db.Column(db.String(150))
     castaway_id = db.Column(db.String(20))  # e.g. US0009
@@ -118,9 +126,13 @@ class Survivor(db.Model):
     sit_outs = db.Column(db.Integer, default=0)
     jury_votes_received = db.Column(db.Integer)  # finalists only
     performance_score = db.Column(db.Float)  # survivoR overall score
-    elimination_episode = db.Column(db.Integer)  # episode eliminated in (null = still in)
+    elimination_episode = db.Column(
+        db.Integer
+    )  # episode eliminated in (null = still in)
     day_voted_out = db.Column(db.Integer)  # game day eliminated (null = still in)
-    episode_stats = db.Column(db.Text)  # JSON: {ep: {conf, ii, ti, idol, adv, adv_play, votes, ...}}
+    episode_stats = db.Column(
+        db.Text
+    )  # JSON: {ep: {conf, ii, ti, idol, adv, adv_play, votes, ...}}
     won_fire = db.Column(db.Boolean, default=False)  # won final 4 fire challenge
     # Bio from survivoR Castaway Details
     age = db.Column(db.Integer)
@@ -142,10 +154,10 @@ class Survivor(db.Model):
     def stats_url(self):
         """Link to survivorstatsdb.com profile."""
         if self.castaway_id and self.version_season:
-            return f'https://survivorstatsdb.com/castaway/{self.version_season}/{self.castaway_id}'
+            return f"https://survivorstatsdb.com/castaway/{self.version_season}/{self.castaway_id}"
         return None
 
-    picks = db.relationship('Pick', backref='survivor', lazy=True)
+    picks = db.relationship("Pick", backref="survivor", lazy=True)
 
 
 class SoleSurvivorPick(db.Model):
@@ -156,20 +168,22 @@ class SoleSurvivorPick(db.Model):
     per consecutive episode they had the winner picked, streaking back from the
     finale.
     """
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    season_id = db.Column(db.Integer, db.ForeignKey('season.id'), nullable=False)
-    survivor_id = db.Column(db.Integer, db.ForeignKey('survivor.id'), nullable=False)
-    episode = db.Column(db.Integer, nullable=False)  # episode this pick becomes active
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    user = db.relationship('User', backref='sole_survivor_picks')
-    survivor = db.relationship('Survivor')
-    season = db.relationship('Season', backref='sole_survivor_picks')
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    season_id = db.Column(db.Integer, db.ForeignKey("season.id"), nullable=False)
+    survivor_id = db.Column(db.Integer, db.ForeignKey("survivor.id"), nullable=False)
+    episode = db.Column(db.Integer, nullable=False)  # episode this pick becomes active
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+    user = db.relationship("User", backref="sole_survivor_picks")
+    survivor = db.relationship("Survivor")
+    season = db.relationship("Season", backref="sole_survivor_picks")
 
     __table_args__ = (
-        db.UniqueConstraint('user_id', 'season_id', 'episode',
-                            name='uq_ss_user_season_episode'),
+        db.UniqueConstraint(
+            "user_id", "season_id", "episode", name="uq_ss_user_season_episode"
+        ),
     )
 
 
@@ -205,7 +219,11 @@ def calculate_ss_streak(ss_picks, season):
     pick_by_episode = {}
     for i, pick in enumerate(sorted_picks):
         start = pick.episode
-        end = sorted_picks[i + 1].episode if i + 1 < len(sorted_picks) else num_episodes + 1
+        end = (
+            sorted_picks[i + 1].episode
+            if i + 1 < len(sorted_picks)
+            else num_episodes + 1
+        )
         for ep in range(start, min(end, num_episodes + 1)):
             pick_by_episode[ep] = pick.survivor_id
 
@@ -226,14 +244,17 @@ def calculate_ss_streak(ss_picks, season):
 
 class Pick(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    season_id = db.Column(db.Integer, db.ForeignKey('season.id'), nullable=False)
-    survivor_id = db.Column(db.Integer, db.ForeignKey('survivor.id'), nullable=False)
-    pick_type = db.Column(db.String(20), nullable=False)  # draft, wildcard, pmr_w, pmr_d
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    season_id = db.Column(db.Integer, db.ForeignKey("season.id"), nullable=False)
+    survivor_id = db.Column(db.Integer, db.ForeignKey("survivor.id"), nullable=False)
+    pick_type = db.Column(
+        db.String(20), nullable=False
+    )  # draft, wildcard, pmr_w, pmr_d
     pick_order = db.Column(db.Integer)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
 
     __table_args__ = (
-        db.UniqueConstraint('user_id', 'season_id', 'survivor_id',
-                            name='uq_user_season_survivor'),
+        db.UniqueConstraint(
+            "user_id", "season_id", "survivor_id", name="uq_user_season_survivor"
+        ),
     )

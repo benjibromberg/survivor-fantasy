@@ -109,12 +109,41 @@ jobs:
       - name: Sanitize SARIF
         if: always()
         run: |
-          # Snyk container scan emits "undefined" and "null" security-severity
-          # values for license findings, which GitHub Code Scanning rejects.
-          # See https://github.com/github/codeql-action/issues/2187
+          # Snyk container scan has two SARIF issues:
+          # 1. Invalid security-severity values ("undefined", "null") that GitHub rejects
+          #    See https://github.com/github/codeql-action/issues/2187
+          # 2. Rule descriptions bake in the wrong severity prefix — almost all say
+          #    "Low severity" regardless of the actual CVSS score
+          # Fix both: sanitize invalid values and rewrite description prefixes to
+          # match the actual security-severity score.
           if [ -f snyk.sarif ]; then
-            sed -i 's/"security-severity": "undefined"/"security-severity": "0"/g' snyk.sarif
-            sed -i 's/"security-severity": "null"/"security-severity": "0"/g' snyk.sarif
+            jq '
+              def severity_label:
+                (if . == null or . == "undefined" or . == "null" then 0
+                 else (tonumber? // 0) end) as $score |
+                if $score >= 9.0 then "Critical"
+                elif $score >= 7.0 then "High"
+                elif $score >= 4.0 then "Medium"
+                else "Low" end;
+
+              .runs |= [.[] |
+                .tool.driver.rules |= [.[] |
+                  # Sanitize invalid security-severity values to "0"
+                  (if .properties["security-severity"] == "undefined" or
+                      .properties["security-severity"] == "null"
+                   then .properties["security-severity"] = "0"
+                   else . end) |
+                  # Rewrite severity prefix in descriptions to match actual score
+                  (.properties["security-severity"] | severity_label) as $label |
+                  (if .shortDescription.text then
+                    .shortDescription.text |= sub("^(Low|Medium|High|Critical) severity"; "\($label) severity")
+                   else . end) |
+                  (if .fullDescription.text then
+                    .fullDescription.text |= sub("^(Low|Medium|High|Critical) severity"; "\($label) severity")
+                   else . end)
+                ]
+              ]
+            ' snyk.sarif > snyk_fixed.sarif && mv snyk_fixed.sarif snyk.sarif
           fi
 
       - name: Upload SARIF to GitHub Code Scanning

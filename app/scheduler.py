@@ -10,36 +10,38 @@ scheduler = BackgroundScheduler()
 def refresh_active_seasons(app):
     """Download latest survivoR data and refresh all active seasons."""
     with app.app_context():
+        from .data import download_survivor_data, export_all_picks, refresh_season
         from .models import Season
-        from .data import download_survivor_data, refresh_season, export_all_picks
 
         try:
             download_survivor_data()
         except Exception as e:
-            logger.error(f'Failed to download survivoR data: {e}')
+            logger.error(f"Failed to download survivoR data: {e}")
             return
 
         # Export picks before refresh (preserve current state)
         try:
             export_all_picks()
         except Exception as e:
-            logger.warning(f'Pick export before refresh failed: {e}')
+            logger.warning(f"Pick export before refresh failed: {e}")
 
         active = Season.query.filter_by(is_active=True).all()
         for season in active:
             try:
                 count, day_warnings = refresh_season(season)
-                logger.info(f'Auto-refresh: updated {count} survivors for season {season.number}')
+                logger.info(
+                    f"Auto-refresh: updated {count} survivors for season {season.number}"
+                )
                 for w in day_warnings:
-                    logger.warning(f'Season {season.number} day data: {w}')
+                    logger.warning(f"Season {season.number} day data: {w}")
             except Exception as e:
-                logger.error(f'Auto-refresh failed for season {season.number}: {e}')
+                logger.error(f"Auto-refresh failed for season {season.number}: {e}")
 
         # Export picks after refresh (capture updated names/stats)
         try:
             export_all_picks()
         except Exception as e:
-            logger.warning(f'Pick export after refresh failed: {e}')
+            logger.warning(f"Pick export after refresh failed: {e}")
 
 
 def init_scheduler(app):
@@ -53,10 +55,10 @@ def init_scheduler(app):
 
     scheduler.add_job(
         refresh_active_seasons,
-        trigger=CronTrigger(hour=8, minute=0, timezone='America/New_York'),
+        trigger=CronTrigger(hour=8, minute=0, timezone="America/New_York"),
         args=[app],
-        id='daily_refresh',
+        id="daily_refresh",
         replace_existing=True,
     )
     scheduler.start()
-    logger.info('Scheduler started: auto-refresh daily at 8am EST')
+    logger.info("Scheduler started: auto-refresh daily at 8am EST")
