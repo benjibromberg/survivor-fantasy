@@ -4,7 +4,6 @@ import pandas as pd
 
 from app.data import compute_castaway_stats
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 
