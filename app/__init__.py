@@ -22,40 +22,54 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
 
 
 def _add_missing_columns():
-    """Add columns that create_all() won't add to existing tables."""
+    """Auto-detect and add columns that exist in models but not in the database.
+
+    Compares SQLAlchemy model metadata against the actual schema and issues
+    ALTER TABLE ADD COLUMN for any missing columns.  Scalar Python-side
+    defaults (int, float, bool, str) are translated to SQL DEFAULT clauses
+    so existing rows get backfilled.
+    """
+    import logging
+
     import sqlalchemy
 
+    log = logging.getLogger(__name__)
     inspector = sqlalchemy.inspect(db.engine)
-    survivor_cols = {c["name"] for c in inspector.get_columns("survivor")}
-    new_cols = {
-        "elimination_episode": "INTEGER",
-        "episode_stats": "TEXT",
-        "tribal_councils_attended": "INTEGER DEFAULT 0",
-        "correct_votes": "INTEGER DEFAULT 0",
-        "votes_nullified": "INTEGER DEFAULT 0",
-        "confessional_time": "REAL DEFAULT 0",
-        "sit_outs": "INTEGER DEFAULT 0",
-        "jury_votes_received": "INTEGER",
-        "performance_score": "REAL",
-        "day_voted_out": "INTEGER",
-    }
-    with db.engine.begin() as conn:
-        for col, col_type in new_cols.items():
-            if col not in survivor_cols:
-                conn.execute(
-                    sqlalchemy.text(f"ALTER TABLE survivor ADD COLUMN {col} {col_type}")
-                )
-    # Season table columns
-    season_cols = {c["name"] for c in inspector.get_columns("season")}
-    season_new = {
-        "merge_episode_num": "INTEGER",
-    }
-    with db.engine.begin() as conn:
-        for col, col_type in season_new.items():
-            if col not in season_cols:
-                conn.execute(
-                    sqlalchemy.text(f"ALTER TABLE season ADD COLUMN {col} {col_type}")
-                )
+    dialect = db.engine.dialect
+
+    for table in db.Model.metadata.sorted_tables:
+        if not inspector.has_table(table.name):
+            continue  # create_all() handles entirely new tables
+
+        existing_cols = {c["name"] for c in inspector.get_columns(table.name)}
+        added = []
+
+        with db.engine.begin() as conn:
+            for column in table.columns:
+                if column.name in existing_cols:
+                    continue
+
+                col_type = column.type.compile(dialect=dialect)
+                stmt = f"ALTER TABLE {table.name} ADD COLUMN {column.name} {col_type}"
+
+                # Translate scalar Python-side defaults to SQL DEFAULT so
+                # existing rows are backfilled (ORM default= only applies to
+                # new INSERTs, not ALTER TABLE).
+                if column.default is not None and column.default.is_scalar:
+                    val = column.default.arg
+                    if isinstance(val, bool):
+                        stmt += f" DEFAULT {int(val)}"
+                    elif isinstance(val, (int, float)):
+                        stmt += f" DEFAULT {val}"
+                    elif isinstance(val, str):
+                        escaped = val.replace("'", "''")
+                        stmt += f" DEFAULT '{escaped}'"
+
+                conn.execute(sqlalchemy.text(stmt))
+                added.append(column.name)
+
+        if added:
+            log.info("Added columns to %s: %s", table.name, ", ".join(added))
 
 
 def create_app():
