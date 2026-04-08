@@ -573,7 +573,7 @@ def rules(season_id):
     # Compute example values for the rules page (skip if merge data unknown)
     examples = {}
     if season and season.merge_threshold is not None:
-        scoring = get_scoring_system(season)
+        scoring = get_scoring_system(season.scoring_system, season.get_scoring_config())
         mt = season.merge_threshold
 
         if progressive:

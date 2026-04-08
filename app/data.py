@@ -96,7 +96,7 @@ def compute_castaway_stats(s_conf, s_vh, s_cr, s_am, idol_ids):
         else pd.Series(dtype=int)
     )
     votes_against = (
-        s_vh.groupby("vote_id").size() if not s_vh.empty else pd.Series(dtype=int)
+        s_vh.groupby("voted_out_id").size() if not s_vh.empty else pd.Series(dtype=int)
     )
     indiv_imm = (
         s_cr[s_cr["won_individual_immunity"] == 1].groupby("castaway_id").size()
