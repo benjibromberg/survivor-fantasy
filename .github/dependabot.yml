@@ -7,6 +7,14 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     open-pull-requests-limit: 15
+    groups:
+      dev-tools:
+        patterns:
+          - "ruff"
+          - "pytest*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: github-actions
     directory: /
