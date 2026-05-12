@@ -37,6 +37,7 @@
             <button type="button" class="outline" onclick="loadDefaults()" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;width:auto;">Load Default</button>
             <button type="button" class="outline secondary" onclick="loadLegacy()" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;width:auto;">Load Legacy</button>
         </div>
+        <div class="table-scroll">
         <table class="scoring-table">
             <thead><tr><th>Component</th><th>Value</th><th>Description</th></tr></thead>
             <tbody>
@@ -49,6 +50,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
 
         <script>
         const DEFAULTS = {{ default_config | tojson }};

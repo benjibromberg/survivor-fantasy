@@ -86,6 +86,7 @@
 
     {% if progressive and examples %}
     <p>This season uses <strong>progressive tribal values</strong>&mdash;later tribals are worth more than earlier ones. The value of each tribal increases as the game progresses through three phases:</p>
+    <div class="table-scroll">
     <table>
         <thead><tr><th>Phase</th><th>How Value Grows</th></tr></thead>
         <tbody>
@@ -104,6 +105,7 @@
             </tr>
         </tbody>
     </table>
+    </div>
     {% elif progressive %}
     <p>This season uses <strong>progressive tribal values</strong>&mdash;later tribals are worth more than earlier ones. Detailed phase breakdowns will appear once merge data is available.</p>
     {% endif %}
@@ -121,6 +123,7 @@
     </details>
 
     {% if active_rules %}
+    <div class="table-scroll">
     <table>
         <thead><tr><th>Component</th><th>Points</th><th>How It Works</th></tr></thead>
         <tbody>
@@ -141,6 +144,7 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
     {% endif %}
 
     {% if inactive_rules %}
@@ -188,6 +192,7 @@
 <!-- Pick Type Summary -->
 <article>
     <header><h2 id="pick-types">Pick Type Summary</h2></header>
+    <div class="table-scroll">
     <table>
         <thead><tr><th>Type</th><th>Points</th><th>When Picked</th></tr></thead>
         <tbody>
@@ -221,6 +226,7 @@
             {% endif %}
         </tbody>
     </table>
+    </div>
 </article>
 
 <!-- Win Probabilities -->
