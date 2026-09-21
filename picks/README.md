@@ -32,10 +32,10 @@ Map filenames in `SEASON_PICK_FILES` in `seed.py`:
 
 ```python
 SEASON_PICK_FILES = {
-    45: 'season45.json',
-    46: 'season46.json',
-    47: 'season47_snakedraft.json',
-    49: 'season49_snakedraft.json',
+    45: "season45.json",
+    46: "season46.json",
+    47: "season47_snakedraft.json",
+    49: "season49_snakedraft.json",
 }
 ```
 
