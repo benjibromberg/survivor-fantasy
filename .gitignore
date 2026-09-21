@@ -8,8 +8,11 @@ picks/*.xlsx
 # Environment
 .env
 
-# Database
+# Database (SQLite + WAL sidecars)
 survivor_fantasy.db
+survivor_fantasy.db-shm
+survivor_fantasy.db-wal
+survivor_fantasy.db-journal
 
 # Python
 __pycache__/
@@ -24,6 +27,10 @@ CLAUDE.md
 
 # Local notes
 TODO.md
+PLAYER_MESSAGE_DRAFT.md
+
+# Editor
+.vscode/
 
 # macOS
 .DS_Store
