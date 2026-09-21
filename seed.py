@@ -508,7 +508,9 @@ def main():
             for snum, filepath in sorted(discovered.items()):
                 filepath = os.path.realpath(filepath)
                 if not filepath.startswith(picks_dir):
-                    print(f"  Skipping {os.path.basename(filepath)}: path escapes picks directory")
+                    print(
+                        f"  Skipping {os.path.basename(filepath)}: path escapes picks directory"
+                    )
                     continue
                 season = Season.query.filter_by(number=snum).first()
                 if not season:

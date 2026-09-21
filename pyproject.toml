@@ -14,7 +14,6 @@ select = [
 ignore = [
     "E501",   # line too long (handled by formatter)
     "SIM108", # use ternary operator (readability preference)
-    "UP038",  # non-pep604-isinstance — tuple syntax is fine
 ]
 
 [tool.ruff.lint.per-file-ignores]
