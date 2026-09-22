@@ -10,7 +10,7 @@
     <h3>Add Player</h3>
     <form method="POST" style="max-width: 24rem;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
             <input type="text" name="name" required placeholder="Friend's name" style="margin-bottom: 0; font-size: 0.85rem;">
             <button type="submit" style="margin-bottom: 0; padding: 0.4rem 1rem; font-size: 0.85rem; white-space: nowrap;">Add</button>
         </div>
@@ -20,6 +20,7 @@
 {% if players %}
 <section>
     <h3>Current Players</h3>
+    <div class="table-scroll">
     <table>
         <thead>
             <tr><th>Name</th><th>Display Name</th><th>Role</th><th></th></tr>
@@ -43,6 +44,7 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
 </section>
 {% endif %}
 {% endblock %}

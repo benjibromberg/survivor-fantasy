@@ -7,7 +7,7 @@
     <h3>Create New Season</h3>
     <form method="POST" style="max-width: 28rem;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
             <label style="margin: 0; font-size: 0.85rem;">
                 Season #
                 <input type="number" name="number" required placeholder="50" style="margin: 0; width: 5rem; padding: 0.3rem 0.4rem; font-size: 0.85rem;">
@@ -30,6 +30,7 @@
             <button type="submit" class="outline" style="padding:0.25rem 0.75rem;font-size:0.85rem;margin:0;">Export All Picks</button>
         </form>
     </div>
+    <div class="table-scroll">
     <table>
         <thead>
             <tr>
@@ -70,6 +71,7 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
 </section>
 {% endif %}
 {% endblock %}
