@@ -28,7 +28,8 @@ class Season(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     number = db.Column(db.Integer, unique=True, nullable=False)
     name = db.Column(db.String(100))
-    is_active = db.Column(db.Boolean, default=True)
+    # Inactive until explicitly activated (only one season is active at a time)
+    is_active = db.Column(db.Boolean, default=False)
     # Overwritten by survivoR data — nullable for in-progress seasons
     num_players = db.Column(db.Integer, default=18)
     num_episodes = db.Column(db.Integer, default=13)

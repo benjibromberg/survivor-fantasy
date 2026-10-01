@@ -1477,7 +1477,9 @@ def admin_seasons():
         elif Season.query.filter_by(number=number).first():
             flash(f"Season {number} already exists.", "error")
         else:
-            season = Season(number=number, name=f"Season {number}")
+            # Created inactive so the public homepage keeps showing the current
+            # season; the admin activates it with the toggle when it is ready.
+            season = Season(number=number, name=f"Season {number}", is_active=False)
             db.session.add(season)
             db.session.commit()
 
@@ -1485,7 +1487,11 @@ def admin_seasons():
             try:
                 download_survivor_data()
                 count, day_warnings = refresh_season(season)
-                flash(f"Season {number} created with {count} survivors!", "success")
+                flash(
+                    f"Season {number} created with {count} survivors! It is "
+                    "inactive until you activate it from the seasons list.",
+                    "success",
+                )
                 for w in day_warnings:
                     flash(f"Data warning: {w}", "error")
 
