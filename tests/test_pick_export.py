@@ -235,3 +235,43 @@ class TestSeedExportBeforeDrop:
 
         assert [os.path.basename(p) for p in paths] == ["season99.json"]
         assert (tmp_path / "data" / "picks" / "season99.json").is_file()
+
+
+# ── Admin export routes ───────────────────────────────────────────────────
+
+
+class TestAdminExportRoutes:
+    def test_export_all_reports_oserror(self, app, admin_client, monkeypatch):
+        """A failed export is an error flash and a redirect, not a 500."""
+        monkeypatch.setattr("app.routes.export_all_picks", _export_denied)
+
+        resp = admin_client.post("/admin/export-all-picks")
+
+        assert resp.status_code == 302
+        assert resp.headers["Location"].endswith("/admin/seasons")
+        errors = _error_flashes(admin_client)
+        assert len(errors) == 1
+        assert "Pick export failed" in errors[0]
+
+    def test_export_season_reports_oserror(self, app, admin_client, monkeypatch):
+        _, db = app
+        season, _user, _surv = _make_season(db)
+        monkeypatch.setattr("app.routes.export_season_picks", _export_denied)
+
+        resp = admin_client.post(f"/admin/season/{season.id}/export-picks")
+
+        assert resp.status_code == 302
+        assert resp.headers["Location"].endswith(f"/admin/season/{season.id}")
+        errors = _error_flashes(admin_client)
+        assert len(errors) == 1
+        assert "Pick export failed" in errors[0]
+
+    def test_export_all_success_still_flashes_success(self, app, admin_client):
+        _, db = app
+        season, user, surv = _make_season(db)
+        _add_pick(db, season, user, surv)
+
+        resp = admin_client.post("/admin/export-all-picks")
+
+        assert resp.status_code == 302
+        assert _error_flashes(admin_client) == []

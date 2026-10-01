@@ -1626,7 +1626,12 @@ def admin_export_picks(season_id):
         return denied
 
     season = Season.query.get_or_404(season_id)
-    path = export_season_picks(season)
+    try:
+        path = export_season_picks(season)
+    except OSError as e:
+        logger.error("Pick export failed for season %d: %s", season.number, e)
+        flash(f"Pick export failed: {e}", "error")
+        return redirect(url_for("main.admin_season_detail", season_id=season.id))
     if path:
         flash(f"Exported picks to {path}", "success")
     else:
@@ -1641,7 +1646,12 @@ def admin_export_all_picks():
     if denied:
         return denied
 
-    paths = export_all_picks()
+    try:
+        paths = export_all_picks()
+    except OSError as e:
+        logger.error("Pick export failed: %s", e)
+        flash(f"Pick export failed: {e}", "error")
+        return redirect(url_for("main.admin_seasons"))
     if paths:
         flash(f"Exported picks for {len(paths)} season(s).", "success")
     else:
