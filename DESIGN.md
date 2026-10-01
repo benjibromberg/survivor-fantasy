@@ -190,17 +190,28 @@ Used by the rules and scoring analysis pages. `<details class="fold" open><summa
 ## Component Patterns
 
 ### Standings Row (`details.lb-team`)
-Each team is a `<details>` card with the left accent border. Its `<summary class="lb-row">` is the standings row: rank, player name with past-winner badges and team name, a torch per pick (lit while the castaway is in the game, snuffed once out, with an `n/m` count; hidden on finished seasons), win %, and points. On desktop that is one line; on phones torches and win % drop to a second line under the name.
+The standings are one card holding a column header (`.lb-standings-head`) and a row per team, divided by hairlines rather than drawn as separate cards. Each team is a `<details>`. Its `<summary class="lb-row">` is the row: rank, player name with past-winner badges, a "You" chip on your own row, team name, a torch per pick (lit while the castaway is in the game, snuffed once out, with an `n/m` count; hidden on finished seasons), win %, and points. On desktop that is one line; on phones torches and win % drop to a second line under the name.
+
+The header and the rows share `--lb-cols` and `--lb-areas`, so they cannot disagree with each other. Three variants set those: the default, `.no-win` when there are no win percentages (every timeline `as_of` view of a season still in progress), and `.is-finished`. **Keep all three at one class of specificity and list every one in the phone block.** Media queries add no specificity, so a base variant written with `:not()` out-specifies the phone override and wins inside it; that shipped once and left phones with a torch column the phone layout does not use. `tests/test_castaway_sheet.py::TestStandingsGridCascade` guards it.
 - Opening the row shows the roster (`.lb-roster`): the Sole Survivor pick and any warnings, then the castaway cards, then team stats.
 - An open team's row is `position: sticky` so it stays in view while its roster scrolls.
 - Rosters start open from 768px up. Below that only the logged-in player's own team starts open, so every row fits on one screen. Choices are remembered for the visit (`sessionStorage`, key `lb-open-teams`); Open all and Close all sit in the toolbar.
 - Champion variant gets gold border + glow. Snuffed variant dims to 0.85 opacity.
 
 ### Castaway Card (`.lb-pick`, macro `app/templates/_pick_card.html`)
-One macro renders every card. On the leaderboard a card is a `<details>`: the summary is the compact card (headshot 80px, 48px on phones; name, points, result or tribe, journey badges, and on desktop a one-line stats summary), and tapping it opens that castaway's point breakdown, stats, bio, journey and stats-site link. There are no global detail switches; detail opens one castaway at a time. On My Team a card is a plain link with no detail.
-- On phones cards sit in a 2-up grid and an open card takes the full row.
+One macro renders every card. On the leaderboard a card is a `<details>` whose summary is a **list row**: a pick-type chip (`DR`, `WC`, `RP`, `RP½`, `SS`), the headshot ringed in tribe colour, the name with its result or tribe, journey badges, and points right-aligned. Rows group under "Draft picks" and "Extra picks". There are no global detail switches; detail opens one castaway at a time. On My Team a card is a plain link with no detail.
+- The chip shows an abbreviation, with the full pick type in a `title` and a `visually-hidden` span, so the abbreviation is never the only label.
 - The summary holds spans only (`<summary>` allows phrasing content).
 - Eliminated picks use the eliminated treatment (see Color: Eliminated Castaways). Sole Survivor picks get gold border + subtle gradient background.
+
+### Castaway Sheet (`.lb-sheet`, inside an open card)
+Opening a card shows the sheet. A hero header tinted with the tribe colour (a left border at full strength, the colour only as a low-alpha gradient behind the text, because a saturated tribe colour behind text fails contrast on half the palette) carries the headshot, full name, age, occupation and tribe. Below it are three panels: **Summary** (point breakdown, stats, stats-site link), **Journey** (the narrative events) and **Episodes**.
+
+- The tab strip is rendered with `hidden` and revealed by script, so without JavaScript every panel stays visible under its own heading, which is what the card used to look like. Tabs never appear without something behind them.
+- Tabs follow the ARIA pattern: `role="tablist"`, roving `tabindex`, arrow keys plus Home and End, `aria-selected` and `aria-controls`. The ids are built from a `uid` passed in by the caller, because two players can hold the same castaway and the name alone is not unique.
+- `.lb-sheet-tab` uses `all: unset`, which drops the focus ring, so it sets its own (see Keyboard and Semantics).
+
+**Episodes table.** One row per episode, stopping at the elimination episode. Two things about `episode_stats` make the obvious reading wrong: its totals are **cumulative**, so an episode's own activity is the difference from the episode before it; and it **keeps repeating the final totals** for every episode after the castaway is voted out, so an untruncated table shows a boot still playing. Cells are heat-tinted on `--heat`, scaled per column to that castaway's own best episode so a quiet player's table still reads. The table sizes to its content rather than stretching, because early in a season most columns are empty.
 
 ### Season Timeline (`.season-timeline`)
 Horizontal scrollable row of episode dots. The connecting line is drawn per point (`.tl-point::before`) so it scrolls with the dots. Milestone dots (Premiere, Merge, Finale) are larger with labels. Active dot gets fire-bright color and is scrolled into view on load. On phones each point is at least 2.75rem wide and only milestone and active labels show.
@@ -225,4 +236,6 @@ Fixed-position overlay, bottom-left (full-width bottom sheet on phones, 0.95rem 
 | 2024 | Ember particles finale-only | Earned spectacle, not ambient decoration |
 | 2026-04-07 | DESIGN.md created | Documented existing system via /design-consultation for mobile responsive work |
 | 2026-04-07 | Mobile responsive overhaul | Added 640px nav breakpoint, 577-768px tablet breakpoint, overflow-x fixes, table scroll wrappers, container padding |
+| 2026-10-01 | Castaway sheet | Tribe-tinted hero plus Summary / Journey / Episodes tabs, replacing the stacked detail block. Tabs are progressive: the strip is hidden until script reveals it. |
+| 2026-10-01 | Rosters as list rows | Replaced the 2-up pill grid. Denser, and it gives points a consistent right-aligned column. |
 | 2026-10-01 | Responsive + readability pass (v2) | Consolidated all breakpoints at end of `style.css`; nav wraps instead of overflowing; header split via `.lb-sub`; 2-up pick grid; chips for toolbar toggles; scrollable timeline; collapsible `details.fold` sections with TOC integration for rules and analysis; `68ch` reading measure |

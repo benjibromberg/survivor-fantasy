@@ -89,6 +89,12 @@ def _fmt_time(secs):
     return f"{m}m {s}s" if m else f"{s}s"
 
 
+def _fmt_occupation(value):
+    """survivoR joins a returning player's occupations with ';' (Ozzy is
+    "Waiter;Photographer"), which reads as a typo wherever it is shown."""
+    return value.replace(";", ", ") if value else value
+
+
 def _voting_accuracy(correct_votes, votes_cast):
     """Percent of votes cast that were for the person voted out, or None.
 
@@ -150,6 +156,80 @@ def _require_admin():
         flash("Admin access required.", "error")
         return redirect(url_for("main.index"))
     return None
+
+
+EPISODE_COLUMNS = (
+    ("conf", "Conf"),
+    ("ii", "Ind"),
+    ("ti", "Tribal"),
+    ("idol", "Idols"),
+    ("adv", "Advs"),
+    ("votes", "Votes"),
+)
+
+
+def _episode_rows(survivor, as_of_episode=None):
+    """Per-episode activity for one castaway, for the sheet's Episodes tab.
+
+    Two things about episode_stats make the obvious reading wrong. Its totals
+    are CUMULATIVE, so an episode's own activity is the difference from the
+    episode before it. And it keeps repeating the final totals for every
+    episode after the castaway is voted out, so rows have to stop at the
+    elimination episode or the table shows a boot still playing.
+    """
+    raw = survivor.get_episode_stats()
+    if not raw:
+        return []
+
+    episodes = sorted(int(k) for k in raw)
+    if not episodes:
+        return []
+    last = survivor.elimination_episode or episodes[-1]
+    if as_of_episode:
+        last = min(last, as_of_episode)
+
+    rows, prev = [], {}
+    for ep in episodes:
+        if ep > last:
+            break
+        cur = raw[str(ep)]
+        values = [
+            (label, (cur.get(key) or 0) - (prev.get(key) or 0))
+            for key, label in EPISODE_COLUMNS
+        ]
+        rows.append(
+            {
+                "episode": ep,
+                "tribe": cur.get("tribe"),
+                "tribe_color": cur.get("tribe_color"),
+                "eliminated": ep == survivor.elimination_episode,
+                "values": values,
+            }
+        )
+        prev = cur
+
+    # Every column zero in every episode means the season has no per-episode
+    # data for this castaway, which is a blank table rather than information.
+    if not any(v for r in rows for _label, v in r["values"]):
+        return []
+
+    # Heat is scaled per column to this castaway's own best episode, so a
+    # quiet player's table still reads rather than being uniformly cold.
+    peaks = {}
+    for r in rows:
+        for label, v in r["values"]:
+            peaks[label] = max(peaks.get(label, 0), v)
+    for r in rows:
+        r["cells"] = [
+            {
+                "label": label,
+                "value": v,
+                "heat": round(v / peaks[label], 3) if peaks.get(label) else 0,
+            }
+            for label, v in r["values"]
+        ]
+        del r["values"]
+    return rows
 
 
 def _build_leaderboard(season):
@@ -290,7 +370,7 @@ def _build_leaderboard(season):
             elif survivor.city or survivor.state:
                 bio_parts.append(survivor.city or survivor.state)
             if survivor.occupation:
-                bio_parts.append(survivor.occupation)
+                bio_parts.append(_fmt_occupation(survivor.occupation))
             if survivor.personality_type:
                 bio_parts.append(survivor.personality_type)
 
@@ -313,6 +393,8 @@ def _build_leaderboard(season):
                     "stats_line": " · ".join(stats) if stats else None,
                     "stats_detail": stats_detail,
                     "bio_line": " · ".join(bio_parts) if bio_parts else None,
+                    "age": survivor.age,
+                    "occupation": _fmt_occupation(survivor.occupation),
                 }
             )
 
@@ -792,9 +874,11 @@ def leaderboard(season_id):
                 )
                 pick["journey_events"] = events
                 pick["journey_badges"] = badges
+                pick["episode_rows"] = _episode_rows(surv, target_episode)
             else:
                 pick["journey_events"] = []
                 pick["journey_badges"] = []
+                pick["episode_rows"] = []
 
     # Season progression chart (show up to effective_as_of)
     progression_datasets = []
