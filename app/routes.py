@@ -1,7 +1,15 @@
 import json
 import logging
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -1381,6 +1389,10 @@ def settings():
 
     if request.method == "POST":
         display_name = request.form.get("display_name", "").strip() or None
+        problem = display_name and _name_problem(display_name, current_user)
+        if problem:
+            flash(problem, "error")
+            return redirect(url_for("main.settings"))
         current_user.display_name = display_name
         db.session.commit()
         flash("Settings saved!", "success")
@@ -1547,37 +1559,33 @@ def admin_delete_ss_pick(season_id, pick_id):
 # --- Admin: Players ---
 
 
-@main_bp.route("/admin/players", defaults={"season_id": None}, methods=["GET", "POST"])
-@main_bp.route("/admin/players/<int:season_id>", methods=["GET", "POST"])
-@login_required
-def admin_players(season_id):
-    denied = _require_admin()
-    if denied:
-        return denied
+def _player_label(player):
+    return player.display_name or player.username
 
-    season = Season.query.get(season_id) if season_id else None
 
-    if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        if not name:
-            flash("Name is required.", "error")
-        elif User.query.filter_by(username=name).first():
-            flash(f'Player "{name}" already exists.', "error")
-        else:
-            player = User(username=name, display_name=name)
-            db.session.add(player)
-            db.session.commit()
-            flash(f'Player "{name}" added!', "success")
-        return redirect(url_for("main.admin_players", season_id=season_id))
+def _name_problem(name, player=None):
+    """Why `name` cannot be a player's name, or None if it can.
 
-    players = User.query.order_by(User.username).all()
-    return render_template(
-        "admin/players.html",
-        players=players,
-        season=season,
-        team_names=TeamName.for_season(season.id) if season else {},
-        team_name_max_length=TEAM_NAME_MAX_LENGTH,
+    Names key the pick export files and seed.py finds players by the
+    lowercased name, so two players may not share a name in any case.
+    """
+    if not name:
+        return "Name is required."
+    if len(name) > User.display_name.type.length:
+        return f"Name must be {User.display_name.type.length} characters or fewer."
+    lowered = name.lower()
+    clash = User.query.filter(
+        db.or_(
+            db.func.lower(User.display_name) == lowered,
+            db.func.lower(User.username) == lowered,
+        )
     )
+    if player is not None:
+        clash = clash.filter(User.id != player.id)
+    other = clash.first()
+    if other:
+        return f'"{name}" is already the name of {_player_label(other)}.'
+    return None
 
 
 def _is_plausible_email(email):
@@ -1593,6 +1601,182 @@ def _is_plausible_email(email):
     )
 
 
+def _email_problem(player, email):
+    """Why `player`'s login email cannot become `email`, or None if it can.
+
+    `email` is already normalized; None unlinks. The address the admin logs
+    in with stays where it is: unlinking it would make the next admin login
+    create a fresh, empty admin row.
+    """
+    admin_email = current_app.config["ADMIN_EMAIL"]
+    if admin_email and player.email == admin_email and email != admin_email:
+        return (
+            f"{admin_email} is the admin login. Merge this player instead of "
+            "unlinking it."
+        )
+    if email and not _is_plausible_email(email):
+        return f'"{email}" does not look like an email address.'
+    if email:
+        owner = User.query.filter(User.email == email, User.id != player.id).first()
+        if owner:
+            return f"{email} is already linked to {_player_label(owner)}."
+    return None
+
+
+def _seasons_by_player():
+    """Return {user_id: [season numbers they have picks in]}, newest first."""
+    rows = (
+        db.session.query(Pick.user_id, Season.number)
+        .join(Season, Season.id == Pick.season_id)
+        .union(
+            db.session.query(SoleSurvivorPick.user_id, Season.number).join(
+                Season, Season.id == SoleSurvivorPick.season_id
+            )
+        )
+        .all()
+    )
+    seasons = {}
+    for user_id, number in rows:
+        seasons.setdefault(user_id, set()).add(number)
+    return {uid: sorted(nums, reverse=True) for uid, nums in seasons.items()}
+
+
+@main_bp.route("/admin/players", defaults={"season_id": None}, methods=["GET", "POST"])
+@main_bp.route("/admin/players/<int:season_id>", methods=["GET", "POST"])
+@login_required
+def admin_players(season_id):
+    denied = _require_admin()
+    if denied:
+        return denied
+
+    season = db.session.get(Season, season_id) if season_id else None
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        problem = _name_problem(name)
+        if problem:
+            flash(problem, "error")
+        else:
+            try:
+                db.session.add(User(username=name.lower(), display_name=name))
+                db.session.commit()
+                flash(f'Player "{name}" added!', "success")
+            except SQLAlchemyError:
+                db.session.rollback()
+                logger.exception("Adding player %r failed", name)
+                flash(f'Could not add "{name}".', "error")
+        return redirect(url_for("main.admin_players", season_id=season_id))
+
+    players = User.query.order_by(db.func.lower(User.display_name)).all()
+    return render_template(
+        "admin/players.html",
+        players=players,
+        season=season,
+        seasons_by_player=_seasons_by_player(),
+        admin_email=current_app.config["ADMIN_EMAIL"],
+        team_names=TeamName.for_season(season.id) if season else {},
+        team_name_max_length=TEAM_NAME_MAX_LENGTH,
+    )
+
+
+@main_bp.route("/admin/player/<int:user_id>")
+@login_required
+def admin_player_detail(user_id):
+    """Everything about one player across all seasons."""
+    denied = _require_admin()
+    if denied:
+        return denied
+
+    player = db.get_or_404(User, user_id)
+
+    counts = {}  # {season_id: {pick_type: n}}
+    for season_id, pick_type, n in (
+        db.session.query(Pick.season_id, Pick.pick_type, db.func.count())
+        .filter(Pick.user_id == player.id)
+        .group_by(Pick.season_id, Pick.pick_type)
+    ):
+        counts.setdefault(season_id, {})[pick_type] = n
+    ss_counts = dict(
+        db.session.query(SoleSurvivorPick.season_id, db.func.count())
+        .filter(SoleSurvivorPick.user_id == player.id)
+        .group_by(SoleSurvivorPick.season_id)
+        .all()
+    )
+    team_names = {
+        row.season_id: row.name for row in TeamName.query.filter_by(user_id=player.id)
+    }
+    season_ids = set(counts) | set(ss_counts) | set(team_names)
+    seasons = (
+        Season.query.filter(Season.id.in_(season_ids))
+        .order_by(Season.number.desc())
+        .all()
+        if season_ids
+        else []
+    )
+    rows = [
+        {
+            "season": s,
+            "draft": counts.get(s.id, {}).get("draft", 0),
+            "wildcard": counts.get(s.id, {}).get("wildcard", 0),
+            "replacement": counts.get(s.id, {}).get("pmr_w", 0)
+            + counts.get(s.id, {}).get("pmr_d", 0),
+            "sole_survivor": ss_counts.get(s.id, 0),
+            "team_name": team_names.get(s.id, ""),
+        }
+        for s in seasons
+    ]
+    others = (
+        User.query.filter(User.id != player.id)
+        .order_by(db.func.lower(User.display_name))
+        .all()
+    )
+    admin_email = current_app.config["ADMIN_EMAIL"]
+    return render_template(
+        "admin/player_detail.html",
+        player=player,
+        rows=rows,
+        others=others,
+        is_admin_login=bool(admin_email) and player.email == admin_email,
+        is_you=player.id == current_user.id,
+        team_name_max_length=TEAM_NAME_MAX_LENGTH,
+    )
+
+
+@main_bp.route("/admin/player/<int:user_id>/edit", methods=["POST"])
+@login_required
+def admin_player_edit(user_id):
+    """Rename a player and set the email they log in with."""
+    denied = _require_admin()
+    if denied:
+        return denied
+
+    player = db.get_or_404(User, user_id)
+    back = redirect(url_for("main.admin_player_detail", user_id=player.id))
+    name = request.form.get("name", "").strip()
+    email = normalize_email(request.form.get("email"))
+
+    problem = _name_problem(name, player) or _email_problem(player, email)
+    if problem:
+        flash(problem, "error")
+        return back
+
+    try:
+        player.display_name = name
+        # The admin's own row can be keyed on the admin email (app/auth.py);
+        # renaming that username would make the next admin login a new row
+        if player.username != current_app.config["ADMIN_EMAIL"]:
+            player.username = name.lower()
+        player.email = email
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception("Editing player %s failed", player.id)
+        flash(f"Could not save {name}.", "error")
+        return back
+    flash(f"Saved {name}.", "success")
+    return back
+
+
 @main_bp.route("/admin/players/<int:user_id>/email", methods=["POST"])
 @login_required
 def admin_player_email(user_id):
@@ -1604,20 +1788,13 @@ def admin_player_email(user_id):
     player = db.get_or_404(User, user_id)
     season_id = request.form.get("season_id", type=int)
     back = redirect(url_for("main.admin_players", season_id=season_id))
-    name = player.display_name or player.username
+    name = _player_label(player)
 
     email = normalize_email(request.form.get("email"))
-    if email and not _is_plausible_email(email):
-        flash(f'"{email}" does not look like an email address.', "error")
+    problem = _email_problem(player, email)
+    if problem:
+        flash(problem, "error")
         return back
-    if email:
-        owner = User.query.filter(User.email == email, User.id != player.id).first()
-        if owner:
-            flash(
-                f"{email} is already linked to {owner.display_name or owner.username}.",
-                "error",
-            )
-            return back
 
     try:
         player.email = email
@@ -1648,11 +1825,105 @@ def admin_player_team_name(user_id, season_id):
     player = db.get_or_404(User, user_id)
     season = db.get_or_404(Season, season_id)
     if _save_team_name(player, season, request.form.get("team_name")):
-        flash(
-            f"Team name saved for {player.display_name or player.username}.",
-            "success",
-        )
+        flash(f"Team name saved for {_player_label(player)}.", "success")
+    if request.form.get("back") == "player":
+        return redirect(url_for("main.admin_player_detail", user_id=player.id))
     return redirect(url_for("main.admin_players", season_id=season.id))
+
+
+def _shared_seasons(source, target):
+    """Season names both players have picks, Sole Survivor picks or a team name in."""
+
+    def season_ids(user):
+        ids = set()
+        for model in (Pick, SoleSurvivorPick, TeamName):
+            ids.update(
+                sid
+                for (sid,) in db.session.query(model.season_id)
+                .filter(model.user_id == user.id)
+                .distinct()
+            )
+        return ids
+
+    shared = season_ids(source) & season_ids(target)
+    if not shared:
+        return []
+    return [
+        s.name or f"Season {s.number}"
+        for s in Season.query.filter(Season.id.in_(shared)).order_by(Season.number)
+    ]
+
+
+@main_bp.route("/admin/player/<int:user_id>/merge", methods=["POST"])
+@login_required
+def admin_player_merge(user_id):
+    """Move everything a player has onto another player, then delete them.
+
+    For duplicates: the two rows must not share a season, so no team is
+    combined with another, and at most one of them may have a login email.
+    """
+    denied = _require_admin()
+    if denied:
+        return denied
+
+    source = db.get_or_404(User, user_id)
+    back = redirect(url_for("main.admin_player_detail", user_id=source.id))
+    target = db.session.get(User, request.form.get("into", type=int) or 0)
+    if target is None:
+        flash("Choose the player to merge into.", "error")
+        return back
+    if target.id == source.id:
+        flash("A player cannot be merged into themselves.", "error")
+        return back
+    if source.id == current_user.id:
+        flash(
+            "You are logged in as this player. Merge the other player into "
+            "this one instead.",
+            "error",
+        )
+        return back
+    shared = _shared_seasons(source, target)
+    if shared:
+        flash(
+            f"{_player_label(source)} and {_player_label(target)} both play "
+            f"{', '.join(shared)}. Move or delete those picks first.",
+            "error",
+        )
+        return back
+    if source.email and target.email:
+        flash(
+            "Both players have a login email. Unlink the one you do not want first.",
+            "error",
+        )
+        return back
+
+    source_name, target_name = _player_label(source), _player_label(target)
+    try:
+        moved = {
+            model: model.query.filter_by(user_id=source.id).update(
+                {"user_id": target.id}, synchronize_session=False
+            )
+            for model in (Pick, SoleSurvivorPick, TeamName)
+        }
+        email = source.email
+        db.session.delete(source)
+        db.session.flush()  # free the email before the target takes it
+        if email:
+            target.email = email
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception("Merging player %s into %s failed", user_id, target.id)
+        flash(f"Could not merge {source_name} into {target_name}.", "error")
+        return back
+
+    flash(
+        f"Merged {source_name} into {target_name}: {moved[Pick]} picks, "
+        f"{moved[SoleSurvivorPick]} Sole Survivor picks and {moved[TeamName]} "
+        "team names moved.",
+        "success",
+    )
+    return redirect(url_for("main.admin_player_detail", user_id=target.id))
 
 
 @main_bp.route("/admin/players/<int:user_id>/delete", methods=["POST"])
@@ -1663,17 +1934,26 @@ def admin_delete_player(user_id):
         return denied
 
     player = db.session.get(User, user_id)
+    admin_email = current_app.config["ADMIN_EMAIL"]
     if not player:
         flash("Player not found.", "error")
-    elif player.is_admin:
-        flash("Cannot delete admin user.", "error")
+    elif player.id == current_user.id:
+        flash("You cannot delete the player you are logged in as.", "error")
+    elif admin_email and player.email == admin_email:
+        flash(f"This player holds the admin login ({admin_email}).", "error")
     else:
-        Pick.query.filter_by(user_id=player.id).delete()
-        SoleSurvivorPick.query.filter_by(user_id=player.id).delete()
-        TeamName.query.filter_by(user_id=player.id).delete()
-        db.session.delete(player)
-        db.session.commit()
-        flash(f'Player "{player.display_name or player.username}" deleted.', "success")
+        name = _player_label(player)
+        try:
+            Pick.query.filter_by(user_id=player.id).delete()
+            SoleSurvivorPick.query.filter_by(user_id=player.id).delete()
+            TeamName.query.filter_by(user_id=player.id).delete()
+            db.session.delete(player)
+            db.session.commit()
+            flash(f'Player "{name}" deleted.', "success")
+        except SQLAlchemyError:
+            db.session.rollback()
+            logger.exception("Deleting player %s failed", user_id)
+            flash(f'Could not delete "{name}".', "error")
     return redirect(url_for("main.admin_players"))
 
 

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Admin - {{ player.display_name or player.username }}{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('main.admin_players') }}">&larr; All Players</a></p>
+<h1>{{ player.display_name or player.username }}</h1>
+<p style="font-size:0.9rem;color:var(--text-dim);">
+    Username <strong>{{ player.username }}</strong>
+    {% if is_admin_login %}&middot; logs in as the league admin{% elif player.email %}&middot; logs in as {{ player.email }}{% else %}&middot; cannot log in yet{% endif %}
+    {% if is_you %}&middot; this is you{% endif %}
+</p>
+
+<section>
+    <h2>Details</h2>
+    <form method="POST" action="{{ url_for('main.admin_player_edit', user_id=player.id) }}" class="admin-inline-form" style="max-width: 40rem;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="player-name" style="margin: 0; white-space: nowrap;">Name</label>
+        <input type="text" id="player-name" name="name" value="{{ player.display_name or player.username }}" required maxlength="80">
+        <label for="player-email" style="margin: 0; white-space: nowrap;">Login email</label>
+        <input type="email" id="player-email" name="email" value="{{ player.email or '' }}" placeholder="not linked"{% if is_admin_login %} readonly{% endif %}>
+        <button type="submit" class="outline">Save</button>
+    </form>
+    <p><small>The name is how the player appears everywhere and how pick files find them, so no two players can share one. The login email must also be on the Cloudflare Access allowlist.{% if is_admin_login %} The admin login email stays on this player; merge a duplicate into it instead of moving it.{% endif %}</small></p>
+</section>
+
+<section>
+    <h2>Seasons</h2>
+    {% if rows %}
+    <table>
+        <thead>
+            <tr><th>Season</th><th>Draft</th><th>Wildcard</th><th>Replacement</th><th>Sole Survivor</th><th>Team Name</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td><a href="{{ url_for('main.admin_season_detail', season_id=row.season.id) }}">{{ row.season.name or 'Season ' ~ row.season.number }}</a>{% if row.season.is_active %} <small>(active)</small>{% endif %}</td>
+                <td data-draft="{{ row.draft }}">{{ row.draft }}</td>
+                <td>{{ row.wildcard }}</td>
+                <td>{{ row.replacement }}</td>
+                <td data-sole-survivor="{{ row.sole_survivor }}">{{ row.sole_survivor }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('main.admin_player_team_name', user_id=player.id, season_id=row.season.id) }}" class="admin-inline-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="back" value="player">
+                        <input type="text" name="team_name" value="{{ row.team_name }}" maxlength="{{ team_name_max_length }}"
+                               placeholder="none" aria-label="Team name for {{ row.season.name or 'Season ' ~ row.season.number }}">
+                        <button type="submit" class="outline">Save</button>
+                    </form>
+                </td>
+                <td><a href="{{ url_for('main.admin_picks', season_id=row.season.id) }}">Picks</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No picks in any season.</p>
+    {% endif %}
+</section>
+
+{% if not is_you %}
+<section>
+    <h2>Merge Into Another Player</h2>
+    <p><small>For duplicates: moves this player's picks, Sole Survivor picks, team names and login email to the player you choose, then deletes this one. Refused if both play the same season or both have a login email.</small></p>
+    <form method="POST" action="{{ url_for('main.admin_player_merge', user_id=player.id) }}" class="admin-inline-form" style="max-width: 30rem;"
+          onsubmit="return confirm('Merge {{ (player.display_name or player.username)|e }} into the selected player and delete {{ (player.display_name or player.username)|e }}?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="merge-into" style="margin: 0; white-space: nowrap;">Merge into</label>
+        <select id="merge-into" name="into" required>
+            <option value="" selected disabled>Choose a player</option>
+            {% for other in others %}
+            <option value="{{ other.id }}">{{ other.display_name or other.username }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="outline secondary">Merge</button>
+    </form>
+</section>
+
+{% if not is_admin_login %}
+<section>
+    <h2>Delete Player</h2>
+    <form method="POST" action="{{ url_for('main.admin_delete_player', user_id=player.id) }}"
+          onsubmit="return confirm('Delete this player and all their picks?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="outline secondary">Delete {{ player.display_name or player.username }} and all their picks</button>
+    </form>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

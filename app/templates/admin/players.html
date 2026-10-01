@@ -3,7 +3,9 @@
 {% block content %}
 <h1>Manage Fantasy Players</h1>
 {% if season %}
-<p><a href="{{ url_for('main.admin_season_detail', season_id=season.id) }}">&larr; Back to {{ season.name or 'Season ' ~ season.number }}</a></p>
+<p><a href="{{ url_for('main.admin_season_detail', season_id=season.id) }}">&larr; Back to {{ season.name or 'Season ' ~ season.number }}</a> &middot; <a href="{{ url_for('main.admin_players') }}">All players</a></p>
+{% else %}
+<p><a href="{{ url_for('main.admin_seasons') }}">&larr; All Seasons</a></p>
 {% endif %}
 
 <section>
@@ -20,11 +22,11 @@
 {% if players %}
 <section>
     <h3>Current Players</h3>
-    <p><small>Link a player's Cloudflare Access email so they can log in as themselves and name their team. The email must also be on the Access allowlist.</small></p>
+    <p><small>Link a player's Cloudflare Access email so they can log in as themselves and name their team. The email must also be on the Access allowlist. Open a player to rename them, see all their seasons, or merge a duplicate.</small></p>
     <table>
         <thead>
             <tr>
-                <th>Name</th><th>Display Name</th><th>Role</th><th>Login Email</th>
+                <th>Name</th><th>Seasons</th><th>Role</th><th>Login Email</th>
                 {% if season %}<th>Team Name ({{ season.name or 'Season ' ~ season.number }})</th>{% endif %}
                 <th></th>
             </tr>
@@ -32,9 +34,9 @@
         <tbody>
             {% for player in players %}
             <tr>
-                <td>{{ player.username }}</td>
-                <td>{{ player.display_name or '—' }}</td>
-                <td>{{ 'Admin' if player.is_admin else 'Player' }}</td>
+                <td><a href="{{ url_for('main.admin_player_detail', user_id=player.id) }}">{{ player.display_name or player.username }}</a></td>
+                <td>{{ seasons_by_player.get(player.id, [])|join(', ') or 'none' }}</td>
+                <td>{{ 'Admin' if admin_email and player.email == admin_email or player.id == current_user.id else 'Player' }}</td>
                 <td>
                     <form method="POST" action="{{ url_for('main.admin_player_email', user_id=player.id) }}" class="admin-inline-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -55,7 +57,7 @@
                 </td>
                 {% endif %}
                 <td>
-                    {% if not player.is_admin %}
+                    {% if player.id != current_user.id and not (admin_email and player.email == admin_email) %}
                     <form method="POST" action="{{ url_for('main.admin_delete_player', user_id=player.id) }}"
                           style="margin:0" onsubmit="return confirm('Delete this player and all their picks?')">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
