@@ -1,31 +1,25 @@
 services:
-  survivor-fantasy-ts:
-    image: tailscale/tailscale:latest
-    hostname: survivor-fantasy
-    security_opt:
-      - apparmor=unconfined
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
     environment:
-      - TS_AUTHKEY=${TS_AUTHKEY}
-      - TS_STATE_DIR=/var/lib/tailscale
-      - TS_SERVE_CONFIG=/config/serve.json
-      - TS_USERSPACE=true
-    volumes:
-      - ${APPDATA_DIR:-.}/ts-config:/config
-      - ${APPDATA_DIR:-.}/ts-state:/var/lib/tailscale
-    dns:
-      - 9.9.9.9
-      - 149.112.112.112
+      # Remotely-managed tunnel token from the Cloudflare Zero Trust dashboard.
+      # The tunnel's public hostname route (e.g. www.benjis-survivor-fantasy.party
+      # -> http://survivor-fantasy:5050) and the Access policy are configured in
+      # the dashboard, not here.
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
     restart: unless-stopped
 
   survivor-fantasy:
     build: .
-    network_mode: service:survivor-fantasy-ts
     env_file:
       - .env
     volumes:
       - ${APPDATA_DIR:-.}/data:/app/data
     environment:
       - DATABASE_URL=sqlite:////app/data/survivor_fantasy.db
-    depends_on:
-      - survivor-fantasy-ts
+    # Reachable to the cloudflared sidecar over the compose network as
+    # http://survivor-fantasy:5050 (gunicorn binds 0.0.0.0:5050).
+    expose:
+      - "5050"
     restart: unless-stopped
