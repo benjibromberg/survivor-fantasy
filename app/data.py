@@ -11,7 +11,7 @@ from urllib.parse import quote
 import pandas as pd
 import requests
 
-from .models import Pick, Season, SoleSurvivorPick, Survivor, User, db
+from .models import Pick, Season, SoleSurvivorPick, Survivor, TeamName, User, db
 
 logger = logging.getLogger(__name__)
 
@@ -915,7 +915,8 @@ def export_season_picks(season, picks_dir=None):
     """Export all picks for a season to a JSON file.
 
     Produces a file compatible with seed.py's load_picks_from_json, extended
-    with sole_survivor_picks and custom scoring_config.
+    with sole_survivor_picks, custom scoring_config, the players' team names
+    for the season, and the season's Episode 2 start time.
 
     Writes to picks_dir, or default_picks_dir() when not given.
 
@@ -984,11 +985,23 @@ def export_season_picks(season, picks_dir=None):
     else:
         scoring = "custom"
 
+    # Team names, keyed by player the same way as the picks above
+    names_by_user = TeamName.for_season(season.id)
+    team_names = {}
+    if names_by_user:
+        for user in User.query.filter(User.id.in_(names_by_user)):
+            team_names[user.display_name or user.username] = names_by_user[user.id]
+
     result = {"scoring": scoring, "picks": picks_data}
     if scoring == "custom":
         result["scoring_config"] = config
     if ss_data:
         result["sole_survivor_picks"] = ss_data
+    if team_names:
+        result["team_names"] = team_names
+    if season.episode2_starts_at is not None:
+        # Stored as naive UTC; the Z makes that explicit in the file
+        result["episode2_starts_at"] = season.episode2_starts_at.isoformat() + "Z"
 
     filepath = os.path.join(picks_dir, f"season{season.number}.json")
     with open(filepath, "w") as f:
@@ -1004,11 +1017,45 @@ def export_season_picks(season, picks_dir=None):
     return filepath
 
 
+PLAYERS_FILE = "players.json"
+
+
+def export_player_emails(picks_dir=None):
+    """Write players.json: the login email linked to each player.
+
+    Emails belong to a player, not a season, so they get their own file
+    beside the season files, keyed by player name the same way. The file is
+    rewritten on every export, even when nobody is linked, so a stale copy
+    cannot bring back an email that was unlinked.
+
+    Returns the filepath written.
+    """
+    picks_dir = os.path.realpath(picks_dir or default_picks_dir())
+    os.makedirs(picks_dir, exist_ok=True)
+
+    linked = User.query.filter(User.email.isnot(None)).order_by(User.username)
+    players = {
+        user.display_name or user.username: {"email": user.email} for user in linked
+    }
+
+    filepath = os.path.join(picks_dir, PLAYERS_FILE)
+    with open(filepath, "w") as f:
+        json.dump({"players": players}, f, indent=2)
+
+    logger.info("Exported %d linked player email(s) to %s", len(players), filepath)
+    return filepath
+
+
 def export_all_picks(picks_dir=None):
-    """Export picks for all seasons that have picks."""
+    """Export picks for all seasons that have picks, plus linked player emails.
+
+    Returns the season files written. players.json is written too but is not
+    in the list, which callers report as a count of seasons.
+    """
     exported = []
     for season in Season.query.all():
         path = export_season_picks(season, picks_dir)
         if path:
             exported.append(path)
+    export_player_emails(picks_dir)
     return exported
