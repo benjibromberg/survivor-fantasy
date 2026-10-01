@@ -93,13 +93,25 @@ git clone https://github.com/benjibromberg/survivor-fantasy.git
 cd survivor-fantasy
 # create .env (above)
 
-# Seed the database, then move it to the data volume
+# Put your league's pick files in the data volume (format: picks/README.md)
+mkdir -p data/picks
+cp /path/to/your/season*.json data/picks/
+
+# Seed the database straight into the data volume
 pip install -r requirements.txt
-python seed.py --picks-dir ./picks
-mkdir -p data && mv survivor_fantasy.db data/
+DATABASE_URL="sqlite:///$PWD/data/survivor_fantasy.db" python seed.py --picks-dir ./data/picks
 
 docker compose up -d
 ```
+
+Pick files are not in the repo, so on a first deployment they have to be placed
+by hand as above. `data/` must be writable by the container user; see
+**Data Persistence**.
+
+Seed into `data/` directly rather than seeding in the repo root and moving
+`survivor_fantasy.db` afterwards. SQLite runs in WAL mode here, so a freshly
+seeded database can sit almost entirely in `survivor_fantasy.db-wal`, and moving
+the `.db` file alone leaves the data behind.
 
 The app will be live at `https://www.benjis-survivor-fantasy.party` once the
 tunnel connects (a minute or two). The first visit prompts for an email; approved
