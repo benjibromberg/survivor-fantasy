@@ -430,6 +430,35 @@ def discover_pick_files(picks_dir):
     return files
 
 
+def load_pick_files(picks_dir, pick_files):
+    """Load each discovered pick file into its season.
+
+    ``pick_files`` maps season number to path, as returned by
+    ``discover_pick_files()``.  A file whose season was not built (left out of
+    --seasons, or missing from survivoR) is skipped with a warning: the tables
+    that held those picks are already gone, so a silent skip loses them.
+    """
+    picks_dir = os.path.realpath(picks_dir)
+    for snum, filepath in sorted(pick_files.items()):
+        filepath = os.path.realpath(filepath)
+        if not filepath.startswith(picks_dir):
+            print(
+                f"  Skipping {os.path.basename(filepath)}: path escapes picks directory"
+            )
+            continue
+        season = Season.query.filter_by(number=snum).first()
+        if not season:
+            print(
+                f"  WARNING: {os.path.basename(filepath)} skipped: season {snum} "
+                "was not built, so its picks were NOT loaded"
+            )
+            continue
+        survivor_map = {
+            s.name.lower(): s for s in Survivor.query.filter_by(season_id=season.id)
+        }
+        load_picks_from_json(filepath, season, survivor_map)
+
+
 def parse_seasons_arg(argv):
     """Return the season numbers given via --seasons, or None if it is absent.
 
@@ -537,21 +566,7 @@ def main():
         # Load picks from JSON files if --picks-dir provided
         if picks_dir:
             print(f"\nLoading pick assignments from {picks_dir}...")
-            for snum, filepath in sorted(pick_files.items()):
-                filepath = os.path.realpath(filepath)
-                if not filepath.startswith(picks_dir):
-                    print(
-                        f"  Skipping {os.path.basename(filepath)}: path escapes picks directory"
-                    )
-                    continue
-                season = Season.query.filter_by(number=snum).first()
-                if not season:
-                    continue
-                survivor_map = {
-                    s.name.lower(): s
-                    for s in Survivor.query.filter_by(season_id=season.id)
-                }
-                load_picks_from_json(filepath, season, survivor_map)
+            load_pick_files(picks_dir, pick_files)
 
         # Enrich all seasons with episode_stats, elimination_episode, etc.
         print("\nRunning refresh_season for per-episode data...")
