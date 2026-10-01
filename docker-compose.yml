@@ -1,6 +1,11 @@
 services:
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    # Pinned by tag+digest, the way the Dockerfile pins its base image. `:latest`
+    # does not mean "current", it means whatever was pulled the last time this
+    # container happened to be recreated. This digest is the one already
+    # running, so the pin changes nothing about what is deployed.
+    # Re-pin with: docker buildx imagetools inspect cloudflare/cloudflared:<tag>
+    image: cloudflare/cloudflared:2026.9.3@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
     command: tunnel --no-autoupdate run
     environment:
       # Remotely-managed tunnel token from the Cloudflare Zero Trust dashboard.
