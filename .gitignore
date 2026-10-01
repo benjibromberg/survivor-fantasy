@@ -23,8 +23,10 @@ venv/
 # Flask
 instance/
 
-# Claude Code
+# Claude Code (project notes, session worktrees, design-hook cache)
 CLAUDE.md
+.claude/worktrees/
+.impeccable/
 
 # Local notes
 TODO.md
