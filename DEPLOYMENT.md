@@ -93,13 +93,25 @@ git clone https://github.com/benjibromberg/survivor-fantasy.git
 cd survivor-fantasy
 # create .env (above)
 
-# Seed the database, then move it to the data volume
+# Put your league's pick files in the data volume (format: picks/README.md)
+mkdir -p data/picks
+cp /path/to/your/season*.json data/picks/
+
+# Seed the database straight into the data volume
 pip install -r requirements.txt
-python seed.py --picks-dir ./picks
-mkdir -p data && mv survivor_fantasy.db data/
+DATABASE_URL="sqlite:///$PWD/data/survivor_fantasy.db" python seed.py --picks-dir ./data/picks
 
 docker compose up -d
 ```
+
+Pick files are not in the repo, so on a first deployment they have to be placed
+by hand as above. `data/` must be writable by the container user; see
+**Data Persistence**.
+
+Seed into `data/` directly rather than seeding in the repo root and moving
+`survivor_fantasy.db` afterwards. SQLite runs in WAL mode here, so a freshly
+seeded database can sit almost entirely in `survivor_fantasy.db-wal`, and moving
+the `.db` file alone leaves the data behind.
 
 The app will be live at `https://www.benjis-survivor-fantasy.party` once the
 tunnel connects (a minute or two). The first visit prompts for an email; approved
@@ -137,8 +149,31 @@ Dockerfile sets `DEV_LOGIN=0` in the image.
 
 ## Data Persistence
 
-The `data/` volume (mounted at `/app/data`) holds `survivor_fantasy.db`.
+The `data/` volume (mounted at `/app/data`) holds everything the app writes:
+
+- `survivor_fantasy.db`: the database.
+- `survivoR.xlsx`: the downloaded survivoR dataset.
+- `picks/season{N}.json`: pick exports, one file per season that has picks
+  (picks, Sole Survivor picks, and the season's scoring config).
+
 Container local disk is otherwise ephemeral; keep durable data in this volume.
+
+The app runs as the non-root `appuser` (UID 1000 in the current image), and the
+rest of `/app` is owned by root, so `data/` is the only place it can write. If
+the host directory belongs to another user, hand it over:
+
+```bash
+sudo chown -R 1000:1000 data
+docker compose restart survivor-fantasy
+```
+
+The pick exports are the backup of everything entered through the admin panel.
+They are rewritten around each daily refresh, around each admin **Refresh**, by
+the admin **Export Picks** / **Export All Picks** buttons, and by `seed.py`
+before it drops tables. A failed export is logged as a warning (scheduler and
+refresh) or shown as an error (export buttons), so if `data/picks/` is missing
+or stale, check `docker compose logs survivor-fantasy` for
+`Pick export ... failed`.
 
 ## Updating
 
@@ -153,15 +188,48 @@ docker compose up -d
 ### Re-seeding (if the schema changed)
 
 ```bash
-docker compose cp picks/season45.json survivor-fantasy:/app/picks/
-docker compose cp picks/season46.json survivor-fantasy:/app/picks/
-docker compose cp picks/season47_snakedraft.json survivor-fantasy:/app/picks/
-docker compose cp picks/season49_snakedraft.json survivor-fantasy:/app/picks/
-docker compose exec survivor-fantasy python seed.py --picks-dir ./picks
+docker compose exec survivor-fantasy python seed.py --picks-dir /app/data/picks
 docker compose restart survivor-fantasy
 ```
 
-`seed.py` drops all tables — export picks first if you have unsaved changes.
+`seed.py` drops every table and rebuilds from survivoR plus the pick files. In
+order, it:
+
+1. Exports the picks of every season that has any to
+   `/app/data/picks/season{N}.json` (`data/picks/` on the host).
+2. Stops with an error and a non-zero exit, before dropping anything, if that
+   export fails while the database holds picks, or if `--picks-dir` is not a
+   directory.
+3. Drops and recreates the tables, then builds the default seasons plus every
+   season that has a pick file in `--picks-dir`, and loads one pick file per
+   season (discovery rules: `picks/README.md`). When a season has both
+   `season{N}.json` and a suffixed file such as `season{N}_draft.json`, the
+   freshly exported `season{N}.json` wins.
+
+So pointing `--picks-dir` at the export directory restores the picks that were
+in the database just before the drop. No files need copying into the container.
+
+Things to know before running it:
+
+- Without `--picks-dir` the picks are exported but not loaded back. Run the
+  command again with `--picks-dir` to restore them.
+- Read the output for `WARNING` lines. A pick file whose season was not built
+  is skipped, not loaded. That happens when `--seasons` leaves the season out
+  (it builds exactly the seasons listed) or when the survivoR dataset has no
+  data for it yet. The skipped file stays in `data/picks/`.
+- The export never deletes files. A leftover file for a season whose picks you
+  have since removed (or a hand-placed file for such a season) is loaded again.
+  Delete any `data/picks/season*.json` you do not want restored first.
+- Only seasons with picks are exported, and only their picks, Sole Survivor
+  picks, and scoring config come back. A custom scoring config on a season with
+  no picks is lost, players with no picks are not recreated, and only the
+  highest-numbered season built is marked active (pass `--active=N` to choose
+  another), so check the admin panel afterwards.
+- To load a draft from a file for a season that has no picks in the database
+  yet, put the file in `data/picks/` on the host and run the same command. For
+  a season that already has picks, the export in step 1 overwrites
+  `season{N}.json` and outranks a suffixed file, so edit those picks in the
+  admin panel instead.
 
 ## Auto-Refresh
 

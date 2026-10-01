@@ -766,7 +766,13 @@ def generate_season_images(season):
     return matched
 
 
-PICKS_DIR = "picks"
+# Pick exports go alongside the database, for the same reason as survivoR.xlsx:
+# in Docker the working directory (/app) is a root-owned image layer, and the
+# data volume is the only place appuser can write.
+# In Docker: /app/data/picks.  Locally: ./picks (unchanged behavior).
+# Resolved per call rather than at import so it always follows DATABASE_URL.
+def default_picks_dir():
+    return os.path.join(_data_dir(), "picks")
 
 
 def export_season_picks(season, picks_dir=None):
@@ -775,9 +781,12 @@ def export_season_picks(season, picks_dir=None):
     Produces a file compatible with seed.py's load_picks_from_json, extended
     with sole_survivor_picks and custom scoring_config.
 
-    Returns the filepath written, or None if no picks exist.
+    Writes to picks_dir, or default_picks_dir() when not given.
+
+    Returns the filepath written, or None if the season has no picks and no
+    Sole Survivor picks.
     """
-    picks_dir = picks_dir or PICKS_DIR
+    picks_dir = os.path.realpath(picks_dir or default_picks_dir())
     os.makedirs(picks_dir, exist_ok=True)
 
     picks = (
@@ -785,7 +794,12 @@ def export_season_picks(season, picks_dir=None):
         .order_by(Pick.user_id, Pick.pick_order)
         .all()
     )
-    if not picks:
+    ss_picks = (
+        SoleSurvivorPick.query.filter_by(season_id=season.id)
+        .order_by(SoleSurvivorPick.user_id, SoleSurvivorPick.episode)
+        .all()
+    )
+    if not picks and not ss_picks:
         return None
 
     surv_by_id = {s.id: s for s in Survivor.query.filter_by(season_id=season.id)}
@@ -809,11 +823,6 @@ def export_season_picks(season, picks_dir=None):
         picks_data[name].append(entry)
 
     # Build sole survivor picks
-    ss_picks = (
-        SoleSurvivorPick.query.filter_by(season_id=season.id)
-        .order_by(SoleSurvivorPick.user_id, SoleSurvivorPick.episode)
-        .all()
-    )
     ss_data = {}
     for sp in ss_picks:
         user = db.session.get(User, sp.user_id)
