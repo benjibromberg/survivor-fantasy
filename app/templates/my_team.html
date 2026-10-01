@@ -58,6 +58,49 @@
     {% endif %}
 </article>
 
+{% if wildcard %}
+<article>
+    <h3>Wildcard</h3>
+    {% if wildcard.pick %}
+    <p class="my-wildcard-current">
+        Your wildcard: <strong>{{ wildcard.pick.survivor.name }}</strong>
+    </p>
+    {% endif %}
+
+    {% if not wildcard.blocked %}
+    <form method="POST" action="{{ url_for('main.my_team_wildcard', season_id=season.id) }}" class="my-team-name-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <select name="survivor_id" aria-label="Wildcard castaway">
+            <option value="">{{ 'No wildcard' if wildcard.pick else 'Choose a castaway' }}</option>
+            {% for s in wildcard.options %}
+            <option value="{{ s.id }}"{% if wildcard.pick and wildcard.pick.survivor_id == s.id %} selected{% endif %}>{{ s.name }}{% if s.tribe %} ({{ s.tribe }}){% endif %}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Save</button>
+    </form>
+    <small>
+        {% if wildcard.pick %}
+        Change it as often as you like until it locks {{ wildcard.lock_label }}, 15 minutes before Episode 2.
+        {% else %}
+        Any castaway still in the game who is not already on your team. Locks {{ wildcard.lock_label }}, 15 minutes before Episode 2.
+        {% endif %}
+    </small>
+    {% else %}
+    <p>{{ wildcard.blocked }}</p>
+    {% endif %}
+
+    <p class="my-wildcard-status">
+        <small>
+        {% if wildcard.hidden %}
+        {{ wildcard.picked }} of {{ wildcard.total }} players have picked. Wildcards stay hidden, and score no points, until everyone has.
+        {% else %}
+        Everyone has picked, so wildcards are now on the leaderboard.
+        {% endif %}
+        </small>
+    </p>
+</article>
+{% endif %}
+
 <h2>Picks</h2>
 {% if entry and entry.picks %}
 {% for warning in entry.warnings %}
