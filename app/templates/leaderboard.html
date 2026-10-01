@@ -83,7 +83,14 @@
 <p class="lb-hint">Win odds will show up around the merge, once this season's jury size is known.</p>
 {% endif %}
 
-<div class="lb-standings">
+<div class="lb-standings{{ ' is-finished' if is_finished else '' }}{{ ' no-win' if not win_pcts else '' }}">
+<div class="lb-standings-head" aria-hidden="true">
+    <span class="lb-head-rank">Rank</span>
+    <span class="lb-head-team">Team</span>
+    {% if not is_finished %}<span class="lb-head-torch">Picks in</span>{% endif %}
+    {% if win_pcts %}<span class="lb-head-win">Win</span>{% endif %}
+    <span class="lb-head-pts">Pts</span>
+</div>
 {% for entry in leaderboard %}
 {% set roster = entry.picks|rejectattr('pick_type_raw', 'eq', 'sole_survivor')|list %}
 {% set still_in = roster|rejectattr('eliminated')|list|length %}
@@ -96,6 +103,7 @@
         <span class="lb-id">
             <span class="lb-name-line">
                 <span class="lb-name">{{ entry.user.display_name or entry.user.username }}</span>
+                {% if mine %}<span class="lb-you">You</span>{% endif %}
                 {% if past_winner_badges.get(entry.user.id) %}
                 <span class="lb-badges">
                     {% for snum in past_winner_badges[entry.user.id] %}
@@ -141,6 +149,7 @@
     {% set special_picks = entry.picks|rejectattr('pick_type_raw', 'eq', 'draft')|list %}
 
     {% if draft_picks %}
+    <p class="lb-section-label">Draft picks</p>
     <div class="lb-picks">
         {% for pick in draft_picks %}
         {{ pick_card(pick, "draft", finale_data and finale_data.sole_survivor and pick.survivor == finale_data.sole_survivor.name, breakdown_labels) }}
@@ -149,6 +158,7 @@
     {% endif %}
 
     {% if special_picks %}
+    <p class="lb-section-label">Extra picks</p>
     <div class="lb-special-picks">
         {% for pick in special_picks %}
         {{ pick_card(pick, "special", finale_data and finale_data.sole_survivor and pick.survivor == finale_data.sole_survivor.name, breakdown_labels) }}

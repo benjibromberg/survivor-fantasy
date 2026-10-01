@@ -96,6 +96,15 @@ TEAM_START = re.compile(
     r'<details class="leaderboard-entry lb-team[^"]*"\s*data-team="(\d+)"'
 )
 
+STANDINGS_START = re.compile(r'<div class="lb-standings[^"]*">')
+
+
+def _standings_start(html):
+    """Index of the standings container, tolerant of extra classes on it."""
+    m = STANDINGS_START.search(html)
+    assert m, "no standings container in the page"
+    return m.start()
+
 
 def _team(html, user_id):
     """One team's markup: from its <details> to the next team's, or the end of the standings."""
@@ -105,10 +114,8 @@ def _team(html, user_id):
             end = (
                 starts[i + 1].start()
                 if i + 1 < len(starts)
-                else html.index('<div class="lb-standings">')
-                + html[html.index('<div class="lb-standings">') :].index(
-                    "\n</div>\n<script>"
-                )
+                else _standings_start(html)
+                + html[_standings_start(html) :].index("\n</div>\n<script>")
             )
             return html[m.start() : end]
     raise AssertionError(f"no team row for user {user_id}")
@@ -152,13 +159,43 @@ class TestTeamRows:
         html = _page(league)
 
         assert not any(_mine_attr(m.group(0) + " ") for m in TEAM_START.finditer(html))
-        assert not _mine_attr(
-            html[
-                html.index('<div class="lb-standings">') : html.index(
-                    "<script>", html.index('<div class="lb-standings">')
-                )
-            ]
+        start = _standings_start(html)
+        assert not _mine_attr(html[start : html.index("<script>", start)])
+
+    def test_the_win_column_goes_when_there_is_no_win_percentage(
+        self, league, monkeypatch
+    ):
+        """Timeline views skip win % as too expensive, so its column goes too.
+
+        The season is still in progress, so `is_finished` does not cover this
+        case and the column would otherwise be reserved but empty. The
+        probabilities are stubbed so both branches are exercised whatever the
+        predictor makes of this fixture.
+        """
+        pcts = {league.pat.id: 60.0, league.sam.id: 40.0}
+        monkeypatch.setattr(
+            "app.routes.calculate_win_probabilities",
+            lambda season: (
+                {uid: {"win_pct": v} for uid, v in pcts.items()},
+                {uid: {"win_pct": v} for uid, v in pcts.items()},
+                1,
+                True,
+                {},
+            ),
         )
+
+        live = _page(league)
+        assert "no-win" not in STANDINGS_START.search(live).group(0)
+        assert 'class="lb-head-win"' in live
+
+        # as_of short-circuits the predictor entirely, so the stub is not used.
+        resp = league.c.get(f"/leaderboard/{league.season.id}?as_of=1")
+        assert resp.status_code == 200
+        timeline = resp.get_data(as_text=True)
+
+        assert "no-win" in STANDINGS_START.search(timeline).group(0)
+        assert "is-finished" not in STANDINGS_START.search(timeline).group(0)
+        assert 'class="lb-head-win"' not in timeline
 
     def test_detail_switches_are_gone(self, league):
         html = _page(league)
