@@ -103,9 +103,20 @@
     </form>
 </section>
 
-<!-- Survivors (read-only) -->
+<!-- Survivors (read-only, apart from adding a cast by hand) -->
 <section>
     <h2>Survivors ({{ survivors|length }})</h2>
+    <p><small>survivoR publishes a season's cast when it premieres, so before then add the castaways here: a name is all that is needed, and a headshot is optional. Tribes, results and stats fill in from survivoR on the first Refresh after the premiere. A hand-entered castaway can be removed until someone picks them.</small></p>
+    <form method="POST" action="{{ url_for('main.admin_add_survivor', season_id=season.id) }}"
+          enctype="multipart/form-data" class="admin-inline-form" style="flex-wrap:wrap;margin-bottom:1rem;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="add-survivor-name" style="margin:0;white-space:nowrap;">Castaway name</label>
+        <input type="text" id="add-survivor-name" name="name" maxlength="100" required
+               autocomplete="off" placeholder="e.g. Dee Dee">
+        <label for="add-survivor-headshot" style="margin:0;white-space:nowrap;">Headshot (optional)</label>
+        <input type="file" id="add-survivor-headshot" name="headshot" accept="image/*">
+        <button type="submit" class="outline">Add Castaway</button>
+    </form>
     {% if survivors %}
     <div style="overflow-x: auto;">
     <table style="font-size:0.85rem;">
@@ -120,12 +131,13 @@
                 <th>Idols</th>
                 <th>Conf</th>
                 <th>Fire</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
             {% for s in survivors %}
             <tr{% if s.voted_out_order > 0 %} class="eliminated"{% endif %}>
-                <td>{{ s.name }}</td>
+                <td>{{ s.name }}{% if s.is_hand_entered %}<br><small style="color:var(--text-dim);">hand-entered</small>{% endif %}</td>
                 <td>{% if s.tribe_color and s.voted_out_order == 0 %}<span style="color:{{ s.tribe_color|contrast }};">{{ s.tribe or '-' }}</span>{% else %}{{ s.tribe or '-' }}{% endif %}</td>
                 <td>{{ s.voted_out_order or '-' }}</td>
                 <td>{{ s.result or '-' }}</td>
@@ -134,13 +146,22 @@
                 <td>{{ s.idols_found or '' }}</td>
                 <td>{{ s.confessional_count or '' }}</td>
                 <td>{{ 'Yes' if s.won_fire else '' }}</td>
+                <td>
+                    {% if s.id in removable_ids %}
+                    <form method="POST" action="{{ url_for('main.admin_remove_survivor', season_id=season.id, survivor_id=s.id) }}"
+                          style="margin:0;" onsubmit="return confirm('Remove {{ s.name|e }} from this season?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="outline secondary" style="padding:0.1rem 0.5rem;font-size:0.8rem;margin:0;width:auto;">Remove</button>
+                    </form>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
     </div>
     {% else %}
-    <p>No survivors yet. Use the Refresh button above to fetch data from survivoR.</p>
+    <p>No castaways yet. Add them above to draft before the premiere, or use Refresh from survivoR once the season has aired.</p>
     {% endif %}
 </section>
 

@@ -885,6 +885,28 @@ def _store_headshot(season_number, raw):
     return f"{HEADSHOT_URL_PREFIX}/{season_number}/{filename}"
 
 
+def store_uploaded_headshot(season_number, stream):
+    """Store an admin-uploaded headshot; return its local URL path.
+
+    Same destination and sizing as a mirrored one, so a hand-entered castaway
+    and a survivoR one are served identically. Reads at most HEADSHOT_MAX_BYTES
+    so an oversized upload cannot fill the data volume, and raises ValueError
+    with something the admin can act on when the bytes are unusable.
+    """
+    raw = stream.read(HEADSHOT_MAX_BYTES + 1)
+    if not raw:
+        raise ValueError("That headshot file was empty.")
+    if len(raw) > HEADSHOT_MAX_BYTES:
+        raise ValueError(
+            f"Headshots must be under {HEADSHOT_MAX_BYTES // (1024 * 1024)} MB."
+        )
+    try:
+        return _store_headshot(season_number, raw)
+    except Exception as e:  # Pillow raises many types on bad data
+        logger.warning("Season %d headshot upload unusable: %s", season_number, e)
+        raise ValueError("That file could not be read as an image.") from e
+
+
 def generate_season_images(season, force=False):
     """Mirror a season's headshots from fantasysurvivorgame.com onto our disk.
 
