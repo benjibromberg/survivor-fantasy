@@ -213,6 +213,8 @@ Opening a card shows the sheet. A hero header tinted with the tribe colour (a le
 
 **Episodes table.** One row per episode, stopping at the elimination episode. Two things about `episode_stats` make the obvious reading wrong: its totals are **cumulative**, so an episode's own activity is the difference from the episode before it; and it **keeps repeating the final totals** for every episode after the castaway is voted out, so an untruncated table shows a boot still playing. Cells are heat-tinted on `--heat`, scaled per column to that castaway's own best episode so a quiet player's table still reads. The table sizes to its content rather than stretching, because early in a season most columns are empty.
 
+The episode title and air date ride on the episode number as a `title` attribute plus a `visually-hidden` span: available on hover and to a screen reader, and costing the table no width. **They do not get a column.** The table is numeric and narrow by design and already overflows a phone inside `.table-scroll`; a multi-word text column pushes the numbers, which is what people scan, out of reach.
+
 ### Season Timeline (`.season-timeline`)
 Horizontal scrollable row of episode dots. The connecting line is drawn per point (`.tl-point::before`) so it scrolls with the dots. Milestone dots (Premiere, Merge, Finale) are larger with labels. Active dot gets fire-bright color and is scrolled into view on load. On phones each point is at least 2.75rem wide and only milestone and active labels show.
 
@@ -238,4 +240,5 @@ Fixed-position overlay, bottom-left (full-width bottom sheet on phones, 0.95rem 
 | 2026-04-07 | Mobile responsive overhaul | Added 640px nav breakpoint, 577-768px tablet breakpoint, overflow-x fixes, table scroll wrappers, container padding |
 | 2026-10-01 | Castaway sheet | Tribe-tinted hero plus Summary / Journey / Episodes tabs, replacing the stacked detail block. Tabs are progressive: the strip is hidden until script reveals it. |
 | 2026-10-01 | Rosters as list rows | Replaced the 2-up pill grid. Denser, and it gives points a consistent right-aligned column. |
+| 2026-10-01 | Episode titles on hover, not in a column | The Episodes table is numeric and already scrolls on a phone; a text column costs the numbers more than the title gains |
 | 2026-10-01 | Responsive + readability pass (v2) | Consolidated all breakpoints at end of `style.css`; nav wraps instead of overflowing; header split via `.lb-sub`; 2-up pick grid; chips for toolbar toggles; scrollable timeline; collapsible `details.fold` sections with TOC integration for rules and analysis; `68ch` reading measure |
