@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+from urllib.parse import quote
 
 import pandas as pd
 import requests
@@ -662,23 +663,59 @@ NAME_TO_SITE = {
     "j. maya": "janani",
 }
 
+# Same, but scoped to one season: {season number: {survivoR name: site name}}.
+# Use this when the site name is specific to one castaway, so a same-named
+# castaway in another season is unaffected.
+SEASON_NAME_TO_SITE = {
+    51: {"danny": "kilby"},  # filed under surname
+}
+
+HEADSHOT_URL = (
+    "https://www.fantasysurvivorgame.com/images/{season}/biopics/{site_name}BIO.jpg"
+)
+
+
+def headshot_url_candidates(season_number, name):
+    """Return the headshot URLs to try for a castaway, most likely first.
+
+    Pure function: no network, no database. Order:
+      1. season-specific override (SEASON_NAME_TO_SITE)
+      2. global override (NAME_TO_SITE), else the first name
+      3. the full name, for multi-word names (e.g. "Thien An")
+      4. the name from step 2 wrapped in double quotes (names like Q)
+    Site names are URL-encoded and duplicates are dropped.
+    """
+    parts = name.lower().split()
+    if not parts:
+        return []
+    name_key = " ".join(parts)
+    site_name = NAME_TO_SITE.get(name_key, parts[0])
+
+    site_names = []
+    season_override = SEASON_NAME_TO_SITE.get(season_number, {}).get(name_key)
+    if season_override:
+        site_names.append(season_override)
+    site_names.append(site_name)
+    if len(parts) > 1:
+        site_names.append(name_key)
+    site_names.append(f'"{site_name}"')
+
+    return [
+        HEADSHOT_URL.format(season=season_number, site_name=quote(s, safe=""))
+        for s in dict.fromkeys(site_names)
+    ]
+
 
 def generate_season_images(season):
     """Generate biopic image URLs for a season from fantasysurvivorgame.com.
 
-    Pattern: /images/{season}/biopics/{firstname}BIO.jpg
+    Keeps the first URL from headshot_url_candidates() that answers 200.
     Returns number of images found.
     """
+    survivors = Survivor.query.filter_by(season_id=season.id).all()
     matched = 0
-    for surv in Survivor.query.filter_by(season_id=season.id).all():
-        name_key = surv.name.lower()
-        site_name = NAME_TO_SITE.get(name_key, surv.name.split()[0].lower())
-
-        candidates = [
-            f"https://www.fantasysurvivorgame.com/images/{season.number}/biopics/{site_name}BIO.jpg",
-            f"https://www.fantasysurvivorgame.com/images/{season.number}/biopics/%22{site_name}%22BIO.jpg",
-        ]
-        for url in candidates:
+    for surv in survivors:
+        for url in headshot_url_candidates(season.number, surv.name):
             try:
                 resp = requests.head(url, timeout=5)
                 if resp.status_code == 200:
@@ -689,8 +726,7 @@ def generate_season_images(season):
                 pass
 
     db.session.commit()
-    total = Survivor.query.filter_by(season_id=season.id).count()
-    logger.info("Season %d images: %d/%d", season.number, matched, total)
+    logger.info("Season %d images: %d/%d", season.number, matched, len(survivors))
     return matched
 
 
