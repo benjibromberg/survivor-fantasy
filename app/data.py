@@ -57,6 +57,45 @@ def us_season_filter(df, season_number):
     return df[(df["version"] == "US") & (df["season"] == season_number)]
 
 
+TRIBE_COLUMNS = ["episode", "castaway_id", "tribe", "tribe_status"]
+
+
+def season_tribe_rows(tribe_mapping, boot_mapping, season_number):
+    """Each castaway's tribe per episode for one US season.
+
+    Tribe Mapping is the source. survivoR can fill Boot Mapping first (it did
+    for Season 51), and the two agree wherever both are filled, so Boot
+    Mapping stands in when Tribe Mapping has no rows for the season. Boot
+    Mapping has a row per boot, so the last row of an episode is kept, and
+    its "No Tribe" placeholder (a castaway on Exile Island) becomes no tribe.
+    """
+    rows = us_season_filter(tribe_mapping, season_number)
+    if not rows.empty:
+        return rows
+    rows = us_season_filter(boot_mapping, season_number)
+    if rows.empty:
+        return rows.reindex(columns=TRIBE_COLUMNS)
+    rows = (
+        rows.sort_values(["episode", "order"])
+        .drop_duplicates(["episode", "castaway_id"], keep="last")
+        .reindex(columns=TRIBE_COLUMNS)
+    )
+    rows["tribe"] = rows["tribe"].where(rows["tribe"] != "No Tribe")
+    return rows.reset_index(drop=True)
+
+
+def first_tribe(tribes_by_episode):
+    """The tribe a castaway started in: the earliest episode that has one.
+
+    `tribes_by_episode` is {episode: (tribe, colour, tribe_status)}.
+    """
+    for episode in sorted(tribes_by_episode):
+        tribe = tribes_by_episode[episode][0]
+        if tribe:
+            return tribe
+    return None
+
+
 def get_idol_ids(advantage_details, season_number=None):
     """Get the set of advantage_ids that are Hidden Immunity Idols.
 
@@ -202,6 +241,7 @@ def refresh_season(season):
     advantage_movement = pd.read_excel(SURVIVOR_DATA_FILE, "Advantage Movement")
     advantage_details = pd.read_excel(SURVIVOR_DATA_FILE, "Advantage Details")
     tribe_mapping = pd.read_excel(SURVIVOR_DATA_FILE, "Tribe Mapping")
+    boot_mapping = pd.read_excel(SURVIVOR_DATA_FILE, "Boot Mapping")
     tribe_colours = pd.read_excel(SURVIVOR_DATA_FILE, "Tribe Colours")
     castaway_scores = pd.read_excel(SURVIVOR_DATA_FILE, "Castaway Scores")
     jury_votes = pd.read_excel(SURVIVOR_DATA_FILE, "Jury Votes")
@@ -303,7 +343,7 @@ def refresh_season(season):
     )
 
     # Tribe mapping & colours for per-episode tribe tracking
-    s_tm = us(tribe_mapping)
+    s_tm = season_tribe_rows(tribe_mapping, boot_mapping, season.number)
     s_tc = us(tribe_colours)
     tribe_color_map = (
         {row["tribe"]: row["tribe_colour"] for _, row in s_tc.iterrows()}
@@ -462,11 +502,11 @@ def refresh_season(season):
     if not s_tm.empty:
         for _, r in s_tm.iterrows():
             cid, ep = r["castaway_id"], int(r["episode"])
-            tribe_name = r["tribe"]
+            tribe_name = r["tribe"] if pd.notna(r["tribe"]) else ""
             tribe_status = r["tribe_status"] if pd.notna(r.get("tribe_status")) else ""
             tribe_by_ep.setdefault(cid, {})[ep] = (
                 tribe_name,
-                tribe_color_map.get(tribe_name, ""),
+                tribe_color_map.get(tribe_name, "") if tribe_name else "",
                 tribe_status,
             )
             if tribe_status == "Merged" and (
@@ -593,6 +633,17 @@ def refresh_season(season):
         # Use most common name for returning players
         if cid in nickname_map:
             surv.name = nickname_map[cid]
+
+        # The starting tribe is set when a castaway is created, but survivoR
+        # can publish a season's cast before its tribes, so fill it in later
+        if not surv.tribe:
+            surv.tribe = (
+                row["original_tribe"]
+                if pd.notna(row.get("original_tribe"))
+                else first_tribe(tribe_by_ep.get(cid, {}))
+            )
+        if surv.tribe and not surv.tribe_color:
+            surv.tribe_color = tribe_color_map.get(surv.tribe)
 
         # Core game data
         surv.voted_out_order = int(row["order"]) if pd.notna(row["order"]) else 0
