@@ -131,6 +131,7 @@ class Survivor(db.Model):
     advantages_played = db.Column(db.Integer, default=0)  # non-idol advantages only
     # Extended stats from survivoR
     tribal_councils_attended = db.Column(db.Integer, default=0)
+    votes_cast = db.Column(db.Integer, default=0)  # excludes tribals with no vote
     correct_votes = db.Column(db.Integer, default=0)
     votes_nullified = db.Column(db.Integer, default=0)
     confessional_time = db.Column(db.Float, default=0)  # seconds
