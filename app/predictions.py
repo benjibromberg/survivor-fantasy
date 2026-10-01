@@ -8,6 +8,7 @@ import time
 
 import pandas as pd
 
+from . import wildcards
 from .data import SURVIVOR_DATA_FILE, get_idol_ids
 from .models import Pick, SoleSurvivorPick, Survivor, User, calculate_ss_streak
 from .scoring import SCORING_STAT_KEYS, get_scoring_system
@@ -47,10 +48,12 @@ def _cache_key(season, scoring_config):
     survivors = Survivor.query.filter_by(season_id=season.id).all()
     # Ordered by each table's unique columns rather than row id: re-saving
     # the same picks creates new rows but should not change the key
-    picks = (
+    # Hidden wildcards are left out, so the key changes at the reveal
+    picks = wildcards.scored_picks(
         Pick.query.filter_by(season_id=season.id)
         .order_by(Pick.user_id, Pick.survivor_id)
-        .all()
+        .all(),
+        wildcards.are_hidden(season),
     )
     ss_picks = (
         SoleSurvivorPick.query.filter_by(season_id=season.id)
@@ -455,12 +458,14 @@ def calculate_win_probabilities(season):
     if not users_with_picks:
         return empty
 
-    # Pre-load picks
+    # Pre-load picks (wildcards score nothing while they are hidden)
+    wildcards_hidden = wildcards.are_hidden(season)
     user_picks = {}
     for user in users_with_picks:
-        user_picks[user.id] = Pick.query.filter_by(
-            user_id=user.id, season_id=season.id
-        ).all()
+        user_picks[user.id] = wildcards.scored_picks(
+            Pick.query.filter_by(user_id=user.id, season_id=season.id).all(),
+            wildcards_hidden,
+        )
 
     surv_by_id = {s.id: s for s in survivors}
 

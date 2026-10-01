@@ -5,6 +5,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
+from . import wildcards
 from .data import (
     download_survivor_data,
     export_all_picks,
@@ -149,6 +150,7 @@ def _build_leaderboard(season):
 
     users = User.query.join(Pick).filter(Pick.season_id == season.id).distinct().all()
     team_names = TeamName.for_season(season.id)
+    wildcards_hidden = wildcards.are_hidden(season)
     leaderboard_data = []
 
     # Build display results for same-day eliminations (e.g. "T-5th voted out")
@@ -191,10 +193,13 @@ def _build_leaderboard(season):
 
     for user in users:
         picks = Pick.query.filter_by(user_id=user.id, season_id=season.id).all()
+        # `picks` still feeds the reminders below; only scoring skips
+        # wildcards that are hidden until every player has picked
+        scored = wildcards.scored_picks(picks, wildcards_hidden)
         total = 0
         pick_details = []
 
-        for pick in picks:
+        for pick in scored:
             # Wildcards: skip if no eliminations yet (picked after ep 1)
             if pick.pick_type == "wildcard" and current_elim_count == 0:
                 continue
@@ -350,7 +355,7 @@ def _build_leaderboard(season):
                 and (merge_elim is None or current_elim_count < merge_elim)
             )
 
-        team_survivors = [p.survivor for p in picks if _pick_active(p)]
+        team_survivors = [p.survivor for p in scored if _pick_active(p)]
         team_stats = {}
         if team_survivors:
             total_conf = sum(s.confessional_count or 0 for s in team_survivors)
@@ -781,11 +786,13 @@ def leaderboard(season_id):
     if leaderboard_data and effective_as_of > 0:
         scoring = get_scoring_system(season.scoring_system, season.get_scoring_config())
         users = [e["user"] for e in leaderboard_data]
+        wildcards_hidden = wildcards.are_hidden(season)
         user_picks = {}
         for user in users:
-            user_picks[user.id] = Pick.query.filter_by(
-                user_id=user.id, season_id=season.id
-            ).all()
+            user_picks[user.id] = wildcards.scored_picks(
+                Pick.query.filter_by(user_id=user.id, season_id=season.id).all(),
+                wildcards_hidden,
+            )
 
         prog_merge = season.merge_threshold  # None if merge data unknown
         # Find merge episode for replacement scoring
@@ -1066,9 +1073,13 @@ def _compare_cache_key(season):
     import hashlib
 
     state = "|".join(f"{s.id}:{s.voted_out_order}" for s in season.survivors)
+    # Hidden wildcards are left out, so the key changes at the reveal
     picks = "|".join(
         f"{p.user_id}:{p.survivor_id}:{p.pick_type}"
-        for p in Pick.query.filter_by(season_id=season.id).order_by(Pick.id).all()
+        for p in wildcards.scored_picks(
+            Pick.query.filter_by(season_id=season.id).order_by(Pick.id).all(),
+            wildcards.are_hidden(season),
+        )
     )
     config = season.scoring_config or "{}"
     raw = f"{season.id}:{state}:{picks}:{config}"
@@ -1096,11 +1107,13 @@ def _build_compare_data(season):
     }
 
     users = User.query.join(Pick).filter(Pick.season_id == season.id).distinct().all()
+    wildcards_hidden = wildcards.are_hidden(season)
     user_picks = {}
     for user in users:
-        user_picks[user.id] = Pick.query.filter_by(
-            user_id=user.id, season_id=season.id
-        ).all()
+        user_picks[user.id] = wildcards.scored_picks(
+            Pick.query.filter_by(user_id=user.id, season_id=season.id).all(),
+            wildcards_hidden,
+        )
 
     # Find merge episode for accurate replacement scoring
     cmp_merge = season.merge_threshold  # None if merge data unknown
@@ -1319,6 +1332,7 @@ def my_team_season(season_id):
         team_count=len(leaderboard_data),
         team_name=TeamName.for_season(season.id).get(current_user.id),
         can_rename=season.is_active or current_user.is_admin,
+        wildcard=wildcards.player_view(season, current_user),
         my_seasons=my_seasons,
         team_name_max_length=TEAM_NAME_MAX_LENGTH,
     )
@@ -1332,6 +1346,22 @@ def my_team_name(season_id):
         flash("Team names can only be changed for the active season.", "error")
     elif _save_team_name(current_user, season, request.form.get("team_name")):
         flash("Team name saved!", "success")
+    return redirect(url_for("main.my_team_season", season_id=season.id))
+
+
+@main_bp.route("/my-team/<int:season_id>/wildcard", methods=["POST"])
+@login_required
+def my_team_wildcard(season_id):
+    """A player sets, changes, or removes their own wildcard."""
+    season = db.get_or_404(Season, season_id)
+    choice = request.form.get("survivor_id", "")
+    error = wildcards.set_pick(season, current_user, choice)
+    if error:
+        flash(error, "error")
+    elif choice.strip():
+        flash("Wildcard saved!", "success")
+    else:
+        flash("Wildcard removed.", "success")
     return redirect(url_for("main.my_team_season", season_id=season.id))
 
 
@@ -1737,7 +1767,47 @@ def admin_season_detail(season_id):
         current_config=current_config,
         default_config=DEFAULT_CONFIG,
         legacy_config=LEGACY_CONFIG,
+        wildcard=wildcards.admin_view(season),
     )
+
+
+@main_bp.route("/admin/season/<int:season_id>/wildcard-window", methods=["POST"])
+@login_required
+def admin_wildcard_window(season_id):
+    """Set the Episode 2 start time, which opens wildcard self-service.
+
+    A blank value switches self-service off for the season.
+    """
+    denied = _require_admin()
+    if denied:
+        return denied
+
+    season = db.get_or_404(Season, season_id)
+    back = redirect(url_for("main.admin_season_detail", season_id=season.id))
+    try:
+        starts_at = wildcards.parse_league_time(request.form.get("episode2_starts_at"))
+    except ValueError:
+        flash("Enter the Episode 2 start as a date and time.", "error")
+        return back
+
+    try:
+        season.episode2_starts_at = starts_at
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception("Saving the Episode 2 time failed (season %s)", season.id)
+        flash("Could not save the Episode 2 time.", "error")
+        return back
+
+    if starts_at is None:
+        flash("Wildcard self-service is off for this season.", "success")
+    else:
+        flash(
+            "Wildcard picks lock "
+            f"{wildcards.format_league_time(wildcards.lock_at(season))}.",
+            "success",
+        )
+    return back
 
 
 @main_bp.route("/admin/season/<int:season_id>/settings", methods=["POST"])
