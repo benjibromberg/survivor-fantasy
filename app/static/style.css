@@ -10,6 +10,10 @@
 }
 
 :root {
+    /* Smallest text size anywhere. Small UI text is sized in em and nests,
+       so it is written max(var(--fs-floor), <em>): the em keeps the design's
+       proportions where there is room, the floor stops it shrinking further. */
+    --fs-floor: 12px;
     --night-sky: #0d1b2a;
     --deep-ocean: #1b2d3e;
     --ocean-surface: #274060;
@@ -124,7 +128,7 @@ nav {
 }
 
 .logo-text {
-    font-family: 'Survivant', Georgia, serif;
+    font-family: var(--font-logo);
     font-size: 1.5em;
     font-weight: normal;
     text-transform: uppercase;
@@ -370,7 +374,7 @@ nav a:hover {
     font-family: var(--font-label);
     position: absolute;
     bottom: calc(100% + 4px);
-    font-size: 0.8em;
+    font-size: max(var(--fs-floor), 0.8em);
     font-weight: 400;
     color: var(--fire-glow);
     white-space: nowrap;
@@ -381,7 +385,7 @@ nav a:hover {
 .tl-label {
     position: absolute;
     top: calc(100% + 6px);
-    font-size: 0.65em;
+    font-size: max(var(--fs-floor), 0.65em);
     color: var(--text-dim);
     white-space: nowrap;
     overflow: hidden;
@@ -824,12 +828,12 @@ nav a:hover {
 }
 
 .lb-pick-meta {
-    font-size: 0.78em;
+    font-size: max(var(--fs-floor), 0.78em);
     color: var(--sand-warm);
 }
 
 .lb-pick-stats {
-    font-size: 0.7em;
+    font-size: max(var(--fs-floor), 0.7em);
     color: var(--text-light);
 }
 
@@ -865,7 +869,7 @@ nav a:hover {
 /* Bio detail — toggled by "Bio" switch */
 .lb-pick-bio-detail {
     display: none;
-    font-size: 0.68em;
+    font-size: max(var(--fs-floor), 0.68em);
     color: var(--text-dim);
     margin-top: 0.15rem;
     font-style: italic;
@@ -893,8 +897,8 @@ nav a:hover {
 }
 
 .lb-badge {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 0.6em;
+    font-family: var(--font-label);
+    font-size: max(var(--fs-floor), 0.6em);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -974,8 +978,8 @@ nav a:hover {
 .journey-dot-fire           { background: var(--fire-bright); }
 
 .journey-ep {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 0.65em;
+    font-family: var(--font-label);
+    font-size: max(var(--fs-floor), 0.65em);
     font-weight: 700;
     color: var(--fire-glow);
     min-width: 30px;
@@ -993,7 +997,7 @@ nav a:hover {
 }
 
 .lb-breakdown-item {
-    font-size: 0.68em;
+    font-size: max(var(--fs-floor), 0.68em);
     color: var(--text-dim);
     white-space: nowrap;
 }
@@ -1004,7 +1008,7 @@ nav a:hover {
 }
 
 .lb-pick-result {
-    font-size: 0.72em;
+    font-size: max(var(--fs-floor), 0.72em);
     color: var(--text-light);
     font-style: italic;
 }
@@ -1041,7 +1045,7 @@ nav a:hover {
 
 .lb-pick-badge {
     font-family: var(--font-label);
-    font-size: 0.8em;
+    font-size: max(var(--fs-floor), 0.8em);
     font-weight: 400;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -1348,6 +1352,7 @@ hgroup p {
 /* small text */
 small {
     color: var(--text-dim);
+    font-size: max(var(--fs-floor), 0.875em);
 }
 
 /* --- Scoring config table (admin) --- */
@@ -1384,7 +1389,7 @@ small {
 }
 
 .config-tag {
-    font-size: 0.7em;
+    font-size: max(var(--fs-floor), 0.7em);
     padding: 0.1rem 0.4rem;
     border-radius: 3px;
     background: var(--ocean-surface);
@@ -1564,8 +1569,8 @@ small {
 
 .logo-motto {
     display: none;
-    font-family: 'Survivant', Georgia, serif;
-    font-size: 0.55em;
+    font-family: var(--font-logo);
+    font-size: max(var(--fs-floor), 0.55em);
     letter-spacing: 0.15em;
     text-transform: uppercase;
     color: var(--text-dim) !important;
@@ -1606,7 +1611,7 @@ small {
 }
 
 .finale-label {
-    font-family: 'Survivant', Georgia, serif;
+    font-family: var(--font-logo);
     font-size: 1.1em;
     letter-spacing: 0.2em;
     text-transform: uppercase;
@@ -1667,7 +1672,7 @@ small {
 }
 
 .finale-stat-label {
-    font-size: 0.7em;
+    font-size: max(var(--fs-floor), 0.7em);
     color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -1809,7 +1814,7 @@ small {
 
 .lb-pick-ss-tag {
     font-family: var(--font-label);
-    font-size: 0.65em;
+    font-size: max(var(--fs-floor), 0.65em);
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--fire-bright);
@@ -2342,7 +2347,7 @@ section > table {
     }
 
     .tl-milestone {
-        font-size: 0.72em;
+        font-size: max(var(--fs-floor), 0.72em);
     }
 
     .season-timeline .tl-label {
@@ -2479,15 +2484,15 @@ section > table {
     }
 
     .lb-pick-meta {
-        font-size: 0.8em;
+        font-size: max(var(--fs-floor), 0.8em);
     }
 
     .lb-pick-result {
-        font-size: 0.78em;
+        font-size: max(var(--fs-floor), 0.78em);
     }
 
     .lb-pick-stats {
-        font-size: 0.75em;
+        font-size: max(var(--fs-floor), 0.75em);
     }
 
     /* A pill showing extra detail needs the full row */
@@ -2511,11 +2516,11 @@ section > table {
     }
 
     /* Keep secondary text legible: nothing under ~11px */
-    .lb-breakdown-item { font-size: 0.78rem; white-space: normal; }
-    .lb-pick-bio-detail { font-size: 0.78rem; }
+    .lb-breakdown-item { font-size: max(var(--fs-floor), 0.78rem); white-space: normal; }
+    .lb-pick-bio-detail { font-size: max(var(--fs-floor), 0.78rem); }
     .journey-text { font-size: 0.8rem; }
-    .journey-ep { font-size: 0.8rem; min-width: 2.2rem; }
-    .lb-badge { font-size: 0.72rem; padding: 1px 8px; }
+    .journey-ep { font-size: max(var(--fs-floor), 0.8rem); min-width: 2.2rem; }
+    .lb-badge { font-size: max(var(--fs-floor), 0.72rem); padding: 1px 8px; }
     .lb-team-stat { font-size: 0.8rem; }
 
     /* Season stat boards */
