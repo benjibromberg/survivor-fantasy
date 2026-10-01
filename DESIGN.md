@@ -17,8 +17,9 @@
 Four brand fonts, each with a distinct role, over Pico's system sans for body text. This is the core of the visual identity.
 
 - **Logo/Branding:** `Survivant` (local @font-face, `fonts/survivant.ttf`) -- Official Survivor logo font. Used ONLY for site logo, finale labels, and logo motto. Uppercase, wide letter-spacing (0.08-0.2em). CSS var: `--font-logo`
-- **Headings/Player Names:** `Cinzel` (Google Fonts) -- Serif with classical authority. Used for h1-h3, player names, leaderboard names, TOC links. Letter-spacing 0.03-0.04em. CSS var: `--font-heading`
-- **Labels/Stats/UI:** `Bebas Neue` (Google Fonts) -- Condensed sans for data-dense UI. Nav buttons, toggle buttons, rank numbers, stat values, badge text, point displays. Uppercase with letter-spacing 0.04-0.1em. CSS var: `--font-label`
+- **Interface:** the system sans stack. CSS var: `--font-ui`. Headings below h1, player names, points, ranks, chips, badges and section labels. This is the default voice of the UI; reach for a decorative family only for the cases below.
+- **Page title:** `Cinzel` (Google Fonts) -- Serif with classical authority. **h1 only.** It used to run through h1-h3, player names and leaderboard names; concentrating it on the page title keeps the ceremony where it is read once and out of the interface, where three decorative families at once was the main thing making the site look unpolished. CSS var: `--font-heading`
+- **Micro-labels and stat values:** `Bebas Neue` (Google Fonts) -- Condensed caps for the small uppercase labels that sit above or beside data, and for stat values. **Not** for chips, badges or anything carrying a phrase: at 12px, condensed caps with tracking is hard to read, which is what made the journey badges difficult. CSS var: `--font-label`
 - **Castaway Names:** `Palatino Linotype` > `Palatino` > `Book Antiqua` > `serif` (system) -- Warm serif for castaway names, team names and a few short labels. Not used for running text. CSS var: `--font-tribal`
 - **Body text:** Pico's system sans-serif stack (no `font-family` set on `body`). Paragraphs, pick meta lines (points, stats, result), form text. Chosen over Palatino because sans reads better at the small sizes used on phones.
 - **Loading:** Survivant is self-hosted (`/static/fonts/survivant.ttf`, `font-display: swap`). Cinzel and Bebas Neue via Google Fonts CDN.
@@ -93,6 +94,7 @@ Pico's dark theme variables are mapped to our palette via `[data-theme="dark"]`:
 ### Contrast
 - Small text needs 4.5:1 against the surface it sits on, large text (24px and up) 3:1.
 - Do not dim text with `opacity`. It lowers contrast against the page and stacks with any dimmed parent. Use `--text-dim`, which is 5.6:1 or better on every surface except the hover surface (`--ocean-surface`, 4.2:1), where rows switch to `--sand-warm`.
+- Journey badges are sentence case in `--font-ui`, not condensed caps, and their labels are short ("Merged", "Immunity", "Idol found"). The long caps versions were legible in isolation but wrapped to two lines each at readable sizes, which made every roster row taller. Contrast was never the problem: every badge measures 6:1 or better on its own tint.
 - Badge labels use a lighter tone than the badge's tint (`#f58a5e` idol and fire, `--palm-light` merge, `#e88484` votes, `#8ab8dc` advantage). The saturated hue on its own tint reads at 1.9 to 4.2:1.
 - Rank numerals are `--fire-bright` at 0.85 opacity: about 3.3:1, which passes only because they are large.
 
@@ -192,6 +194,8 @@ Used by the rules and scoring analysis pages. `<details class="fold" open><summa
 ### Standings Row (`details.lb-team`)
 The standings are one card holding a column header (`.lb-standings-head`) and a row per team, divided by hairlines rather than drawn as separate cards. Each team is a `<details>`. Its `<summary class="lb-row">` is the row: rank, player name with past-winner badges, a "You" chip on your own row, team name, a torch per pick (lit while the castaway is in the game, snuffed once out, with an `n/m` count; hidden on finished seasons), win %, and points. On desktop that is one line; on phones torches and win % drop to a second line under the name.
 
+The standings are hairline-separated rows on the page background, not a bordered card, with a faint alternating fill (`:nth-of-type(even)`) for scanning. Rank is a quiet tabular ordinal; only the leader's carries the accent (`:first-of-type`). **Use `:nth-of-type` and `:first-of-type`, never the `-child` forms**: `.lb-standings-head` is the first child, so a child-counting selector silently matches nothing.
+
 The header and the rows share `--lb-cols` and `--lb-areas`, so they cannot disagree with each other. Three variants set those: the default, `.no-win` when there are no win percentages (every timeline `as_of` view of a season still in progress), and `.is-finished`. **Keep all three at one class of specificity and list every one in the phone block.** Media queries add no specificity, so a base variant written with `:not()` out-specifies the phone override and wins inside it; that shipped once and left phones with a torch column the phone layout does not use. `tests/test_castaway_sheet.py::TestStandingsGridCascade` guards it.
 - Opening the row shows the roster (`.lb-roster`): the Sole Survivor pick and any warnings, then the castaway cards, then team stats.
 - An open team's row is `position: sticky` so it stays in view while its roster scrolls.
@@ -213,8 +217,15 @@ Opening a card shows the sheet. A hero header tinted with the tribe colour (a le
 
 **Episodes table.** One row per episode, stopping at the elimination episode. Two things about `episode_stats` make the obvious reading wrong: its totals are **cumulative**, so an episode's own activity is the difference from the episode before it; and it **keeps repeating the final totals** for every episode after the castaway is voted out, so an untruncated table shows a boot still playing. Cells are heat-tinted on `--heat`, scaled per column to that castaway's own best episode so a quiet player's table still reads. The table sizes to its content rather than stretching, because early in a season most columns are empty.
 
+### Phone Tab Bar (`.tabbar`)
+Below 640px the top nav's links are hidden and the primary destinations live in a fixed, pill-shaped bar at the bottom: Standings, My Team (when signed in), Rules, Analysis, and More. Icon above a small uppercase label; the active item is `--fire-glow`, the rest `--text-dim`. More opens a sheet above the bar with the season list and the account links.
+
+- The header is one row on phones as a result. It used to wrap to three, with Logout orphaned on its own line.
+- `body` gets bottom padding so content clears the bar, and the contents panel is hidden on phones: the bar owns that corner, and a floating button competing with it is worse than no button.
+- `.tabbar` is a `<nav>`, so the `nav a { color: ... !important }` rule had to be scoped to `nav:not(.tabbar)`. A new component placed inside a `<nav>` will hit the same thing.
+
 ### Season Timeline (`.season-timeline`)
-Horizontal scrollable row of episode dots. The connecting line is drawn per point (`.tl-point::before`) so it scrolls with the dots. Milestone dots (Premiere, Merge, Finale) are larger with labels. Active dot gets fire-bright color and is scrolled into view on load. On phones each point is at least 2.75rem wide and only milestone and active labels show.
+Horizontal scrollable row of episode dots. Point widths on phones are tuned so a typical in-progress season fits **without** scrolling, because the script scrolls the active dot into view on load: when the row overflows by even a little, that pushes the first milestone label off the left edge, where it reads as a truncated word rather than as something scrolled. A long season still scrolls, which is fine. The connecting line is drawn per point (`.tl-point::before`) so it scrolls with the dots. Milestone dots (Premiere, Merge, Finale) are larger with labels. Active dot gets fire-bright color and is scrolled into view on load. On phones each point is at least 2.75rem wide and only milestone and active labels show.
 
 ### Stats Grid (`.stats-grid`)
 3-column CSS Grid for stat items. Each item has a label (Bebas Neue, dim) and value. Drops to 1-column at 576px.
@@ -236,6 +247,7 @@ Fixed-position overlay, bottom-left (full-width bottom sheet on phones, 0.95rem 
 | 2024 | Ember particles finale-only | Earned spectacle, not ambient decoration |
 | 2026-04-07 | DESIGN.md created | Documented existing system via /design-consultation for mobile responsive work |
 | 2026-04-07 | Mobile responsive overhaul | Added 640px nav breakpoint, 577-768px tablet breakpoint, overflow-x fixes, table scroll wrappers, container padding |
+| 2026-10-01 | Phone tab bar; one interface font | Navigation moved to a bottom bar so the phone header stops wrapping to three rows. Cinzel narrowed to h1 and Bebas to micro-labels, with a system sans carrying the interface, because three decorative families at once read as unpolished. Survivant, Palatino on castaway names, the torches and the fire accent stay: they carry the theme without being in the way of the data. |
 | 2026-10-01 | Castaway sheet | Tribe-tinted hero plus Summary / Journey / Episodes tabs, replacing the stacked detail block. Tabs are progressive: the strip is hidden until script reveals it. |
 | 2026-10-01 | Rosters as list rows | Replaced the 2-up pill grid. Denser, and it gives points a consistent right-aligned column. |
 | 2026-10-01 | Responsive + readability pass (v2) | Consolidated all breakpoints at end of `style.css`; nav wraps instead of overflowing; header split via `.lb-sub`; 2-up pick grid; chips for toolbar toggles; scrollable timeline; collapsible `details.fold` sections with TOC integration for rules and analysis; `68ch` reading measure |
