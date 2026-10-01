@@ -18,7 +18,7 @@ Built for the modern era of Survivor (seasons 41+) where idols, advantages, and 
 - **Winner badges** showing past season wins on player names across all leaderboards
 - **Survivor-themed design** with Survivant logo font, Cinzel headings, Bebas Neue stats, tiki torch SVGs, and Tribal Council color palette
 - **Auto-generated sidebar TOC** with scroll-based active section highlighting
-- **Docker + Tailscale** deployment for private hosting on your Tailnet
+- **Docker + Cloudflare Tunnel** deployment, with Cloudflare Access (email one-time code) in front
 
 ## Quick Start
 
@@ -41,15 +41,16 @@ A "Dev Login" link appears in the nav bar for local development (no OAuth needed
 Create a `.env` file in the project root:
 
 ```env
-# Required for admin login in production
-GITHUB_CLIENT_ID=your_oauth_app_id
-GITHUB_CLIENT_SECRET=your_oauth_app_secret
-ADMIN_GITHUB_USERNAME=your_github_username
+# Admin login via Cloudflare Access. The Access-authenticated email
+# that should be treated as admin.
+ADMIN_EMAIL=you@example.com
+
+# Required in production (app errors on startup if missing)
+SECRET_KEY=your-random-secret
 
 # Optional
-SECRET_KEY=your-random-secret          # Required in production (app errors on startup if missing)
-DEV_LOGIN=0          # Set to 1 to enable dev login (default: 1 locally, 0 in Docker)
-TS_AUTHKEY=tskey-... # Tailscale auth key for Docker deployment
+DEV_LOGIN=0            # 1 enables dev login (default: 1 locally, 0 in Docker)
+CF_TUNNEL_TOKEN=...    # Cloudflare Tunnel token for the cloudflared sidecar
 ```
 
 ## How It Works
@@ -105,15 +106,20 @@ Each configuration is scored on 12 metrics including:
 
 The admin panel has a "Load Recommended Config" button to apply the analysis results with one click.
 
-## Deploy (Docker + Tailscale)
+## Deploy (Docker + Cloudflare Tunnel)
 
-The app runs behind a Tailscale sidecar for private HTTPS on your Tailnet (not internet-facing). This follows the same pattern as the [Tailscale self-hosting guide for audiobookshelf](https://github.com/tailscale-dev/video-code-snippets/tree/main/2025/2025-06-self-hosting-part2/audiobookshelf).
+The app is not exposed on the host. A `cloudflared` sidecar makes an outbound-only
+connection to Cloudflare, and **Cloudflare Access** sits in front, so visitors sign in
+with a one-time code emailed to an allowlist. There is no app password to manage.
 
-1. Create a [GitHub OAuth App](https://github.com/settings/developers) with callback URL `https://survivor-fantasy.<tailnet>.ts.net/auth/callback`
-2. Create `.env` with your credentials (see above)
-3. `docker compose up -d`
+1. Create a tunnel in Cloudflare Zero Trust (Networks > Tunnels) and copy its token
+2. Add an Access application for the hostname, with an email one-time-PIN policy
+3. Create `.env` with `CF_TUNNEL_TOKEN`, `ADMIN_EMAIL` and `SECRET_KEY` (see above)
+4. `docker compose up -d`
 
-Your friends on the Tailnet can access it at `https://survivor-fantasy.<tailnet>.ts.net`.
+Everyone on the Access allowlist can then reach it at your tunnel's hostname. The
+leaderboard needs no app login; players sign in to see and name their own team, and
+`ADMIN_EMAIL` is the only admin.
 
 See [`DEPLOYMENT.md`](DEPLOYMENT.md) for a detailed walkthrough including Proxmox setup.
 
@@ -145,7 +151,6 @@ analyze_scoring.py     # Scoring config optimizer
 seed.py                # DB seeding from survivoR + JSON pick files
 config.py              # Flask config (env vars)
 Dockerfile             # Python 3.11-slim + gunicorn
-docker-compose.yml     # App + Tailscale sidecar
-serve.json             # Tailscale Serve config (HTTPS proxy to :5050)
-DEPLOYMENT.md          # Full deployment guide for Proxmox + Docker + Tailscale
+docker-compose.yml     # App + cloudflared sidecar
+DEPLOYMENT.md          # Full deployment guide (Docker + Cloudflare Tunnel + Access)
 ```
