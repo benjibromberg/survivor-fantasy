@@ -1,10 +1,13 @@
 """Seed the database from survivoR.xlsx (all survivor data) and optional JSON files (pick assignments).
 
 Usage:
-    python seed.py                          # Build all seasons, no picks
+    python seed.py                          # Build DEFAULT_SEASONS, no picks
     python seed.py --picks-dir ./picks      # Also load pick JSON files from directory
     python seed.py --no-scrape              # Skip network calls
-    python seed.py --seasons 46,47,49,50    # Only build specific seasons (default: 46,47,49,50)
+    python seed.py --seasons 46,47,49,50    # Build exactly these seasons
+
+Without --seasons, the seasons built are DEFAULT_SEASONS plus, when --picks-dir
+is given, every season that has a pick file in that directory.
 """
 
 import os
@@ -31,6 +34,9 @@ from app.models import Pick, Season, SoleSurvivorPick, Survivor, User, db
 SURVIVOR_DATA_URL = (
     "https://github.com/doehm/survivoR/raw/refs/heads/master/dev/xlsx/survivoR.xlsx"
 )
+
+# Seasons built when --seasons is not given (see resolve_season_nums)
+DEFAULT_SEASONS = [45, 46, 47, 49, 50, 51]
 
 # Nickname mapping: legacy xlsx shorthand → survivoR castaway name
 NICKNAME_MAP = {
@@ -424,21 +430,41 @@ def discover_pick_files(picks_dir):
     return files
 
 
+def parse_seasons_arg(argv):
+    """Return the season numbers given via --seasons, or None if it is absent.
+
+    Accepts both ``--seasons 46,47`` and ``--seasons=46,47``.
+    """
+    seasons = None
+    for idx, arg in enumerate(argv):
+        if arg.startswith("--seasons="):
+            seasons = [int(s) for s in arg.split("=")[1].split(",")]
+        elif arg == "--seasons" and idx + 1 < len(argv):
+            seasons = [int(s) for s in argv[idx + 1].split(",")]
+    return seasons
+
+
+def resolve_season_nums(explicit_seasons, pick_file_seasons=()):
+    """Decide which seasons to build.
+
+    An explicit --seasons list is authoritative.  Otherwise build
+    DEFAULT_SEASONS plus every season that has a pick file, so a season with
+    picks cannot drop out of a default re-seed (which wipes every table).
+    """
+    if explicit_seasons is not None:
+        return list(explicit_seasons)
+    return sorted(set(DEFAULT_SEASONS) | set(pick_file_seasons))
+
+
 def main():
     no_scrape = "--no-scrape" in sys.argv
 
     if not no_scrape:
         ensure_survivor_data()
 
-    # Parse --seasons (default: 46,47,49,50)
-    season_nums = [45, 46, 47, 49, 50]
-    for arg in sys.argv[1:]:
-        if arg.startswith("--seasons="):
-            season_nums = [int(s) for s in arg.split("=")[1].split(",")]
-        elif arg.startswith("--seasons"):
-            idx = sys.argv.index(arg)
-            if idx + 1 < len(sys.argv):
-                season_nums = [int(s) for s in sys.argv[idx + 1].split(",")]
+    # Parse --seasons (None if absent: the default list is resolved below,
+    # once the pick files are known)
+    explicit_seasons = parse_seasons_arg(sys.argv[1:])
 
     # Parse --picks-dir
     picks_dir = None
@@ -485,6 +511,17 @@ def main():
         print("Loading survivoR reference data...")
         ref_data = load_survivor_ref()
 
+        # Discover pick files before building: without --seasons, every season
+        # that has a pick file is built alongside DEFAULT_SEASONS
+        pick_files = {}
+        if picks_dir:
+            picks_dir = os.path.realpath(picks_dir)
+            if not os.path.isdir(picks_dir):
+                print(f"Error: --picks-dir {picks_dir} is not a directory")
+                sys.exit(1)
+            pick_files = discover_pick_files(picks_dir)
+        season_nums = resolve_season_nums(explicit_seasons, pick_files)
+
         # Build seasons from survivoR data
         print("\nBuilding seasons from survivoR database...")
         for snum in season_nums:
@@ -499,13 +536,8 @@ def main():
 
         # Load picks from JSON files if --picks-dir provided
         if picks_dir:
-            picks_dir = os.path.realpath(picks_dir)
-            if not os.path.isdir(picks_dir):
-                print(f"Error: --picks-dir {picks_dir} is not a directory")
-                sys.exit(1)
             print(f"\nLoading pick assignments from {picks_dir}...")
-            discovered = discover_pick_files(picks_dir)
-            for snum, filepath in sorted(discovered.items()):
+            for snum, filepath in sorted(pick_files.items()):
                 filepath = os.path.realpath(filepath)
                 if not filepath.startswith(picks_dir):
                     print(
