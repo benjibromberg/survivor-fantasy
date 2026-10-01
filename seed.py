@@ -482,6 +482,50 @@ def resolve_active_season(active_season=None):
     return Season.query.order_by(Season.number.desc()).first()
 
 
+def count_pick_rows():
+    """Count pick rows (regular and Sole Survivor) in the current database.
+
+    Runs COUNT(*) only on the tables that exist, so a database with no tables
+    yet counts as zero instead of raising.
+    """
+    from sqlalchemy import func, inspect, select
+
+    existing = set(inspect(db.engine).get_table_names())
+    total = 0
+    for model in (Pick, SoleSurvivorPick):
+        table = model.__table__
+        if table.name in existing:
+            total += db.session.execute(
+                select(func.count()).select_from(table)
+            ).scalar_one()
+    return total
+
+
+def export_picks_before_drop():
+    """Export all picks ahead of db.drop_all() and return the paths written.
+
+    Fails closed: a failed export is only skipped when the database holds no
+    picks (first run, or nothing assigned yet). If picks exist and could not
+    be backed up, exit non-zero so the caller never reaches the drop.
+    """
+    from app.data import default_picks_dir, export_all_picks
+
+    try:
+        return export_all_picks()
+    except Exception as e:
+        db.session.rollback()
+        pick_rows = count_pick_rows()
+        if pick_rows:
+            sys.exit(
+                f"Error: could not export picks to {default_picks_dir()}: {e}\n"
+                f"The database holds {pick_rows} pick row(s) that re-seeding "
+                "would delete, so nothing was dropped. Fix the export and run "
+                "seed.py again."
+            )
+        print(f"Pick export skipped (no picks in the database): {e}")
+        return []
+
+
 def main():
     no_scrape = "--no-scrape" in sys.argv
 
@@ -510,18 +554,16 @@ def main():
 
     app = create_app()
     with app.app_context():
-        # Safety net: export all picks before dropping tables
-        try:
-            from app.data import export_all_picks
-
-            exported = export_all_picks()
-            if exported:
-                print(f"Auto-exported picks for {len(exported)} season(s) to picks/")
-                for p in exported:
-                    print(f"  {p}")
-        except Exception as e:
-            # First run or empty DB — nothing to export
-            print(f"Pick export skipped: {e}")
+        # Safety net: export all picks before dropping tables. Exits here,
+        # before the drop, if picks exist and cannot be backed up.
+        exported = export_picks_before_drop()
+        if exported:
+            print(
+                f"Auto-exported picks for {len(exported)} season(s) "
+                f"to {os.path.dirname(exported[0])}"
+            )
+            for p in exported:
+                print(f"  {p}")
 
         print("Dropping and recreating all tables...")
         db.drop_all()

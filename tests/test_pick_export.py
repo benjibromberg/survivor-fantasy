@@ -163,3 +163,75 @@ class TestExportLocation:
         assert (elsewhere / "season99.json").is_file()
         assert os.path.realpath(path) == os.path.realpath(elsewhere / "season99.json")
         assert not (tmp_path / "data" / "picks").exists()
+
+
+# ── seed.py pre-drop export decision ──────────────────────────────────────
+
+
+class TestSeedExportBeforeDrop:
+    def test_aborts_when_export_fails_and_picks_exist(self, app, monkeypatch):
+        """Picks that cannot be backed up must stop the seed before the drop."""
+        _, db = app
+        from app.models import Pick
+        from seed import export_picks_before_drop
+
+        season, user, surv = _make_season(db)
+        _add_pick(db, season, user, surv)
+        monkeypatch.setattr("app.data.export_all_picks", _export_denied)
+
+        with pytest.raises(SystemExit) as excinfo:
+            export_picks_before_drop()
+
+        assert excinfo.value.code not in (0, None)
+        assert "Permission denied" in str(excinfo.value.code)
+        assert Pick.query.count() == 1
+
+    def test_aborts_when_only_sole_survivor_picks_exist(self, app, monkeypatch):
+        _, db = app
+        from app.models import SoleSurvivorPick
+        from seed import export_picks_before_drop
+
+        season, user, surv = _make_season(db)
+        db.session.add(
+            SoleSurvivorPick(
+                user_id=user.id, season_id=season.id, survivor_id=surv.id, episode=1
+            )
+        )
+        db.session.commit()
+        monkeypatch.setattr("app.data.export_all_picks", _export_denied)
+
+        with pytest.raises(SystemExit) as excinfo:
+            export_picks_before_drop()
+
+        assert excinfo.value.code not in (0, None)
+
+    def test_proceeds_when_export_fails_and_no_picks(self, app, monkeypatch):
+        """Empty database: a failed export has nothing to lose."""
+        _, db = app
+        from seed import export_picks_before_drop
+
+        _make_season(db)
+        monkeypatch.setattr("app.data.export_all_picks", _export_denied)
+
+        assert export_picks_before_drop() == []
+
+    def test_proceeds_when_tables_missing(self, app):
+        """No tables yet: the real export raises, and the seed carries on."""
+        _, db = app
+        from seed import export_picks_before_drop
+
+        db.drop_all()
+
+        assert export_picks_before_drop() == []
+
+    def test_returns_exported_paths_on_success(self, app, tmp_path):
+        _, db = app
+        from seed import export_picks_before_drop
+
+        season, user, surv = _make_season(db)
+        _add_pick(db, season, user, surv)
+
+        paths = export_picks_before_drop()
+
+        assert [os.path.basename(p) for p in paths] == ["season99.json"]
+        assert (tmp_path / "data" / "picks" / "season99.json").is_file()
