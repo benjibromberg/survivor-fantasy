@@ -43,7 +43,13 @@ captures the tunnel token. The steps it covers:
 ### 1. Create the Tunnel and get its token
 Zero Trust → **Networks → Tunnels → Create a tunnel** (e.g. `survivor-fantasy`).
 Choose **Docker** and copy the **token** (the `eyJ...` value). Store it as
-`CF_TUNNEL_TOKEN` in `.env` (and in your secret manager).
+`CF_TUNNEL_TOKEN` in the server `.env`.
+
+> **Secret storage:** the canonical copy lives in the macOS Keychain as
+> `SURVIVOR_FANTASY_TUNNEL_TOKEN` (`keychain-secret set SURVIVOR_FANTASY_TUNNEL_TOKEN`).
+> It is written to the server `.env` as the `CF_TUNNEL_TOKEN` line (the name
+> `docker-compose.yml` interpolates). The Keychain name is descriptive to avoid
+> clashing with other tunnels; the `.env` var name is fixed by compose.
 
 ### 2. Add a public hostname route
 On the tunnel's **Published application routes**, add:
