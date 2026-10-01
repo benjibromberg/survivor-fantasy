@@ -66,6 +66,9 @@ class Season(db.Model):
     episode2_manual = db.Column(db.Boolean, default=False)
     # Admin switch: False keeps wildcards admin-entered even with a known time
     wildcard_self_service = db.Column(db.Boolean, default=True)
+    # JSON: {episode: {title, date}} from the survivoR Episodes sheet, keyed by
+    # episode number as a string so it lines up with Survivor.episode_stats.
+    episode_info = db.Column(db.Text)
     survivors = db.relationship("Survivor", backref="season", lazy=True)
     picks = db.relationship("Pick", backref="season", lazy=True)
 
@@ -128,6 +131,26 @@ class Season(db.Model):
             return json.loads(self.scoring_config) if self.scoring_config else {}
         except json.JSONDecodeError:
             return {}
+
+    def get_episode_info(self):
+        """Parsed episode_info ({episode: {title, date}}), or an empty dict.
+
+        Parsed once per instance, cached on the raw column text so a refresh
+        that rewrites it invalidates the cache rather than serving the old
+        titles (the same pattern as Survivor.get_episode_stats).
+        """
+        raw = self.episode_info
+        cached = getattr(self, "_episode_info_cache", None)
+        if cached is not None and cached[0] is raw:
+            return cached[1]
+        parsed = {}
+        if raw:
+            try:
+                parsed = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                parsed = {}
+        self._episode_info_cache = (raw, parsed)
+        return parsed
 
 
 class Survivor(db.Model):

@@ -341,3 +341,157 @@ class TestFullIntegration:
             "adv_played",
         ]:
             assert result[key].empty
+
+
+# ── Episodes sheet: titles and air dates ──────────────────────────────────
+
+# The real column shape, checked against survivoR.xlsx: one row per episode
+# per season, `episode` season-relative (1 to 13, 14 in S47), `episode_date`
+# a datetime, and `episode_summary` empty for some episodes, which is why
+# nothing reads it.
+EPISODE_SHEET_COLUMNS = [
+    "version",
+    "version_season",
+    "season",
+    "episode_number_overall",
+    "episode",
+    "episode_title",
+    "episode_label",
+    "episode_date",
+    "episode_length",
+    "viewers",
+    "imdb_rating",
+    "n_ratings",
+    "episode_summary",
+]
+
+
+def _episode_row(season, episode, title, date, summary="", version="US"):
+    """One Episodes row, with every column the sheet really has."""
+    return {
+        "version": version,
+        "version_season": f"{version}{season}",
+        "season": season,
+        "episode_number_overall": 600 + episode,
+        "episode": episode,
+        "episode_title": title,
+        "episode_label": f"Ep {episode}",
+        "episode_date": date if date is pd.NaT else pd.Timestamp(date),
+        "episode_length": 64.0,
+        "viewers": 5.1,
+        "imdb_rating": 7.4,
+        "n_ratings": 912.0,
+        "episode_summary": summary,
+    }
+
+
+def _episodes(rows):
+    return pd.DataFrame(rows, columns=EPISODE_SHEET_COLUMNS)
+
+
+S47 = _episodes(
+    [
+        _episode_row(47, 1, "One Glorious and Perfect Episode", "2024-09-18"),
+        _episode_row(47, 2, "Epic Boss Girl Move", "2024-09-25", summary="They play."),
+        _episode_row(47, 3, "Belly of the Beast", "2024-10-02"),
+    ]
+)
+
+
+class TestSeasonEpisodeInfo:
+    def test_keys_are_episode_numbers_as_strings(self):
+        """The same key shape as Survivor.episode_stats, so the two line up."""
+        from app.data import season_episode_info
+
+        assert sorted(season_episode_info(S47, 47)) == ["1", "2", "3"]
+
+    def test_title_and_iso_date_per_episode(self):
+        from app.data import season_episode_info
+
+        info = season_episode_info(S47, 47)
+
+        assert info["3"] == {"title": "Belly of the Beast", "date": "2024-10-02"}
+
+    def test_a_missing_summary_does_not_cost_the_title(self):
+        """episode_summary is empty for some real episodes; nothing reads it."""
+        from app.data import season_episode_info
+
+        info = season_episode_info(S47, 47)
+
+        assert info["1"]["title"] == "One Glorious and Perfect Episode"
+        assert all("summary" not in ep for ep in info.values())
+
+    def test_ignores_other_versions_and_seasons(self):
+        from app.data import season_episode_info
+
+        episodes = _episodes(
+            [
+                _episode_row(47, 1, "Australian Ep 1", "2024-01-01", version="AU"),
+                _episode_row(46, 1, "Another Season", "2024-02-28"),
+            ]
+        )
+
+        assert season_episode_info(episodes, 47) == {}
+
+    def test_an_empty_sheet_is_an_empty_mapping(self):
+        from app.data import season_episode_info
+
+        assert season_episode_info(_episodes([]), 47) == {}
+
+    def test_a_title_free_future_episode_keeps_its_date(self):
+        from app.data import season_episode_info
+
+        episodes = _episodes([_episode_row(47, 4, None, "2024-10-09")])
+
+        assert season_episode_info(episodes, 47) == {"4": {"date": "2024-10-09"}}
+
+    def test_an_episode_with_neither_is_left_out(self):
+        from app.data import season_episode_info
+
+        episodes = _episodes(
+            [
+                _episode_row(47, 1, "Real Title", "2024-09-18"),
+                _episode_row(47, 2, None, pd.NaT),
+            ]
+        )
+
+        assert season_episode_info(episodes, 47) == {
+            "1": {"title": "Real Title", "date": "2024-09-18"}
+        }
+
+
+class TestReadEpisodes:
+    def test_reads_the_episodes_sheet_of_the_dataset(self, monkeypatch):
+        from app import data
+
+        seen = {}
+
+        def fake_read_excel(path, sheet):
+            seen.update(path=path, sheet=sheet)
+            return S47
+
+        monkeypatch.setattr(data.pd, "read_excel", fake_read_excel)
+
+        assert data.read_episodes() is S47
+        assert seen == {"path": data.SURVIVOR_DATA_FILE, "sheet": "Episodes"}
+
+    def test_the_episodes_sheet_is_read_in_exactly_one_place(self):
+        """Two reads of one sheet is how the two readers drift apart.
+
+        app/schedule.py wants the Episode 2 air date and refresh_season()
+        wants the titles; both go through data.read_episodes().
+        """
+        import pathlib
+        import re
+
+        app_dir = pathlib.Path(__file__).resolve().parent.parent / "app"
+        reads = [
+            f"{path.name}: {line.strip()}"
+            for path in sorted(app_dir.rglob("*.py"))
+            for line in path.read_text().splitlines()
+            if re.search(r"read_excel\(.*Episodes", line)
+        ]
+
+        assert reads == [
+            'data.py: return pd.read_excel(SURVIVOR_DATA_FILE, "Episodes")'
+        ]
