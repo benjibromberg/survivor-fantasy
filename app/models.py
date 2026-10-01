@@ -58,6 +58,10 @@ class Season(db.Model):
     )  # from tribe_status='Merged'
     scoring_system = db.Column(db.String(50), default="Classic")
     scoring_config = db.Column(db.Text, default="{}")
+    # When Episode 2 starts, as naive UTC. Entered by the admin (survivoR has
+    # no air times). Setting it turns on wildcard self-service for the season;
+    # see app/wildcards.py.
+    episode2_starts_at = db.Column(db.DateTime, nullable=True)
     survivors = db.relationship("Survivor", backref="season", lazy=True)
     picks = db.relationship("Pick", backref="season", lazy=True)
 

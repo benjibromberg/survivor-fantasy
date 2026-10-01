@@ -30,6 +30,9 @@
     <div class="fold-body">
     <p>After the first episode airs (once the first castaway has been eliminated), each fantasy player selects one <strong>Wildcard</strong> from any remaining castaway not already on another player's roster.</p>
     <p>Wildcards earn <strong>half points</strong> ({{ "%.0f"|format(config.wildcard_multiplier * 100) }}%) for everything their castaway accomplishes.</p>
+    {% if season and season.episode2_starts_at %}
+    <p>Pick your Wildcard yourself on <strong>My Team</strong>. You can change it as often as you like until picks lock 15 minutes before Episode 2; after that only the league admin can enter one. Wildcards stay hidden, and score no points, until every player has picked, so two players can end up with the same Wildcard.</p>
+    {% endif %}
     <details>
         <summary>Example</summary>
         <p>If your Wildcard castaway survives 10 tribal councils and earns 12 base points, your Wildcard score would be <strong>6 pts</strong> (12 &times; 50%).</p>
