@@ -31,6 +31,10 @@ CLAUDE.md
 # Browser-automation scratch (Playwright MCP screenshots, snapshots, console logs)
 .playwright-mcp/
 
+# Visual reference supplied by the owner (third-party product
+# screenshots). Not ours to publish; see reference/README.md.
+reference/
+
 # Local notes
 TODO.md
 PLAYER_MESSAGE_DRAFT.md

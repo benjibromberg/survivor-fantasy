@@ -207,6 +207,84 @@
     })();
     </script>
 
+    {# Phone navigation. The top nav's links are hidden below 640px and the
+       primary destinations live here instead, so the header stays one row.
+       Secondary items (seasons, admin, account) are behind More. #}
+    {% set ep = request.endpoint %}
+    <nav class="tabbar" aria-label="Primary">
+        <a href="{{ url_for('main.index') }}" class="tabbar-item{% if ep in ('main.index', 'main.leaderboard', 'main.season_stats', 'main.scoring_compare') %} is-active{% endif %}"{% if ep == 'main.leaderboard' %} aria-current="page"{% endif %}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h4v-7H4v7zm6 0h4V5h-4v14zm6 0h4v-10h-4v10z"/></svg>
+            <span>Standings</span>
+        </a>
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('main.my_team') }}" class="tabbar-item{% if ep in ('main.my_team', 'main.my_team_season') %} is-active{% endif %}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-4 0-7 2-7 4.5V21h14v-2.5c0-2.5-3-4.5-7-4.5z"/></svg>
+            <span>My Team</span>
+        </a>
+        {% endif %}
+        <a href="{{ url_for('main.rules') }}" class="tabbar-item{% if ep == 'main.rules' %} is-active{% endif %}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h9a3 3 0 013 3v13H8a3 3 0 00-3 3V4zm3 14h7V7a1 1 0 00-1-1H8v12z"/></svg>
+            <span>Rules</span>
+        </a>
+        <a href="{{ url_for('main.scoring_analysis') }}" class="tabbar-item{% if ep == 'main.scoring_analysis' %} is-active{% endif %}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 4 5-7 4 5v4H3z" opacity="0.55"/><path d="M3 19h18v2H3z"/></svg>
+            <span>Analysis</span>
+        </a>
+        <button type="button" class="tabbar-item tabbar-more" id="tabbar-more" aria-haspopup="true" aria-expanded="false" aria-controls="tabbar-sheet">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+            <span>More</span>
+        </button>
+    </nav>
+
+    <div class="tabbar-sheet" id="tabbar-sheet" hidden>
+        {% if all_seasons|length > 1 %}
+        <p class="tabbar-sheet-label">Season</p>
+        {% for s in all_seasons %}
+        <a href="{{ url_for('main.leaderboard', season_id=s.id) }}" class="tabbar-sheet-item">
+            {{ s.name or 'Season ' ~ s.number }}{% if s.is_active %} <span class="nav-dropdown-badge">Active</span>{% endif %}
+        </a>
+        {% endfor %}
+        {% endif %}
+        <p class="tabbar-sheet-label">Account</p>
+        {% if current_user.is_authenticated %}
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('main.admin_seasons') }}" class="tabbar-sheet-item">Admin</a>
+            <a href="{{ url_for('main.settings') }}" class="tabbar-sheet-item">Settings</a>
+            {% endif %}
+            <a href="{{ url_for('auth.logout') }}" class="tabbar-sheet-item">Log out</a>
+        {% else %}
+            {% if config.DEV_LOGIN %}
+            <a href="{{ url_for('auth.dev_login') }}" class="tabbar-sheet-item">Dev login</a>
+            {% else %}
+            <a href="{{ url_for('auth.login') }}" class="tabbar-sheet-item">Log in</a>
+            {% endif %}
+        {% endif %}
+    </div>
+
+    <script>
+    /* More sheet. Nothing here runs above 640px, where the tab bar is hidden. */
+    (function() {
+        var btn = document.getElementById('tabbar-more');
+        var sheet = document.getElementById('tabbar-sheet');
+        if (!btn || !sheet) return;
+        function setOpen(open) {
+            sheet.hidden = !open;
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            btn.classList.toggle('is-active', open);
+        }
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            setOpen(sheet.hidden);
+        });
+        document.addEventListener('click', function(e) {
+            if (!sheet.hidden && !sheet.contains(e.target)) setOpen(false);
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && !sheet.hidden) { setOpen(false); btn.focus(); }
+        });
+    })();
+    </script>
+
     <footer class="site-footer">
         <div class="container">
             <p>Built by <a href="https://github.com/benjibromberg" target="_blank" rel="noopener">Benji Bromberg</a></p>

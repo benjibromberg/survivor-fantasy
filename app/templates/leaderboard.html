@@ -65,22 +65,18 @@
 
 <h2 id="standings">Standings</h2>
 {% if leaderboard %}
+{% if win_pcts %}
 <div class="lb-toolbar">
-    <a href="{{ url_for('main.scoring_compare', season_id=season.id) }}" class="toolbar-link">Compare scoring</a>
     <div class="toolbar-toggles">
-        <button type="button" class="lb-roster-all" data-roster="open">Open all</button>
-        <button type="button" class="lb-roster-all" data-roster="close">Close all</button>
-        {% if win_pcts %}
         <label class="toolbar-toggle" title="Projected: estimates future immunity wins, idols, and advantages based on historical rates">
             <input type="checkbox" id="pred-toggle" role="switch">
             <span>Projected</span>
         </label>
-        {% endif %}
     </div>
 </div>
-<p class="lb-hint">Tap a team to see its castaways, and a castaway to see how their points were earned.</p>
+{% endif %}
 {% if odds_pending %}
-<p class="lb-hint">Win odds will show up around the merge, once this season's jury size is known.</p>
+<p class="lb-hint">Win odds appear around the merge, once the jury size is known.</p>
 {% endif %}
 
 <div class="lb-standings{{ ' is-finished' if is_finished else '' }}{{ ' no-win' if not win_pcts else '' }}">
@@ -128,7 +124,7 @@
             <span class="lb-win-pct lb-win-projected">{{ "%.0f"|format(projected_win_pcts.get(entry.user.id, 0)) }}% win</span>
             {% endif %}
         </span>
-        <span class="lb-points">{{ "%.2f"|format(entry.total_points) }} pts</span>
+        <span class="lb-points">{{ "%.2f"|format(entry.total_points) }}<span class="visually-hidden"> points</span></span>
     </summary>
     <div class="lb-roster">
     {% if entry.sole_survivor_pick or entry.warnings %}
@@ -206,13 +202,6 @@
             setTimeout(remember, 0);
         });
     });
-    document.querySelectorAll('.lb-roster-all').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var open = btn.dataset.roster === 'open';
-            teams.forEach(function(t) { t.open = open; });
-            remember();
-        });
-    });
 })();
 </script>
 <script>
@@ -261,6 +250,10 @@
     });
 })();
 </script>
+
+<p class="lb-compare">
+    <a href="{{ url_for('main.scoring_compare', season_id=season.id) }}">Compare this season under a different scoring system &rarr;</a>
+</p>
 {% else %}
 <p>No picks submitted yet.</p>
 {% endif %}

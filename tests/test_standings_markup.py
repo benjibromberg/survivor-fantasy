@@ -202,7 +202,9 @@ class TestTeamRows:
 
         for removed in ("pts-toggle", "stats-toggle", "bio-toggle", "journey-toggle"):
             assert removed not in html
-        assert 'data-roster="open"' in html and 'data-roster="close"' in html
+        # Open all / Close all were removed: a whole toolbar row for
+        # something rarely used, and rows open individually.
+        assert 'data-roster="open"' not in html
 
 
 class TestCastawayCards:

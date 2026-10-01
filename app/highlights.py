@@ -254,7 +254,7 @@ def _generate_badges(events, total_ii, total_votes_survived):
 
     # Priority 1: Immunity wins (aggregated)
     if total_ii > 0:
-        label = f"{total_ii}x Immunity" if total_ii > 1 else "Won Immunity"
+        label = f"{total_ii}x immunity" if total_ii > 1 else "Immunity"
         badges.append(Badge(label, IMMUNITY))
 
     # Priority 2: Idol found/played (separate badges)
@@ -263,26 +263,26 @@ def _generate_badges(events, total_ii, total_votes_survived):
     if idol_found:
         badges.append(
             Badge(
-                "Idol Found" if idol_found == 1 else f"{idol_found}x Idol Found", IDOL
+                "Idol found" if idol_found == 1 else f"{idol_found}x idol found", IDOL
             )
         )
     if idol_played:
         badges.append(
             Badge(
-                "Idol Played" if idol_played == 1 else f"{idol_played}x Idol Played",
+                "Idol played" if idol_played == 1 else f"{idol_played}x idol played",
                 IDOL,
             )
         )
 
     # Priority 3: Made merge
     if any(e.event_type == MERGE for e in events):
-        badges.append(Badge("Made Merge", MERGE))
+        badges.append(Badge("Merged", MERGE))
 
     # Priority 4: Votes survived (aggregated)
     if total_votes_survived > 0:
         badges.append(
             Badge(
-                f"Survived {total_votes_survived} Vote{'s' if total_votes_survived != 1 else ''}",
+                f"Survived {total_votes_survived} vote{'s' if total_votes_survived != 1 else ''}",
                 VOTES,
             )
         )
@@ -292,13 +292,13 @@ def _generate_badges(events, total_ii, total_votes_survived):
     if adv_count:
         badges.append(
             Badge(
-                f"{adv_count}x Advantage" if adv_count > 1 else "Advantage", ADVANTAGE
+                f"{adv_count}x advantage" if adv_count > 1 else "Advantage", ADVANTAGE
             )
         )
 
     # Priority 6: Fire-making win
     if any(e.event_type == FIRE for e in events):
-        badges.append(Badge("Won Fire", FIRE))
+        badges.append(Badge("Won fire", FIRE))
 
     return badges[:4]
 

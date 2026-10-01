@@ -53,6 +53,10 @@
     --font-heading: 'Cinzel', Georgia, serif;
     --font-label: 'Bebas Neue', 'Arial Narrow', sans-serif;
     --font-tribal: 'Palatino Linotype', Palatino, 'Book Antiqua', serif;
+    /* The interface font. Headings, names and running text use this; the
+       decorative families are now reserved for the wordmark and for the
+       small uppercase labels that sit above data. */
+    --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     --pico-dropdown-background-color: var(--deep-ocean);
     --pico-dropdown-border-color: var(--card-border);
     --pico-dropdown-color: var(--text-light);
@@ -80,14 +84,22 @@ main.container {
     box-sizing: border-box;
 }
 
-h1, h2 {
+/* The page title keeps the serif; everything below it is the UI sans. */
+h1 {
     font-family: var(--font-heading);
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
+}
+
+h2 {
+    font-family: var(--font-ui);
+    font-weight: 650;
+    letter-spacing: -0.01em;
 }
 
 h3 {
-    font-family: var(--font-heading);
-    letter-spacing: 0.03em;
+    font-family: var(--font-ui);
+    font-weight: 600;
+    letter-spacing: -0.005em;
 }
 
 a { color: var(--fire-glow); }
@@ -275,11 +287,14 @@ nav {
     margin-left: auto;
 }
 
-nav a, nav strong a {
+/* The tab bar is a <nav> too, and these are !important, so they would beat
+   its own colours at any specificity. Scoped out rather than answered with
+   more !important. */
+nav:not(.tabbar) a, nav:not(.tabbar) strong a {
     color: var(--sand-warm) !important;
 }
 
-nav a:hover {
+nav:not(.tabbar) a:hover {
     color: var(--torch-gold) !important;
 }
 
@@ -380,6 +395,17 @@ nav a:hover {
     white-space: nowrap;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+}
+
+/* Milestone labels are centred on their dot. On the first and last points
+   half the label falls outside the scrolling container and is clipped, which
+   is what turned "Pre-game" into "game". Anchor the end ones inward. */
+.tl-point:first-child .tl-milestone {
+    left: 0;
+}
+
+.tl-point:last-child .tl-milestone {
+    right: 0;
 }
 
 .tl-label {
@@ -491,9 +517,9 @@ nav a:hover {
     --lb-cols: 2.2rem minmax(0, 1fr) 8.5rem 4rem 5.5rem 1rem;
     --lb-areas: "rank id torch win pts chev";
     margin-bottom: 1.5rem;
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 8px;
+    background: transparent;
+    border: 0;
+    border-top: 1px solid var(--card-border);
 }
 
 /* Win % is skipped on timeline (as_of) views of a season still in progress,
@@ -543,6 +569,12 @@ nav a:hover {
     border-bottom: 1px solid var(--card-border);
 }
 
+/* A faint alternating fill makes a long list scannable without drawing a
+   box around every row. */
+.leaderboard-entry:nth-of-type(even) > summary.lb-row {
+    background: rgba(255, 255, 255, 0.015);
+}
+
 .leaderboard-entry:last-child {
     border-bottom: 0;
 }
@@ -572,14 +604,15 @@ details.lb-team[data-mine] > summary.lb-row {
 }
 
 .lb-you {
-    font-family: var(--font-label);
-    font-size: max(var(--fs-floor), 0.8rem);
-    letter-spacing: 0.08em;
+    font-family: var(--font-ui);
+    font-size: max(var(--fs-floor), 0.7rem);
+    font-weight: 600;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: var(--night-sky);
-    background: var(--fire-glow);
-    padding: 0 0.4rem;
-    border-radius: 4px;
+    color: var(--fire-glow);
+    background: rgba(244, 162, 97, 0.14);
+    padding: 1px 6px;
+    border-radius: 3px;
 }
 
 /* An open team's row stays at the top while its roster scrolls past */
@@ -675,8 +708,9 @@ details.lb-team > summary.lb-row:focus-visible {
 
 .lb-section-label {
     margin: 0.75rem 0 0.15rem;
-    font-family: var(--font-label);
-    font-size: max(var(--fs-floor), 0.85rem);
+    font-family: var(--font-ui);
+    font-size: max(var(--fs-floor), 0.7rem);
+    font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-dim);
@@ -696,40 +730,31 @@ details.lb-team > summary.lb-row:focus-visible {
     color: var(--text-dim);
 }
 
-.lb-roster-all {
-    width: auto;
-    margin: 0;
-    padding: 0.25rem 0.7rem;
-    font-family: var(--font-label);
-    font-size: 0.95rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    background: transparent;
-    border: 1px solid var(--card-border);
-}
-
-.lb-roster-all:hover {
-    color: var(--sand-warm);
-    border-color: var(--fire-glow);
-}
-
 .lb-rank {
-    font-family: var(--font-label);
-    font-size: 2em;
-    font-weight: 400;
-    color: var(--fire-bright);
-    opacity: 0.85;
+    font-family: var(--font-ui);
+    font-size: 0.95em;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-dim);
     min-width: 2.2rem;
     text-align: center;
 }
 
+/* Only the leader gets the accent, so it means something.
+
+   :first-of-type, not :first-child: the column header is the first child of
+   .lb-standings, so a child-counting selector here matches nothing at all
+   and silently never applies. */
+.leaderboard-entry:first-of-type .lb-rank {
+    color: var(--fire-glow);
+}
+
 .lb-name {
-    font-family: var(--font-heading);
-    font-size: 1.25em;
-    font-weight: 700;
-    color: var(--sand-warm);
-    letter-spacing: 0.03em;
+    font-family: var(--font-ui);
+    font-size: 1em;
+    font-weight: 650;
+    color: var(--sand-light);
+    letter-spacing: -0.005em;
 }
 
 /* Per-season team name, set by the player on My Team */
@@ -761,11 +786,12 @@ details.lb-team > summary.lb-row:focus-visible {
 }
 
 .lb-points {
-    font-family: var(--font-label);
-    font-size: 1.4em;
-    font-weight: 400;
-    color: var(--torch-gold);
-    letter-spacing: 0.03em;
+    font-family: var(--font-ui);
+    font-size: 1.05em;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    color: var(--sand-light);
+    letter-spacing: -0.01em;
 }
 
 /* Prediction mode toggle — frozen vs projected win percentages */
@@ -1299,13 +1325,16 @@ details.lb-pick[open] .lb-pick-stats {
 }
 
 .lb-badge {
-    font-family: var(--font-label);
-    font-size: max(var(--fs-floor), 0.6em);
+    /* These were 12px condensed all-caps carrying multi-word phrases, which
+       is hard to read regardless of colour. Contrast was never the issue:
+       every badge measures 6:1 or better on its own tint. Sentence case in
+       the UI sans, a little larger, with the tracking removed. */
+    font-family: var(--font-ui);
+    font-size: max(var(--fs-floor), 0.72em);
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 1px 7px;
-    border-radius: 10px;
+    letter-spacing: 0;
+    padding: 2px 8px;
+    border-radius: 4px;
     white-space: nowrap;
 }
 
@@ -2145,15 +2174,16 @@ details.lb-champion[open] > summary.lb-row {
 }
 
 .lb-season-badge {
-    font-family: var(--font-label);
-    font-size: 0.95em;
-    letter-spacing: 0.04em;
+    font-family: var(--font-ui);
+    font-size: max(var(--fs-floor), 0.7rem);
+    font-weight: 600;
+    letter-spacing: 0;
     color: var(--torch-gold);
     background: rgba(252, 163, 17, 0.12);
-    border: 1px solid rgba(252, 163, 17, 0.25);
-    padding: 0.15rem 0.45rem;
-    border-radius: 4px;
-    line-height: 1;
+    border: 0;
+    padding: 1px 6px;
+    border-radius: 3px;
+    line-height: 1.4;
 }
 
 /* Sole Survivor row — highlighted on finale pages */
@@ -2590,6 +2620,33 @@ section > table {
     }
 }
 
+.lb-compare {
+    margin: 0.75rem 0 1.5rem;
+    text-align: center;
+    font-size: max(var(--fs-floor), 0.85em);
+}
+
+.lb-compare a {
+    color: var(--text-dim);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+}
+
+.lb-compare a:hover {
+    color: var(--fire-glow);
+    border-bottom-color: var(--fire-glow);
+}
+
+/* ---- Phone tab bar -------------------------------------------------
+   Hidden above 640px; the desktop nav is unchanged. Below it, the top
+   nav's links are hidden and these are the primary destinations, so the
+   header stays one row instead of wrapping to three. */
+
+.tabbar,
+.tabbar-sheet {
+    display: none;
+}
+
 /* --- Phones, nav (<= 640px) --- */
 
 @media (max-width: 640px) {
@@ -2623,13 +2680,127 @@ section > table {
         letter-spacing: 0.05em;
     }
 
-    /* Links drop to their own row and wrap instead of overflowing */
+    /* The links live in the tab bar at the bottom instead */
     .nav-links {
-        width: 100%;
-        flex-wrap: wrap;
-        gap: 0.2rem;
-        padding-top: 0.35rem;
-        border-top: 1px solid rgba(42, 64, 85, 0.6);
+        display: none;
+    }
+
+    nav {
+        flex-wrap: nowrap;
+    }
+
+    .tabbar {
+        display: flex;
+        position: fixed;
+        left: 0.5rem;
+        right: 0.5rem;
+        bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+        z-index: 60;
+        justify-content: space-around;
+        gap: 0.15rem;
+        padding: 0.3rem 0.2rem;
+        border: 1px solid var(--card-border);
+        border-radius: 999px;
+        background: rgba(22, 37, 53, 0.97);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    .tabbar-item {
+        all: unset;
+        cursor: pointer;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.15rem;
+        min-height: 3rem;
+        padding: 0.35rem 0.2rem;
+        border-radius: 999px;
+        color: var(--text-dim);
+        text-align: center;
+        transition: color 0.15s;
+    }
+
+    .tabbar-item svg {
+        width: 22px;
+        height: 22px;
+        fill: currentColor;
+    }
+
+    .tabbar-item span {
+        font-family: var(--font-label);
+        font-size: max(var(--fs-floor), 0.68rem);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        line-height: 1;
+    }
+
+    .tabbar-item.is-active {
+        color: var(--fire-glow);
+    }
+
+    .tabbar-item:focus-visible {
+        outline: 2px solid var(--fire-glow);
+        outline-offset: -2px;
+    }
+
+    /* The sheet sits above the bar, not over it */
+    .tabbar-sheet {
+        display: block;
+        position: fixed;
+        left: 0.5rem;
+        right: 0.5rem;
+        bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+        z-index: 61;
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 0.4rem;
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        background: var(--deep-ocean);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    }
+
+    .tabbar-sheet[hidden] {
+        display: none;
+    }
+
+    .tabbar-sheet-label {
+        margin: 0.35rem 0.6rem 0.2rem;
+        font-family: var(--font-label);
+        font-size: max(var(--fs-floor), 0.72rem);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+    }
+
+    .tabbar-sheet-item {
+        display: block;
+        min-height: 2.75rem;
+        padding: 0.7rem 0.6rem;
+        border-radius: 6px;
+        color: var(--text-light);
+        text-decoration: none;
+    }
+
+    .tabbar-sheet-item:hover,
+    .tabbar-sheet-item:focus-visible {
+        background: var(--ocean-surface);
+        color: var(--sand-warm);
+    }
+
+    /* Content must clear the bar */
+    body {
+        padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* The tab bar is the navigation on phones, so the floating contents
+       button goes rather than competing with it for the same corner. The
+       page is a scroll and the sections are short. */
+    .toc-toggle,
+    .page-toc {
+        display: none;
     }
 
     .nav-btn {
@@ -2674,8 +2845,42 @@ section > table {
 /* --- Phones, content (<= 576px). Wins over the 640px block above. --- */
 
 @media (max-width: 576px) {
-    h1 { font-size: 1.6rem; }
-    h2 { font-size: 1.3rem; }
+    /* The page opens with a season name, a meta line, the timeline and a
+       section heading before any data. Each is legitimate; together they
+       were pushing the first standings row off the screen. These shrink the
+       furniture rather than remove it. */
+    h1 {
+        font-size: 1.35rem;
+        line-height: 1.15;
+        margin-bottom: 0.15rem;
+    }
+
+    h2 {
+        font-size: max(var(--fs-floor), 0.8rem);
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        margin-bottom: 0.5rem;
+    }
+
+    hgroup {
+        margin-bottom: 0.75rem;
+    }
+
+    hgroup > p {
+        font-size: max(var(--fs-floor), 0.85rem);
+        color: var(--text-dim);
+    }
+
+    .lb-hint {
+        font-size: max(var(--fs-floor), 0.8rem);
+        line-height: 1.35;
+    }
+
+    .season-timeline {
+        margin-bottom: 1rem;
+    }
 
     .stats-grid {
         grid-template-columns: 1fr;
@@ -2685,22 +2890,29 @@ section > table {
         grid-template-columns: 1fr;
     }
 
-    /* Timeline: scrolls sideways with real tap targets */
+    /* Timeline: scrolls sideways with real tap targets.
+
+       The widths are tuned so a typical in-progress season fits without
+       scrolling. It matters because the script scrolls the active dot into
+       view on load, and when the row overflows by even a little that pushes
+       the first milestone label off the left edge, where it reads as a
+       truncated word rather than as something scrolled. A long season still
+       scrolls, which is fine; it is the near-fitting case that looked broken. */
     .season-timeline {
-        padding: 1.8rem 0.5rem 2rem;
+        padding: 1.8rem 0.25rem 2rem;
         scroll-snap-type: x proximity;
         -webkit-overflow-scrolling: touch;
     }
 
     .tl-point {
         flex: 0 0 auto;
-        min-width: 2.75rem;
+        min-width: 2.5rem;
         padding: 0.6rem 0;
         scroll-snap-align: center;
     }
 
     .tl-point.milestone {
-        min-width: 4.25rem;
+        min-width: 3.5rem;
     }
 
     .tl-milestone {
@@ -2951,18 +3163,13 @@ section > table {
     }
 
     /* Contents: bottom sheet, thumb-sized links */
-    .toc-toggle {
-        left: 0.75rem;
-        bottom: 1rem;
-        padding: 0.8rem;
-    }
-
+    /* Both this block and the 640px one match here, and this one is later,
+       so the tab-bar clearance has to be repeated rather than inherited. */
+    /* Hidden in the 640px block; repeated because this one is later and
+       would otherwise bring them back. */
+    .toc-toggle,
     .page-toc {
-        left: 0.5rem;
-        right: 0.5rem;
-        bottom: 4.25rem;
-        width: auto;
-        max-height: 60vh;
+        display: none;
     }
 
     .toc-link {
