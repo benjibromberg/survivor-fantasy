@@ -82,9 +82,11 @@ def create_app():
     login_manager.login_view = "auth.login"
 
     from .auth import auth_bp
+    from .headshots import headshots_bp
     from .routes import _ensure_contrast, main_bp
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(headshots_bp)
     app.register_blueprint(main_bp)
 
     app.jinja_env.filters["contrast"] = _ensure_contrast
