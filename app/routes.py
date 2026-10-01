@@ -33,7 +33,7 @@ from .models import (
     db,
     normalize_email,
 )
-from .predictions import calculate_win_probabilities
+from .predictions import calculate_win_probabilities, season_structure_known
 from .scoring import SCORING_SYSTEMS, compute_stat_overrides, get_scoring_system
 from .scoring.classic import CONFIG_LABELS, DEFAULT_CONFIG, LEGACY_CONFIG
 
@@ -746,6 +746,13 @@ def leaderboard(season_id):
     # Win probabilities (skip for historical as_of views — too expensive)
     win_pcts = {}
     projected_win_pcts = {}
+    # Tell players why there are no odds yet, rather than leaving a gap
+    odds_pending = bool(
+        leaderboard_data
+        and active_count > 0
+        and as_of is None
+        and not season_structure_known(season)
+    )
     if leaderboard_data and active_count > 0 and as_of is None:
         frozen, projected, total_scenarios, exhaustive, _rates = (
             calculate_win_probabilities(season)
@@ -983,6 +990,7 @@ def leaderboard(season_id):
         effective_as_of=effective_as_of,
         win_pcts=win_pcts,
         projected_win_pcts=projected_win_pcts,
+        odds_pending=odds_pending,
         stat_boards=stat_boards,
         breakdown_labels=breakdown_labels,
         progression_datasets=progression_datasets,

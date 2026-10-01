@@ -79,6 +79,9 @@
     </div>
 </div>
 <p class="lb-hint">Tap a team to see its castaways, and a castaway to see how their points were earned.</p>
+{% if odds_pending %}
+<p class="lb-hint">Win odds will show up around the merge, once this season's jury size is known.</p>
+{% endif %}
 
 <div class="lb-standings">
 {% for entry in leaderboard %}
