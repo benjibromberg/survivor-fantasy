@@ -280,16 +280,51 @@ Things to know before running it:
   not recreated unless they have a linked email. Only the highest-numbered
   season built is marked active (pass `--active=N` to choose another), so
   check the admin panel afterwards.
-- To load a draft from a file for a season that has no picks in the database
-  yet, put the file in `data/picks/` on the host and run the same command. For
-  a season that already has picks, the export in step 1 overwrites
-  `season{N}.json` and outranks a suffixed file, so edit those picks in the
-  admin panel instead.
+- Do not re-seed to add a season or to load a draft. Use `add_season.py`
+  (**Adding a season** below), which leaves the rest of the database alone. For
+  a season that already has picks, edit them in the admin panel.
 
 ## Auto-Refresh
 
 An APScheduler job refreshes survivoR data daily at 8am EST, inside the Flask
-process. No cron setup needed.
+process. No cron setup needed. It refreshes the **active** season only, so a new
+season gets no data updates until it is activated.
+
+## Adding a season
+
+A new season does not need a re-seed. `add_season.py` adds one season to the
+existing database and touches nothing else.
+
+```bash
+# 1. Create the season once survivoR has its cast. It is created inactive, so
+#    the homepage keeps showing the current season.
+docker compose exec survivor-fantasy python add_season.py 52
+
+# 2. After the draft, put the pick file in data/picks/ on the host
+#    (format: picks/README.md), then load it and switch the active season.
+docker compose exec survivor-fantasy \
+  python add_season.py 52 --picks /app/data/picks/season52.json --activate
+```
+
+Each run first backs the database up to `data/backups/`. What the steps do:
+
+- **Create:** downloads the latest survivoR dataset, creates the season and its
+  castaways, and fetches headshots. If survivoR has no data for the season yet,
+  nothing is created.
+- **`--picks`:** loads a draft into a season that has no picks yet. The whole
+  file is checked first: every castaway name has to match the season's
+  castaways exactly, and every pick type has to be a known code. If anything is
+  off, nothing is written and the problems are listed. Players in the file who
+  do not exist yet are created.
+- **`--activate`:** makes the season the only active one, the same as the toggle
+  on the admin seasons page.
+
+The same steps work from the admin panel (create the season, enter each
+player's picks, then activate), which is the way to change picks afterwards. To
+print the exact castaway names for a pick file, open the season's admin page.
+
+Picks loaded this way are in the database, and the next export rewrites
+`data/picks/season{N}.json` from it.
 
 ## Proxmox-Specific Notes
 
