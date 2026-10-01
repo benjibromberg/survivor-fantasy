@@ -105,8 +105,21 @@ def league(client):
         version_season="US98",
         episode_stats=_cumulative({}, 5),
     )
+    # The winner carries an elimination_episode too: the finale is where their
+    # game ended. So do both runners-up and whoever loses the fire challenge.
+    champ = Survivor(
+        season_id=season.id,
+        name="Champ",
+        full_name="Champ Winner",
+        voted_out_order=4,
+        elimination_episode=5,
+        result="Sole Survivor",
+        castaway_id="US983",
+        version_season="US98",
+        episode_stats=_cumulative({1: {"conf": 3}, 5: {"conf": 2, "ii": 1}}, 5),
+    )
     pat = User(username="pat", display_name="Pat", email="pat@example.com")
-    db.session.add_all([boot, runner, quiet, pat])
+    db.session.add_all([boot, runner, quiet, champ, pat])
     db.session.flush()
     db.session.add_all(
         Pick(
@@ -115,11 +128,17 @@ def league(client):
             survivor_id=s.id,
             pick_type="draft",
         )
-        for s in (boot, runner, quiet)
+        for s in (boot, runner, quiet, champ)
     )
     db.session.commit()
     return SimpleNamespace(
-        c=c, season=season, pat=pat, boot=boot, runner=runner, quiet=quiet
+        c=c,
+        season=season,
+        pat=pat,
+        boot=boot,
+        runner=runner,
+        quiet=quiet,
+        champ=champ,
     )
 
 
@@ -156,7 +175,7 @@ class TestEpisodeRows:
         rows = _episode_rows(league.boot)
 
         assert [r["episode"] for r in rows] == [1, 2]
-        assert rows[-1]["eliminated"] is True
+        assert rows[-1]["final"] is True
 
     def test_a_castaway_still_in_the_game_keeps_every_episode(self, league):
         from app.routes import _episode_rows
@@ -164,7 +183,7 @@ class TestEpisodeRows:
         rows = _episode_rows(league.runner)
 
         assert [r["episode"] for r in rows] == [1, 2, 3, 4, 5]
-        assert not any(r["eliminated"] for r in rows)
+        assert not any(r["final"] for r in rows)
 
     def test_a_castaway_with_no_activity_gets_no_table(self, league):
         """All-zero rows are a blank table, not information."""
@@ -180,6 +199,23 @@ class TestEpisodeRows:
 
         assert max(conf) == 1.0  # the castaway's own best episode
         assert conf[0] == pytest.approx(0.5)  # 2 confessionals against a best of 4
+
+    def test_the_winner_is_not_described_as_voted_out(self, league):
+        """elimination_episode is where a game ended, not where a vote landed.
+
+        The winner, both runners-up and the fire loser all share the finale's
+        elimination_episode without anyone voting them out.
+        """
+        from app.routes import _episode_rows
+
+        rows = _episode_rows(league.champ)
+
+        # The marker still belongs on their last row; the claim it makes must
+        # be true for a winner, so it says the game ended rather than why.
+        assert rows[-1]["final"] is True
+        html = _page(league)
+        assert "voted out this episode" not in html
+        assert "last episode in the game" in html
 
     def test_as_of_truncates_the_table(self, league):
         from app.routes import _episode_rows

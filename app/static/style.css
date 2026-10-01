@@ -1222,11 +1222,11 @@ details.lb-pick[open] .lb-pick-stats {
     color: var(--text-dim);
 }
 
-.lb-episodes tbody tr.is-out th {
+.lb-episodes tbody tr.is-final th {
     color: var(--fire-glow);
 }
 
-.lb-ep-out {
+.lb-ep-final {
     color: var(--fire-bright);
 }
 

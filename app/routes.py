@@ -202,7 +202,11 @@ def _episode_rows(survivor, as_of_episode=None):
                 "episode": ep,
                 "tribe": cur.get("tribe"),
                 "tribe_color": cur.get("tribe_color"),
-                "eliminated": ep == survivor.elimination_episode,
+                # The end of this castaway's game, which is NOT the same as
+                # being voted out: the winner, both runners-up and the fire
+                # loser all share the finale's elimination_episode.
+                "final": survivor.voted_out_order > 0
+                and ep == survivor.elimination_episode,
                 "values": values,
             }
         )

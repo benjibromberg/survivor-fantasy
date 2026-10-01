@@ -168,8 +168,8 @@ lb-pick{% if variant == 'special' %} lb-pick-special lb-pick-{{ pick.pick_type_r
         </thead>
         <tbody>
             {% for row in pick.episode_rows %}
-            <tr{% if row.eliminated %} class="is-out"{% endif %}>
-                <th scope="row">{{ row.episode }}{% if row.eliminated %} <span class="lb-ep-out" title="Voted out this episode" aria-label="voted out this episode">&#8224;</span>{% endif %}</th>
+            <tr{% if row.final %} class="is-final"{% endif %}>
+                <th scope="row">{{ row.episode }}{% if row.final %} <span class="lb-ep-final" title="Last episode in the game" aria-label="last episode in the game">&#9679;</span>{% endif %}</th>
                 <td class="lb-ep-tribe"{% if row.tribe_color %} style="color: {{ row.tribe_color|contrast }};"{% endif %}>{{ row.tribe or "" }}</td>
                 {% for cell in row.cells %}
                 <td class="lb-ep-cell"{% if cell.value %} style="--heat: {{ cell.heat }};"{% endif %}>{{ cell.value or "" }}</td>
