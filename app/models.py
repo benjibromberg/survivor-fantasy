@@ -28,7 +28,8 @@ class Season(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     number = db.Column(db.Integer, unique=True, nullable=False)
     name = db.Column(db.String(100))
-    is_active = db.Column(db.Boolean, default=True)
+    # Inactive until explicitly activated (only one season is active at a time)
+    is_active = db.Column(db.Boolean, default=False)
     # Overwritten by survivoR data — nullable for in-progress seasons
     num_players = db.Column(db.Integer, default=18)
     num_episodes = db.Column(db.Integer, default=13)
@@ -41,6 +42,16 @@ class Season(db.Model):
     scoring_config = db.Column(db.Text, default="{}")
     survivors = db.relationship("Survivor", backref="season", lazy=True)
     picks = db.relationship("Pick", backref="season", lazy=True)
+
+    @classmethod
+    def get_active(cls):
+        """Return the active season, or None if no season is active.
+
+        Only one season should be active at a time. If several rows are
+        flagged anyway, the highest season number wins so every caller gets
+        the same answer.
+        """
+        return cls.query.filter_by(is_active=True).order_by(cls.number.desc()).first()
 
     @property
     def merge_threshold(self):

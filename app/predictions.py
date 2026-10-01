@@ -25,13 +25,53 @@ CACHE_TTL = 300  # 5 minutes
 # Cached historical rates (computed once from survivoR.xlsx, survives across requests)
 _rates_cache = None
 
+# Survivor columns the simulation and the scorer read. Display-only stats
+# (confessionals, tribe, bio) are left out so they don't force a recompute.
+_SURVIVOR_KEY_ATTRS = (
+    "voted_out_order",
+    "made_jury",
+    "won_fire",
+    "day_voted_out",
+    "elimination_episode",
+    *SCORING_STAT_KEYS.values(),
+)
+
 
 def _cache_key(season, scoring_config):
-    """Build a cache key from season state + scoring config."""
+    """Build a cache key from season state + picks + scoring config.
+
+    Odds are computed per fantasy player from their picks, so the picks are
+    part of the key. Each worker process holds its own copy of the cache, so
+    a changed key is the only invalidation that reaches all of them.
+    """
     survivors = Survivor.query.filter_by(season_id=season.id).all()
+    # Ordered by each table's unique columns rather than row id: re-saving
+    # the same picks creates new rows but should not change the key
+    picks = (
+        Pick.query.filter_by(season_id=season.id)
+        .order_by(Pick.user_id, Pick.survivor_id)
+        .all()
+    )
+    ss_picks = (
+        SoleSurvivorPick.query.filter_by(season_id=season.id)
+        .order_by(SoleSurvivorPick.user_id, SoleSurvivorPick.episode)
+        .all()
+    )
     state = {
-        "season_id": season.id,
-        "vo": {s.id: s.voted_out_order for s in survivors},
+        "season": [
+            season.id,
+            season.scoring_system,
+            season.num_players,
+            season.num_episodes,
+            season.left_at_jury,
+            season.n_finalists,
+        ],
+        "survivors": {
+            s.id: [getattr(s, attr) for attr in _SURVIVOR_KEY_ATTRS] for s in survivors
+        },
+        "picks": [[p.user_id, p.survivor_id, p.pick_type] for p in picks],
+        # Episode matters: the streak bonus counts episodes back from the finale
+        "ss_picks": [[p.user_id, p.episode, p.survivor_id] for p in ss_picks],
         "config": scoring_config,
     }
     raw = json.dumps(state, sort_keys=True)

@@ -23,10 +23,10 @@ load_dotenv()
 
 from app import create_app
 from app.data import (
-    NAME_TO_SITE,
     SURVIVOR_DATA_FILE,
     _build_nickname_map,
     compute_castaway_stats,
+    generate_season_images,
     get_idol_ids,
     refresh_season,
     us_season_filter,
@@ -377,35 +377,18 @@ def load_picks_from_json(filepath, season, survivor_map):
 
 
 def generate_image_urls():
-    """Generate biopic image URLs from fantasysurvivorgame.com using predictable URL pattern.
+    """Generate biopic image URLs for every season from fantasysurvivorgame.com.
 
-    No scraping — just constructs URLs from castaway names.
-    Pattern: /images/{season}/biopics/{firstname}BIO.jpg
+    URL construction and matching live in app.data.generate_season_images().
     """
+    totals = dict(
+        db.session.query(Survivor.season_id, db.func.count(Survivor.id))
+        .group_by(Survivor.season_id)
+        .all()
+    )
     for season in Season.query.all():
-        matched = 0
-        for surv in Survivor.query.filter_by(season_id=season.id).all():
-            name_key = surv.name.lower()
-            site_name = NAME_TO_SITE.get(name_key, surv.name.split()[0].lower())
-
-            # Try the direct name, then quoted version for names like Q
-            candidates = [
-                f"https://www.fantasysurvivorgame.com/images/{season.number}/biopics/{site_name}BIO.jpg",
-                f"https://www.fantasysurvivorgame.com/images/{season.number}/biopics/%22{site_name}%22BIO.jpg",
-            ]
-            for url in candidates:
-                try:
-                    resp = http_requests.head(url, timeout=5)
-                    if resp.status_code == 200:
-                        surv.image_url = url
-                        matched += 1
-                        break
-                except Exception:
-                    pass
-
-        db.session.commit()
-        total = Survivor.query.filter_by(season_id=season.id).count()
-        print(f"  Season {season.number}: {matched}/{total} images")
+        matched = generate_season_images(season)
+        print(f"  Season {season.number}: {matched}/{totals.get(season.id, 0)} images")
 
 
 def discover_pick_files(picks_dir):
