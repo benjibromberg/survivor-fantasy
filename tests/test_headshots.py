@@ -1,6 +1,7 @@
 """Tests for castaway headshot URLs: candidate ordering and the HEAD-check loop."""
 
 import importlib
+import logging
 import sys
 from types import SimpleNamespace
 
@@ -156,3 +157,23 @@ class TestGenerateSeasonImages:
         assert danny.image_url == _url(51, "kilby")
         assert thien_an.image_url == _url(51, "thien%20an")
         assert nobody.image_url is None
+
+    def test_request_failure_is_logged_and_next_candidate_tried(
+        self, app, monkeypatch, caplog
+    ):
+        _, db = app
+        season, (q,) = _add_season(db, 46, ["Q"])
+
+        def fake_head(url, timeout):
+            if url == _url(46, "q"):
+                raise requests.ConnectionError("boom")
+            return SimpleNamespace(status_code=200)
+
+        monkeypatch.setattr("app.data.requests.head", fake_head)
+
+        with caplog.at_level(logging.WARNING, logger="app.data"):
+            assert generate_season_images(season) == 1
+
+        assert q.image_url == _url(46, "%22q%22")
+        assert _url(46, "q") in caplog.text
+        assert "boom" in caplog.text

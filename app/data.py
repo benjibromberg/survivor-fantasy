@@ -718,14 +718,21 @@ def generate_season_images(season):
         for url in headshot_url_candidates(season.number, surv.name):
             try:
                 resp = requests.head(url, timeout=5)
-                if resp.status_code == 200:
-                    surv.image_url = url
-                    matched += 1
-                    break
-            except Exception:
-                pass
+            except requests.RequestException as e:
+                logger.warning(
+                    "Season %d image check failed for %s: %s", season.number, url, e
+                )
+                continue
+            if resp.status_code == 200:
+                surv.image_url = url
+                matched += 1
+                break
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
     logger.info("Season %d images: %d/%d", season.number, matched, len(survivors))
     return matched
 
