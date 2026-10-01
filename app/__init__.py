@@ -1,4 +1,6 @@
+import logging
 import sqlite3
+from contextlib import contextmanager
 
 from flask import Flask
 from flask_login import LoginManager
@@ -97,6 +99,39 @@ def _add_missing_indexes():
                 log.info("Created index %s on %s", index.name, table.name)
 
 
+@contextmanager
+def _schema_sync_lock():
+    """Hold an exclusive cross-process lock while the schema is created or synced.
+
+    Gunicorn starts several workers and each one calls create_app(), so each
+    runs create_all() and the column and index sync against the same database
+    at the same moment. Unserialized, the loser of a CREATE TABLE, ALTER TABLE
+    or CREATE INDEX fails with "already exists" / "duplicate column name" (or
+    "database is locked" while the journal mode is switched) and that worker
+    dies at boot. The lock is a file beside the database, so the second worker
+    waits and then finds the schema complete.
+    """
+    path = db.engine.url.database
+    if db.engine.dialect.name != "sqlite" or not path or path == ":memory:":
+        yield
+        return
+    try:
+        import fcntl
+    except ImportError:  # not POSIX: no lock available, same behaviour as before
+        logging.getLogger(__name__).warning(
+            "No file locking on this platform; schema sync is not serialized"
+        )
+        yield
+        return
+
+    with open(f"{path}.schema-lock", "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object("config.Config")
@@ -122,7 +157,7 @@ def create_app():
 
         return {"all_seasons": Season.query.order_by(Season.number.desc()).all()}
 
-    with app.app_context():
+    with app.app_context(), _schema_sync_lock():
         db.create_all()
         _add_missing_columns()
         _add_missing_indexes()
