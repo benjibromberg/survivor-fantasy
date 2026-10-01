@@ -10,15 +10,18 @@
 </hgroup>
 
 <!-- TL;DR -->
-<article id="tldr-section" style="display: none;">
-    <header><h2>The Bottom Line</h2></header>
+<details class="fold" open id="tldr-section" style="display: none;">
+    <summary><h2>The Bottom Line</h2></summary>
+    <div class="fold-body">
     <div class="tldr-grid" id="tldr-grid"></div>
     <p id="tldr-detail" style="margin-top: 1rem; color: #9aa5b1;"></p>
-</article>
+</div>
+</details>
 
 <!-- Methodology -->
-<article>
-    <header><h2>How We Tested</h2></header>
+<details class="fold" open data-mobile-collapsed>
+    <summary><h2>How We Tested</h2></summary>
+    <div class="fold-body">
     <p>For each scoring configuration, we simulated random snake drafts
     across 7 player counts (4&ndash;10) and 9 seasons, then tracked full leaderboard trajectories
     episode-by-episode. Every player drafts exactly 4 castaways. When there are too many
@@ -29,6 +32,7 @@
     <p>Each configuration was scored on twelve metrics, combined into a single
     <strong>composite fun/fairness score</strong> (higher = better):</p>
 
+    <div class="table-scroll">
     <table>
         <thead><tr><th>Metric</th><th>What It Measures</th><th>Goal</th><th>Weight</th></tr></thead>
         <tbody>
@@ -70,51 +74,62 @@
                 <td>Lower = fairer</td><td>-1.0</td></tr>
         </tbody>
     </table>
+    </div>
 
     <p><small>Configs with high variance across drafts are penalized (consistency penalty
     on comeback rate, suspense, draft skill, and final spread standard deviations).
     Parameter space covered using two-phase optimization: stratified random sampling
     (25,000 configs) followed by iterative neighborhood refinement of top results.
     All point values snapped to 0.5 increments.</small></p>
-</article>
+</div>
+</details>
 
 <!-- Score Distribution -->
-<article>
-    <header><h2>Score Distribution</h2></header>
+<details class="fold" open>
+    <summary><h2>Score Distribution</h2></summary>
+    <div class="fold-body">
     <p>How all tested configurations scored. The current default and legacy configs are marked.</p>
     <canvas id="histogram-chart" style="max-height: 300px;"></canvas>
-</article>
+</div>
+</details>
 
 <!-- Game Health: Legacy vs Recommended -->
-<article>
-    <header><h2>Game Health by Season</h2></header>
+<details class="fold" open>
+    <summary><h2>Game Health by Season</h2></summary>
+    <div class="fold-body">
     <p>Aggregate stats across all simulated drafts for each season.
     Where available, legacy scoring stats are shown alongside the recommended config
     so you can see exactly what changes.</p>
     <div id="season-health-grid" class="season-health-grid"></div>
-</article>
+</div>
+</details>
 
 <!-- Closeness Throughout the Game -->
-<article>
-    <header><h2>How Close Are Games?</h2></header>
+<details class="fold" open>
+    <summary><h2>How Close Are Games?</h2></summary>
+    <div class="fold-body">
     <p>The gap between 1st and 2nd place throughout the season, across 50 simulated 6-player drafts.
     The shaded band shows the 25th&ndash;75th percentile range; the line is the median.
     A narrow band near the bottom means games are consistently close.</p>
     <div id="percentile-charts"></div>
-</article>
+</div>
+</details>
 
 <!-- Side-by-Side: Legacy vs Recommended -->
-<article>
-    <header><h2>Legacy vs Recommended</h2></header>
+<details class="fold" open>
+    <summary><h2>Legacy vs Recommended</h2></summary>
+    <div class="fold-body">
     <p>Same 6-player draft, same elimination order, different scoring.
     Each draft was selected as the median outcome across 50 random drafts
     (not cherry-picked for drama or dominance).</p>
     <div id="comparison-charts"></div>
-</article>
+</div>
+</details>
 
 <!-- Parameter Impact -->
-<article>
-    <header><h2>Parameter Impact</h2></header>
+<details class="fold" open>
+    <summary><h2>Parameter Impact</h2></summary>
+    <div class="fold-body">
     <p>For each scoring parameter, this shows the average fun/fairness score when that parameter
     is set to each value (with all other parameters randomized). Taller bars = that value
     tends to produce better games.</p>
@@ -152,32 +167,41 @@
             <canvas id="chart-advantage_play_val"></canvas>
         </div>
     </div>
-</article>
+</div>
+</details>
 
 <!-- Key Findings -->
-<article>
-    <header><h2>Key Findings</h2></header>
+<details class="fold" open data-mobile-collapsed>
+    <summary><h2>Key Findings</h2></summary>
+    <div class="fold-body">
+    <div class="table-scroll">
     <table>
         <thead><tr><th>Finding</th><th>Detail</th></tr></thead>
         <tbody id="findings-table">
         </tbody>
     </table>
-</article>
+    </div>
+</div>
+</details>
 
 <!-- Top Configurations -->
-<article>
-    <header><h2>Top Configurations</h2></header>
+<details class="fold" open data-mobile-collapsed>
+    <summary><h2>Top Configurations</h2></summary>
+    <div class="fold-body">
     <p>The highest-scoring configs found. Only parameters that differ from the default are shown.</p>
     <div id="top-configs"></div>
-</article>
+</div>
+</details>
 
 <!-- Recommended Config -->
-<article>
-    <header><h2>Recommended Configuration</h2></header>
+<details class="fold" open data-mobile-collapsed>
+    <summary><h2>Recommended Configuration</h2></summary>
+    <div class="fold-body">
     <p>The full recommended config (highest composite score):</p>
     <pre id="recommended-config" style="font-size: 0.85em;"></pre>
     <div id="recommended-metrics"></div>
-</article>
+</div>
+</details>
 
 <p><a href="{{ url_for('main.rules') }}" class="nav-link-back">&larr; Rules</a></p>
 
@@ -213,6 +237,7 @@ const timelineColors = [
 const chartDefaults = {
     responsive: true,
     maintainAspectRatio: true,
+                    aspectRatio: window.innerWidth < 576 ? 1.15 : 2,
     plugins: {
         legend: { display: false },
     },
@@ -523,6 +548,7 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
+                    aspectRatio: window.innerWidth < 576 ? 1.15 : 2,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: {
@@ -596,6 +622,7 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
             const chartOpts = (maxY) => ({
                 responsive: true,
                 maintainAspectRatio: true,
+                    aspectRatio: window.innerWidth < 576 ? 1.15 : 2,
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: {
@@ -876,7 +903,10 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
             tBody.appendChild(tr);
         });
         table.appendChild(tBody);
-        topDiv.appendChild(table);
+        const scroller = document.createElement('div');
+        scroller.className = 'table-scroll';
+        scroller.appendChild(table);
+        topDiv.appendChild(scroller);
     }
 
     // ── Recommended Config ──────────────────────────────────────────
@@ -1000,11 +1030,6 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
 }
-@media (max-width: 768px) {
-    .comparison-grid {
-        grid-template-columns: 1fr;
-    }
-}
 .param-chart-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -1025,6 +1050,17 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
 .param-group canvas {
     margin-bottom: 0.5rem;
     max-height: 120px;
+}
+@media (max-width: 768px) {
+    .comparison-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 576px) {
+    .param-chart-grid { grid-template-columns: 1fr; }
+    .season-health-grid { grid-template-columns: 1fr; }
+    .tldr-grid { grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
+    .tldr-value { font-size: 1.6rem; }
+    .season-health-card { padding: 0.85rem 0.9rem; }
+    .param-group canvas { max-height: 150px; }
 }
 #recommended-config {
     background: var(--card-bg);
