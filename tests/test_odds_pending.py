@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-NOTE = "Win odds will show up around the merge"
+NOTE = "Win odds appear around the merge"
 
 
 @pytest.fixture()
