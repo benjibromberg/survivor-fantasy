@@ -67,7 +67,7 @@ Branch naming follows `<type>/<short-description>`:
 - `refactor/scoring-engine`
 - `docs/contributing-guide`
 - `test/highlight-edge-cases`
-- `ci/snyk-actions`
+- `ci/pin-action-shas`
 
 ## Commit Conventions
 

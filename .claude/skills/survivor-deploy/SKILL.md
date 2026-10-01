@@ -1,7 +1,7 @@
 ---
 name: survivor-deploy
 description: >-
-  Deploying and operating the survivor-fantasy app: the Proxmox host, Docker plus Cloudflare Tunnel, the update and re-seed procedures, what lives on the data volume, CI/CD workflows and the Snyk setup. Use when deploying, re-seeding, adding a season to production, changing CI, or running a security scan.
+  Deploying and operating the survivor-fantasy app: the Proxmox host, Docker plus Cloudflare Tunnel, the update and re-seed procedures, what lives on the data volume, and CI/CD workflows. Use when deploying, re-seeding, adding a season to production, or changing CI.
 ---
 
 # survivor-deploy
@@ -38,25 +38,13 @@ docker compose up -d
 ## CI/CD
 
 - **CI** (`.github/workflows/ci.yml`): `pytest` + `ruff` on PR/push.
-- **Security** (`.github/workflows/security.yml`): Three Snyk jobs (SAST, SCA, container) on PR, push to main, daily 8am ET. SAST/SCA block on high/critical via SARIF `error`-level parsing; container is advisory-only. All action refs pinned to commit SHAs.
 - **Dependabot** (`.github/dependabot.yml`): Weekly updates for pip, GitHub Actions, Docker. Conventional commit prefixes.
-- **Branch protection**: `snyk-code` and `snyk-sca` required checks on `main`. Admin bypass enabled.
+- **Branch protection**: `pytest`, `ruff` and `docker-build` required checks on `main`. Admin bypass enabled.
 - **Preview deployments** (#35): Coolify on Proxmox (under evaluation — security constraints documented in issue).
-## Security (Snyk)
+## Security practices
 
-Snyk MCP is configured globally for "Secure at Inception" scanning. Run scans before shipping code changes.
+These outlived the scanner that first flagged them and are kept on their own merits.
 
-**CI workflow gotchas (`security.yml`):**
-- **`--severity-threshold` filters SARIF output**, not just exit code. Don't use it if you want all findings visible in Code Scanning. The workflow uses `continue-on-error` + `jq` SARIF parsing instead.
-- **Snyk container SARIF has invalid `security-severity` values** (`"undefined"`, `"null"` strings). Must `sed`-sanitize before `upload-sarif`. See github/codeql-action#2187.
-- **`snyk/actions/*` are Docker actions** — they run their own Python. Host-side `setup-python` + `pip install` is redundant for SCA scans.
-- **GitHub Actions `permissions:` block** defaults unspecified permissions to `none`. Always include `contents: read` alongside `security-events: write`.
-- **Fork PRs won't be scanned** — `SNYK_TOKEN` is withheld from fork `pull_request` events. Checks show red (safe default), manual review required.
-
-- **`snyk_code_scan`**: Run on new/modified Python code. Use `path` = absolute project path.
-- **`snyk_sca_scan`**: Run when `requirements.txt` changes. Use `command=python3` and `skip_unresolved=true` if venv is not active.
-- **Fix → rescan → repeat**: If issues are found, fix them using Snyk's context, then rescan to verify. Repeat until clean.
-- **No `hashlib.md5`**: Use `hashlib.sha256` for all hashing, even non-cryptographic uses like cache keys. Snyk flags MD5 regardless of context.
-- **CLI path arguments**: `seed.py` and `analyze_scoring.py` accept file paths from command-line args. Always use `os.path.realpath()` and validate paths are within expected directories before opening. Snyk will still flag the taint flow from argparse → open() — this is a residual finding inherent to CLI tools that accept file paths.
-- **Keep dependencies current**: Check `snyk_sca_scan` when updating `requirements.txt`. Pin exact versions.
-- **IaC scan does not apply**: No Terraform/K8s/CloudFormation files in this repo.
+- **Validate CLI path arguments**: `seed.py` and `analyze_scoring.py` take file paths from `argv`. Resolve with `os.path.realpath()` and check the result is inside the directory you expect before opening it.
+- **GitHub Actions `permissions:` blocks** default every unspecified permission to `none`, so a workflow that needs `contents: read` must say so even when it also asks for something else.
+- **Prefer `hashlib.sha256`** over `md5`, including for non-cryptographic uses such as cache keys. There is no upside to md5 here and it reads as a finding to every future reviewer and tool.
