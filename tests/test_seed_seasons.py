@@ -1,4 +1,4 @@
-"""Tests for seed.py season selection and pick-file loading."""
+"""Tests for seed.py season selection, pick-file loading and the active season."""
 
 import importlib
 import json
@@ -213,3 +213,40 @@ class TestLoadPickFiles:
         assert "season51_snakedraft.json" in out
         assert "season50.json" not in out
         assert [p.season_id for p in Pick.query.all()] == [season50.id]
+
+
+# ── Active season ─────────────────────────────────────────────────────────
+
+
+class TestResolveActiveSeason:
+    def test_defaults_to_highest_built_season(self, app):
+        """A requested season that was never built must not win the default."""
+        _, db = app
+        from seed import resolve_active_season
+
+        _add_season(db, 49)
+        _add_season(db, 50)
+
+        assert resolve_active_season().number == 50
+
+    def test_explicit_season_wins(self, app):
+        _, db = app
+        from seed import resolve_active_season
+
+        _add_season(db, 49)
+        _add_season(db, 50)
+
+        assert resolve_active_season(49).number == 49
+
+    def test_explicit_season_not_built_returns_none(self, app):
+        _, db = app
+        from seed import resolve_active_season
+
+        _add_season(db, 50)
+
+        assert resolve_active_season(51) is None
+
+    def test_no_seasons_returns_none(self, app):
+        from seed import resolve_active_season
+
+        assert resolve_active_season() is None

@@ -5,9 +5,11 @@ Usage:
     python seed.py --picks-dir ./picks      # Also load pick JSON files from directory
     python seed.py --no-scrape              # Skip network calls
     python seed.py --seasons 46,47,49,50    # Build exactly these seasons
+    python seed.py --active=49              # Mark this season active
 
 Without --seasons, the seasons built are DEFAULT_SEASONS plus, when --picks-dir
-is given, every season that has a pick file in that directory.
+is given, every season that has a pick file in that directory.  Without
+--active, the highest season that was built is marked active.
 """
 
 import os
@@ -485,6 +487,18 @@ def resolve_season_nums(explicit_seasons, pick_file_seasons=()):
     return sorted(set(DEFAULT_SEASONS) | set(pick_file_seasons))
 
 
+def resolve_active_season(active_season=None):
+    """Return the Season to mark active, or None if there is none.
+
+    --active names it explicitly.  The default is the highest season that was
+    actually built, not the highest requested: a requested season that
+    survivoR has no data for yet would otherwise leave no season active.
+    """
+    if active_season is not None:
+        return Season.query.filter_by(number=active_season).first()
+    return Season.query.order_by(Season.number.desc()).first()
+
+
 def main():
     no_scrape = "--no-scrape" in sys.argv
 
@@ -505,7 +519,7 @@ def main():
             if idx + 1 < len(sys.argv):
                 picks_dir = sys.argv[idx + 1]
 
-    # Parse --active (which season to mark active, default: highest)
+    # Parse --active (which season to mark active, default: highest built)
     active_season = None
     for arg in sys.argv[1:]:
         if arg.startswith("--active="):
@@ -577,9 +591,7 @@ def main():
                 print(f"    WARNING: {w}")
 
         # Mark active season
-        if active_season is None:
-            active_season = max(season_nums)
-        active = Season.query.filter_by(number=active_season).first()
+        active = resolve_active_season(active_season)
         if active:
             active.is_active = True
             db.session.commit()
