@@ -14,10 +14,13 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # GitHub OAuth — create an app at https://github.com/settings/developers
-    GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID", "")
-    GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET", "")
-    # Your GitHub username — only this user can log in as admin
-    ADMIN_GITHUB_USERNAME = os.environ.get("ADMIN_GITHUB_USERNAME", "")
-    # Enable /dev-login for local development (no OAuth needed)
+    # Admin login via Cloudflare Access (email OTP). ADMIN_EMAIL is the
+    # Access-authenticated email that is treated as admin. Cloudflare Access
+    # forwards the verified email in ACCESS_EMAIL_HEADER; the origin is only
+    # reachable through the tunnel behind Access, so the header is trusted.
+    ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "").lower()
+    ACCESS_EMAIL_HEADER = os.environ.get(
+        "ACCESS_EMAIL_HEADER", "Cf-Access-Authenticated-User-Email"
+    )
+    # Enable /dev-login for local development (no Access in front)
     DEV_LOGIN = os.environ.get("DEV_LOGIN", "1") == "1"

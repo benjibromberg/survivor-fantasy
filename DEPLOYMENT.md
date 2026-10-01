@@ -1,142 +1,138 @@
 # Deployment Guide
 
-This app is designed to run on a home server (e.g., Proxmox) using Docker with a Tailscale sidecar for private HTTPS access on your Tailnet — no port forwarding or public exposure required.
+This app runs on a home server (e.g. Proxmox) using Docker, with a
+**Cloudflare Tunnel** sidecar for private HTTPS access and **Cloudflare Access**
+(email one-time PIN) for authentication — no port forwarding, no public
+exposure, and no network client for your league to install. Access is granted by
+adding an email to an allowlist; members get a 6-digit code by email.
 
-This setup follows the same pattern as the [Tailscale self-hosting guide for audiobookshelf](https://github.com/tailscale-dev/video-code-snippets/tree/main/2025/2025-06-self-hosting-part2/audiobookshelf), demonstrated in [this video](https://www.youtube.com/watch?v=guHoZ68N3XM).
+Rationale and the alternatives considered: `docs/cloudflare-private-access.md`.
 
 ## Architecture
 
 ```
-Internet (blocked)
-       |
-[Proxmox Host]
-  └── Docker
-        ├── survivor-fantasy-ts   (Tailscale sidecar)
-        │     └── Tailscale Serve: HTTPS :443 → proxy to 127.0.0.1:5050
-        └── survivor-fantasy      (Flask app via gunicorn)
-              └── Listens on :5050 (network_mode: service:survivor-fantasy-ts)
+League member ──▶ https://www.benjis-survivor-fantasy.party
+                    │  Cloudflare edge: Access enforces email OTP against your allowlist
+                    ▼
+                  Cloudflare Tunnel  (outbound-only; nothing exposed on the host)
+                    ▼
+[Proxmox Host] Docker
+  ├── cloudflared        (Tunnel connector; token-based, remotely managed)
+  └── survivor-fantasy   (Flask app via gunicorn on :5050)
 ```
 
-The Flask app shares the Tailscale container's network stack via `network_mode: service:survivor-fantasy-ts`. Tailscale Serve handles TLS termination and proxies HTTPS traffic to the app on port 5050. The app is only accessible to devices on your Tailnet.
+`cloudflared` makes an outbound connection to Cloudflare and serves the app
+through the tunnel's public hostname. Cloudflare Access sits in front of that
+hostname and only forwards a request to the tunnel after the visitor passes your
+OTP policy. The app's admin login reads the email Access forwards (see
+**Admin login** below).
 
 ## Prerequisites
 
-- A machine running Docker (Proxmox LXC, bare metal, VM, etc.)
-- A [Tailscale account](https://tailscale.com/) with an auth key
-- A [GitHub OAuth App](https://github.com/settings/developers) for admin login
+- A machine running Docker (Proxmox LXC, VM, or bare metal).
+- A free [Cloudflare account](https://dash.cloudflare.com/) with **Zero Trust**
+  enabled, and a domain on Cloudflare DNS (here: `benjis-survivor-fantasy.party`,
+  via Cloudflare Registrar).
 
 ## Setup
 
-### 1. Generate a Tailscale auth key
+The Cloudflare dashboard steps are scripted in the **`cloudflare-access-setup.sh`
+wizard** at the repo root — run it and it walks you through each click and
+captures the tunnel token. The steps it covers:
 
-Go to [Tailscale Admin Console → Settings → Keys](https://login.tailscale.com/admin/settings/keys) and create a new auth key. For a persistent deployment, use a reusable key with no expiry, and tag it appropriately (e.g., `tag:server`).
+### 1. Create the Tunnel and get its token
+Zero Trust → **Networks → Tunnels → Create a tunnel** (e.g. `survivor-fantasy`).
+Choose **Docker** and copy the **token** (the `eyJ...` value). Store it as
+`CF_TUNNEL_TOKEN` in `.env` (and in your secret manager).
 
-### 2. Create a GitHub OAuth App
+### 2. Add a public hostname route
+On the tunnel's **Published application routes**, add:
+- **Hostname**: `www.benjis-survivor-fantasy.party`
+- **Service**: `http://survivor-fantasy:5050`
 
-Go to [GitHub → Settings → Developer settings → OAuth Apps](https://github.com/settings/developers) and create a new app:
+(`survivor-fantasy` is the app's compose service name; `cloudflared` reaches it
+over the compose network.)
 
-- **Homepage URL**: `https://survivor-fantasy.<your-tailnet>.ts.net`
-- **Authorization callback URL**: `https://survivor-fantasy.<your-tailnet>.ts.net/auth/callback`
+### 3. Add the One-Time PIN identity provider
+Zero Trust → **Integrations → Identity providers → Add → One-time PIN**. (New
+Zero Trust orgs don't add OTP automatically.)
 
-Note your Client ID and generate a Client Secret.
+### 4. Create the Access application + policy
+Zero Trust → **Access controls → Applications → Add → Self-hosted**:
+- **Application hostname**: `www.benjis-survivor-fantasy.party`
+- **Policy**: Action **Allow**, rule **Emails** (or **Emails ending in**) listing
+  your league. Authentication method: **One-time PIN**.
 
-### 3. Configure environment
-
-Create a `.env` file in the project root:
+### 5. Configure environment
+Create `.env` in the project root (see `.env.example`):
 
 ```env
-# Tailscale
-TS_AUTHKEY=tskey-auth-...
+# Admin login: the Access email treated as admin
+ADMIN_EMAIL=you@example.com
 
-# GitHub OAuth (for admin login)
-GITHUB_CLIENT_ID=your_client_id
-GITHUB_CLIENT_SECRET=your_client_secret
-ADMIN_GITHUB_USERNAME=your_github_username
+# Cloudflare Tunnel token (from step 1)
+CF_TUNNEL_TOKEN=eyJ...
 
-# Flask
+# Required in production (DEV_LOGIN=0). App errors on startup if missing.
 SECRET_KEY=generate-a-random-string-here
 
-# Data directory (optional, defaults to current directory)
+# Optional data directory for the Docker volume mount
 # APPDATA_DIR=/srv/survivor-fantasy
 ```
 
-### 4. Deploy
+### 6. Deploy
 
 ```bash
-# Clone the repo
 git clone https://github.com/benjibromberg/survivor-fantasy.git
 cd survivor-fantasy
+# create .env (above)
 
-# Create .env (see above)
-
-# Seed the database
+# Seed the database, then move it to the data volume
 pip install -r requirements.txt
-python seed.py
-# Move the DB to the data volume mount
-mkdir -p data
-mv survivor_fantasy.db data/
+python seed.py --picks-dir ./picks
+mkdir -p data && mv survivor_fantasy.db data/
 
-# Start the containers
 docker compose up -d
 ```
 
-The app will be available at `https://survivor-fantasy.<your-tailnet>.ts.net` within a minute or two of the Tailscale container joining your Tailnet.
+The app will be live at `https://www.benjis-survivor-fantasy.party` once the
+tunnel connects (a minute or two). The first visit prompts for an email; approved
+addresses receive a one-time code.
 
-### 5. Verify
+### 7. Verify
 
 ```bash
-# Check container status
 docker compose ps
-
-# Check Tailscale status
-docker compose exec survivor-fantasy-ts tailscale status
-
-# Check app logs
+docker compose logs cloudflared       # should show "Registered tunnel connection"
 docker compose logs survivor-fantasy
 ```
 
+## Admin login
+
+The whole site is gated by Access, so every visitor is an authenticated league
+member. **Admin** is whoever's Access email matches `ADMIN_EMAIL`: visit
+`/login` (the "Login" button) and the app promotes that email to admin. Access
+forwards the verified email in the `Cf-Access-Authenticated-User-Email` header;
+because the origin is reachable only through the tunnel behind Access, the app
+trusts that header. For defence-in-depth you can additionally validate the
+`Cf-Access-Jwt-Assertion` JWT against your team's public keys.
+
+`DEV_LOGIN=1` still works for local development (no Access in front); the
+Dockerfile sets `DEV_LOGIN=0` in the image.
+
 ## How It Works
 
-### Docker Compose (`docker-compose.yml`)
-
-Two services:
-
-1. **`survivor-fantasy-ts`** — The Tailscale sidecar container. Joins your Tailnet, gets a hostname (`survivor-fantasy`), and runs Tailscale Serve to accept HTTPS and proxy to the app.
-
-2. **`survivor-fantasy`** — The Flask app built from the `Dockerfile`. Uses `network_mode: service:survivor-fantasy-ts` to share the Tailscale container's network, so it's reachable at `127.0.0.1:5050` from within the sidecar's network namespace.
-
-### Tailscale Serve (`serve.json`)
-
-```json
-{
-  "TCP": { "443": { "HTTPS": true } },
-  "Web": {
-    "${TS_CERT_DOMAIN}:443": {
-      "Handlers": { "/": { "Proxy": "http://127.0.0.1:5050" } }
-    }
-  },
-  "AllowFunnel": { "${TS_CERT_DOMAIN}:443": false }
-}
-```
-
-- Listens on port 443 with automatic HTTPS (Tailscale manages the TLS cert)
-- Proxies all requests to the Flask/gunicorn server on port 5050
-- `AllowFunnel: false` ensures the app is Tailnet-only (not publicly accessible)
-
-### Dockerfile
-
-- Python 3.11-slim base image
-- Installs dependencies + gunicorn
-- Runs with 2 gunicorn workers on port 5050
-- `DEV_LOGIN=0` disables the dev login shortcut in production
+- **`cloudflared`** runs the remotely-managed tunnel from the `CF_TUNNEL_TOKEN`
+  (`tunnel --no-autoupdate run`). Its route and the Access policy live in the
+  Cloudflare dashboard, not in the repo.
+- **`survivor-fantasy`** is the Flask app (gunicorn, 2 workers, `0.0.0.0:5050`),
+  reachable to `cloudflared` over the compose network as
+  `http://survivor-fantasy:5050`.
 
 ## Data Persistence
 
-The `data/` volume (mounted at `/app/data`) contains:
-
-- `survivor_fantasy.db` — SQLite database with all seasons, picks, and user data
-
-Tailscale state is persisted in `ts-state/` and `ts-config/` volumes so the node doesn't need to re-authenticate on container restart.
+The `data/` volume (mounted at `/app/data`) holds `survivor_fantasy.db`.
+Container local disk is otherwise ephemeral; keep durable data in this volume.
 
 ## Updating
 
@@ -148,39 +144,34 @@ docker compose build
 docker compose up -d
 ```
 
-The SQLite database is preserved across rebuilds since it lives in the mounted `data/` volume.
-
-### Re-seeding the database
-
-If the schema has changed (new columns, etc.), you'll need to re-seed:
+### Re-seeding (if the schema changed)
 
 ```bash
-# Copy pick JSON files into the running container (they aren't in the Docker image
-# because they're added after build — *.xlsx is in .dockerignore but JSONs need
-# to be present at /app/picks/ inside the container)
 docker compose cp picks/season45.json survivor-fantasy:/app/picks/
 docker compose cp picks/season46.json survivor-fantasy:/app/picks/
 docker compose cp picks/season47_snakedraft.json survivor-fantasy:/app/picks/
 docker compose cp picks/season49_snakedraft.json survivor-fantasy:/app/picks/
-
-# Re-seed (downloads fresh survivoR data + generates images)
 docker compose exec survivor-fantasy python seed.py --picks-dir ./picks
-
-# Restart to pick up the new DB
 docker compose restart survivor-fantasy
 ```
 
-If you don't need images (faster), add `--no-scrape`. If pick files are already inside the container from a previous build, skip the `cp` steps.
+`seed.py` drops all tables — export picks first if you have unsaved changes.
 
 ## Auto-Refresh
 
-The app includes an APScheduler job that automatically refreshes game data from the survivoR dataset daily at 8am EST. No cron setup needed — it runs inside the Flask app process.
+An APScheduler job refreshes survivoR data daily at 8am EST, inside the Flask
+process. No cron setup needed.
 
 ## Proxmox-Specific Notes
 
-If running in a Proxmox LXC container:
+- Install Docker in the LXC (or use a VM with Docker).
+- The LXC needs outbound network access for `cloudflared` and data refresh; it
+  needs **no** inbound port forwarding.
+- Allocate at least 1GB RAM and 2 CPU cores.
 
-- Ensure Docker is installed in the LXC (or use a VM with Docker pre-installed)
-- The LXC needs network access for Tailscale to connect and for data refresh
-- No special Proxmox configuration is needed — the Tailscale sidecar handles all networking
-- Consider allocating at least 1GB RAM and 2 CPU cores for comfortable operation
+## Migrating off Tailscale
+
+The previous deployment used a Tailscale sidecar (`serve.json`, `TS_AUTHKEY`).
+To cut over with zero downtime, run the Cloudflare tunnel alongside Tailscale
+first (the app can serve both), verify the new URL + OTP, then remove the
+Tailscale sidecar and auth key.

@@ -544,13 +544,20 @@ def main():
         else:
             print("Skipping image URL generation (--no-scrape)")
 
-        # Set admin from env var
-        admin_username = os.environ.get("ADMIN_GITHUB_USERNAME", "").lower()
-        if admin_username:
-            admin = User.query.filter_by(username=admin_username).first()
-            if admin:
+        # Set admin from env var (Cloudflare Access email)
+        admin_email = os.environ.get("ADMIN_EMAIL", "").lower()
+        if admin_email:
+            admin = User.query.filter_by(username=admin_email).first()
+            if not admin:
+                admin = User(
+                    username=admin_email,
+                    display_name=admin_email.split("@")[0],
+                    is_admin=True,
+                )
+                db.session.add(admin)
+            else:
                 admin.is_admin = True
-                db.session.commit()
+            db.session.commit()
 
         print(
             f"\nDone! {User.query.count()} users, {Season.query.count()} seasons, "

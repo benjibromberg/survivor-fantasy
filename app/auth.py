@@ -1,97 +1,57 @@
-import secrets
-
-import requests as http_requests
-from flask import Blueprint, current_app, flash, redirect, request, session, url_for
+from flask import Blueprint, current_app, flash, redirect, request, url_for
 from flask_login import login_required, login_user, logout_user
 
 from .models import User, db
 
 auth_bp = Blueprint("auth", __name__)
 
-GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
-GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
-GITHUB_USER_URL = "https://api.github.com/user"
 
-
-@auth_bp.route("/login")
-def login():
-    client_id = current_app.config["GITHUB_CLIENT_ID"]
-    if not client_id:
-        flash(
-            "GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.",
-            "error",
-        )
-        return redirect(url_for("main.index"))
-
-    state = secrets.token_urlsafe(32)
-    session["oauth_state"] = state
-
-    return redirect(
-        f"{GITHUB_AUTHORIZE_URL}?client_id={client_id}&state={state}&scope=read:user"
-    )
-
-
-@auth_bp.route("/auth/callback")
-def github_callback():
-    # Verify state to prevent CSRF
-    request_state = request.args.get("state")
-    if request_state != session.pop("oauth_state", None):
-        flash("OAuth state mismatch.", "error")
-        return redirect(url_for("main.index"))
-
-    code = request.args.get("code")
-    if not code:
-        flash("GitHub login cancelled.", "error")
-        return redirect(url_for("main.index"))
-
-    # Exchange code for access token
-    resp = http_requests.post(
-        GITHUB_TOKEN_URL,
-        json={
-            "client_id": current_app.config["GITHUB_CLIENT_ID"],
-            "client_secret": current_app.config["GITHUB_CLIENT_SECRET"],
-            "code": code,
-        },
-        headers={"Accept": "application/json"},
-        timeout=10,
-    )
-
-    token_data = resp.json()
-    access_token = token_data.get("access_token")
-    if not access_token:
-        flash("Failed to get access token from GitHub.", "error")
-        return redirect(url_for("main.index"))
-
-    # Fetch GitHub user info
-    user_resp = http_requests.get(
-        GITHUB_USER_URL,
-        headers={
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-        },
-        timeout=10,
-    )
-    github_user = user_resp.json()
-    github_username = github_user.get("login", "")
-
-    # Check if this user is the allowed admin
-    admin_username = current_app.config["ADMIN_GITHUB_USERNAME"]
-    if github_username.lower() != admin_username.lower():
-        flash("You are not authorized to log in.", "error")
-        return redirect(url_for("main.index"))
-
-    # Find or create admin user
-    user = User.query.filter_by(github_username=github_username).first()
+def _get_or_create_admin(email):
+    """Return the admin User for this email, creating/promoting as needed."""
+    user = User.query.filter_by(username=email).first()
     if not user:
         user = User(
-            username=github_username,
-            github_username=github_username,
-            display_name=github_user.get("name") or github_username,
+            username=email,
+            display_name=email.split("@")[0],
             is_admin=True,
         )
         db.session.add(user)
         db.session.commit()
+    elif not user.is_admin:
+        user.is_admin = True
+        db.session.commit()
+    return user
 
+
+@auth_bp.route("/login")
+def login():
+    """Admin login via Cloudflare Access identity.
+
+    Cloudflare Access authenticates the visitor (email one-time PIN) at the
+    edge and forwards their verified email in a request header. The origin is
+    only reachable through the Cloudflare Tunnel behind Access, so this header
+    is trusted. (For defence-in-depth you can additionally validate the
+    `Cf-Access-Jwt-Assertion` JWT against the team's public keys.)
+    """
+    admin_email = current_app.config["ADMIN_EMAIL"]
+    if not admin_email:
+        flash("Admin login is not configured (set ADMIN_EMAIL).", "error")
+        return redirect(url_for("main.index"))
+
+    header = current_app.config["ACCESS_EMAIL_HEADER"]
+    email = (request.headers.get(header) or "").lower()
+    if not email:
+        flash(
+            "No Cloudflare Access identity found — open the site through its "
+            "Access-protected URL.",
+            "error",
+        )
+        return redirect(url_for("main.index"))
+    if email != admin_email:
+        flash("You are not authorized to log in as admin.", "error")
+        return redirect(url_for("main.index"))
+
+    user = _get_or_create_admin(email)
     login_user(user)
     flash(f"Logged in as {user.display_name or user.username}!", "success")
     return redirect(url_for("main.index"))
@@ -99,7 +59,7 @@ def github_callback():
 
 @auth_bp.route("/dev-login")
 def dev_login():
-    """Dev-only: log in as admin without OAuth. Controlled by DEV_LOGIN config."""
+    """Dev-only: log in as admin without Access. Controlled by DEV_LOGIN config."""
     if not current_app.config.get("DEV_LOGIN"):
         flash("Dev login is disabled.", "error")
         return redirect(url_for("main.index"))
