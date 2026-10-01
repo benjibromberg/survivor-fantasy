@@ -46,7 +46,7 @@
 </hgroup>
 
 {% if timeline_points|length > 1 %}
-<div class="season-timeline">
+<div class="season-timeline" role="navigation" aria-label="Episode timeline">
     {% for pt in timeline_points %}
     <a href="{{ url_for('main.leaderboard', season_id=season.id) }}{% if pt.as_of < max_eliminations %}?as_of={{ pt.as_of }}{% endif %}"
        class="tl-point{{ ' active' if loop.index0 == active_timeline_idx }}{{ ' milestone' if pt.milestone }}"
@@ -104,6 +104,8 @@
             {% endfor %}
         </span>
         {% endif %}
+        <span class="lb-points">{{ "%.2f"|format(entry.total_points) }} pts</span>
+        <div class="lb-sub">
         {% if entry.sole_survivor_pick %}
         <span class="lb-ss-pick {{ 'eliminated' if entry.sole_survivor_eliminated else '' }}" title="Sole Survivor pick">
             Winner: {{ entry.sole_survivor_pick }}
@@ -113,10 +115,10 @@
         <span class="lb-win-pct lb-win-frozen">{{ "%.0f"|format(win_pcts[entry.user.id]) }}% win</span>
         <span class="lb-win-pct lb-win-projected">{{ "%.0f"|format(projected_win_pcts.get(entry.user.id, 0)) }}% win</span>
         {% endif %}
-        <span class="lb-points">{{ "%.2f"|format(entry.total_points) }} pts</span>
         {% for warning in entry.warnings %}
         <span class="lb-warning">{{ warning }}</span>
         {% endfor %}
+        </div>
     </header>
 
     {# Group picks by type for visual separation #}
@@ -501,6 +503,14 @@ const confChart = new Chart(document.getElementById('confessional-chart'), {
 </div>
 {% endif %}
 
+<script>
+/* Keep the active episode visible when the timeline scrolls sideways */
+(function() {
+    var tl = document.querySelector('.season-timeline');
+    var active = tl && tl.querySelector('.tl-point.active');
+    if (active) tl.scrollLeft = active.offsetLeft - (tl.clientWidth - active.offsetWidth) / 2;
+})();
+</script>
 <script>
 const ptsToggle = document.getElementById('pts-toggle');
 const statsToggle = document.getElementById('stats-toggle');

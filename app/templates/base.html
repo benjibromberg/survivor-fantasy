@@ -99,6 +99,38 @@
     </script>
 
     <script>
+    /* Collapsible sections (details.fold) on text-heavy pages */
+    (function() {
+        function openFoldsFor(el) {
+            var d = el.closest('details');
+            while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); }
+        }
+        window.openFoldsFor = openFoldsFor;
+
+        // Phones: start with the long sections closed so the page is scannable
+        if (window.matchMedia('(max-width: 576px)').matches) {
+            document.querySelectorAll('details.fold[data-mobile-collapsed]').forEach(function(d) { d.open = false; });
+        }
+
+        // Deep links open their section
+        function fromHash() {
+            if (!location.hash) return;
+            var el = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+            if (el) { openFoldsFor(el); el.scrollIntoView(); }
+        }
+        window.addEventListener('hashchange', fromHash);
+        fromHash();
+
+        document.querySelectorAll('.fold-all').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var open = btn.getAttribute('data-fold') === 'open';
+                document.querySelectorAll('details.fold').forEach(function(d) { d.open = open; });
+            });
+        });
+    })();
+    </script>
+
+    <script>
     (function() {
         const toc = document.getElementById('page-toc');
         const tocNav = document.getElementById('toc-nav');
@@ -120,6 +152,7 @@
             a.className = 'toc-link';
             a.textContent = h.textContent;
             a.addEventListener('click', function() {
+                if (window.openFoldsFor) window.openFoldsFor(h);
                 if (window.innerWidth < 1200) toc.classList.remove('open');
             });
             tocNav.appendChild(a);
