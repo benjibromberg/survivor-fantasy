@@ -8,11 +8,12 @@ picks/*.xlsx
 # Environment
 .env
 
-# Database (SQLite + WAL sidecars)
+# Database (SQLite + WAL sidecars + startup schema-sync lock)
 survivor_fantasy.db
 survivor_fantasy.db-shm
 survivor_fantasy.db-wal
 survivor_fantasy.db-journal
+survivor_fantasy.db.schema-lock
 
 # Python
 __pycache__/
