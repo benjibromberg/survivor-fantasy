@@ -60,7 +60,7 @@
             <label class="survivor-card {{ 'eliminated' if survivor.voted_out_order > 0 else '' }}">
                 <input type="checkbox" name="draft" value="{{ survivor.id }}" class="draft-check">
                 {% if survivor.image_url %}
-                <img src="{{ survivor.image_url }}" alt="{{ survivor.name }}" class="survivor-headshot">
+                <img src="{{ survivor.image_url }}" alt="{{ survivor.name }}" class="survivor-headshot" loading="lazy" decoding="async">
                 {% endif %}
                 <div class="survivor-info">
                     <span class="survivor-name">{{ survivor.name }}</span>

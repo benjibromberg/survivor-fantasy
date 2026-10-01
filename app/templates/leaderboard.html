@@ -134,6 +134,7 @@
             title="{{ pick.full_name or pick.survivor }}{% if pick.result %} — {{ pick.result }}{% endif %}">
             {% if pick.survivor_image %}
             <img src="{{ pick.survivor_image }}" alt="{{ pick.survivor }}" class="lb-pick-img"
+                 loading="lazy" decoding="async"
                  {% if is_sole_survivor %}style="border: 2px solid var(--torch-gold);"
                  {% elif pick.tribe_color %}style="border: 2px solid {{ pick.tribe_color|contrast }};"{% endif %}>
             {% else %}
@@ -204,6 +205,7 @@
             title="{{ pick.full_name or pick.survivor }} — {{ pick.pick_type }}{% if pick.result %} — {{ pick.result }}{% endif %}">
             {% if pick.survivor_image %}
             <img src="{{ pick.survivor_image }}" alt="{{ pick.survivor }}" class="lb-pick-img"
+                 loading="lazy" decoding="async"
                  {% if is_sole_survivor %}style="border: 2px solid var(--torch-gold);"
                  {% elif pick.tribe_color %}style="border: 2px solid {{ pick.tribe_color|contrast }};"{% endif %}>
             {% else %}
@@ -486,6 +488,7 @@ const confChart = new Chart(document.getElementById('confessional-chart'), {
                 <span class="stat-rank">{{ loop.index }}</span>
                 {% if surv.image_url %}
                 <img src="{{ surv.image_url }}" alt="{{ surv.name }}" class="stat-img"
+                     loading="lazy" decoding="async"
                      {% if surv.tribe_color %}style="border-color: {{ surv.tribe_color|contrast }};"{% endif %}>
                 {% endif %}
                 <span class="stat-name">{{ surv.name }}</span>
