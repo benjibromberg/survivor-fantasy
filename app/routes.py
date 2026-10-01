@@ -404,7 +404,7 @@ def _build_leaderboard(season):
 
 @main_bp.route("/")
 def index():
-    season = Season.query.filter_by(is_active=True).first()
+    season = Season.get_active()
     if season:
         return redirect(url_for("main.leaderboard", season_id=season.id))
     return render_template("no_season.html")
@@ -540,7 +540,7 @@ def rules(season_id):
     if season_id:
         season = Season.query.get_or_404(season_id)
     else:
-        season = Season.query.filter_by(is_active=True).first()
+        season = Season.get_active()
         if not season:
             season = Season.query.first()
 

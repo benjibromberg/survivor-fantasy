@@ -43,6 +43,16 @@ class Season(db.Model):
     survivors = db.relationship("Survivor", backref="season", lazy=True)
     picks = db.relationship("Pick", backref="season", lazy=True)
 
+    @classmethod
+    def get_active(cls):
+        """Return the active season, or None if no season is active.
+
+        Only one season should be active at a time. If several rows are
+        flagged anyway, the highest season number wins so every caller gets
+        the same answer.
+        """
+        return cls.query.filter_by(is_active=True).order_by(cls.number.desc()).first()
+
     @property
     def merge_threshold(self):
         """Elimination count at which merge occurs (pre-merge tribals).

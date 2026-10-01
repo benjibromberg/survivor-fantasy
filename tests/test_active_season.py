@@ -126,3 +126,63 @@ class TestCreateSeasonIsInactive:
         db.session.commit()
 
         assert season.is_active is False
+
+
+class TestActiveSeasonLookup:
+    def _two_active(self, db):
+        """Two active rows, lower number inserted first (unordered scans hit it)."""
+        from app.models import Season
+
+        older = Season(number=60, name="Season 60", is_active=True)
+        db.session.add(older)
+        db.session.commit()
+        newer = Season(number=61, name="Season 61", is_active=True)
+        db.session.add(newer)
+        db.session.commit()
+        return older, newer
+
+    def test_prefers_highest_number_when_two_active(self, client):
+        _c, db = client
+        from app.models import Season
+
+        _older, newer = self._two_active(db)
+
+        assert Season.get_active().id == newer.id
+
+    def test_index_redirects_to_highest_active_season(self, client):
+        c, db = client
+        _older, newer = self._two_active(db)
+
+        resp = c.get("/")
+
+        assert resp.status_code == 302
+        assert resp.headers["Location"].endswith(f"/leaderboard/{newer.id}")
+
+    def test_rules_page_uses_highest_active_season(self, client):
+        c, db = client
+        self._two_active(db)
+
+        resp = c.get("/rules")
+
+        assert resp.status_code == 200
+        assert b"Scoring for <strong>Season 61</strong>" in resp.data
+
+    def test_ignores_inactive_seasons(self, client):
+        _c, db = client
+        from app.models import Season
+
+        active = Season(number=60, name="Season 60", is_active=True)
+        inactive = Season(number=61, name="Season 61", is_active=False)
+        db.session.add_all([active, inactive])
+        db.session.commit()
+
+        assert Season.get_active().id == active.id
+
+    def test_returns_none_without_active_season(self, client):
+        _c, db = client
+        from app.models import Season
+
+        db.session.add(Season(number=60, name="Season 60", is_active=False))
+        db.session.commit()
+
+        assert Season.get_active() is None
