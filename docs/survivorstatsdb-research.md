@@ -451,10 +451,9 @@ plus a test. Value is to fantasy players during a season.
 ## 6. Open questions
 
 1. **Which link?** Per-season (recommended) or career?
-2. **Does `careerUS0771` exist in the site's data?** The owner has seen the URL, but my download
-   of `castawayCareer.json` stopped at `careerUS0676`. If career records only appear once a
-   castaway's season is over, a career link for a Season 51 castaway would render "Castaway not
-   found" **[not verified]**.
+2. **Does `careerUS0771` exist in the site's data?** Resolved: yes. A later complete download of
+   `castawayCareer.json` holds career records for the Season 51 cast, including `careerUS0771`
+   **[fetched]**.
 3. **Why do US scores and threat levels differ from the xlsx?** Probably user votes and RESI
    (Section 3.2) **[inferred]**. Ask the author before showing either.
 4. **Season 51 tribes in the app.** The current xlsx has no US51 rows in Tribe Mapping, and
@@ -462,7 +461,8 @@ plus a test. Value is to fantasy players during a season.
    21 castaways (Savu, Toka, and one castaway on Exile Island with tribe "No Tribe")
    **[computed]**. `refresh_season()` takes tribe names, colours and the merge episode from Tribe
    Mapping (`app/data.py:305-312`, `:459-476`) **[read]**, so Season 51 picks may show no tribe
-   until survivoR fills that sheet. I did not check the running app.
+   until survivoR fills that sheet. Checked afterwards on the running app: 0 of 21 Season 51
+   castaways have a tribe, against 24 of 24 for Season 50 **[read]**.
 5. **Will survivoR publish future casts before their premieres?** It did not for Season 51. This
    decides how the draft board gets its cast.
 6. **Does the owner want any site-only item** (threat levels with user votes, RESI)? If so, ask
