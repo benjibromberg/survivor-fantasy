@@ -278,7 +278,7 @@ class TestPlayerEmailExport:
         export_all_picks(str(out))
 
         assert _read(out / "players.json") == {
-            "players": {"Pat": {"email": "pat@example.com"}}
+            "players": {"Pat": {"email": "pat@example.com", "username": "pat"}}
         }
 
     def test_export_all_still_returns_only_season_files(self, league, tmp_path):
@@ -315,7 +315,8 @@ class TestPlayerEmailExport:
         export_all_picks(str(out))
 
         assert _read(out / "players.json")["players"]["Robin"] == {
-            "email": "robin@example.com"
+            "email": "robin@example.com",
+            "username": "robin",
         }
 
     def test_players_file_is_not_mistaken_for_a_season_file(self, league, tmp_path):

@@ -94,12 +94,12 @@ A player can have one Sole Survivor entry per episode.
 ```json
 {
   "players": {
-    "PlayerA": {"email": "playera@example.com"}
+    "PlayerA": {"email": "playera@example.com", "username": "playera"}
   }
 }
 ```
 
-The login email linked to each player, keyed by fantasy player name the same way as the season files. `seed.py` reads it from `--picks-dir` after the season files. It is not a season file, so discovery ignores it.
+The login email linked to each player, keyed by fantasy player name the same way as the season files. `seed.py` reads it from `--picks-dir` after the season files. It is not a season file, so discovery ignores it. `username` is written for reference and is not read back yet: players are matched on the name, as in the season files.
 
 - The app rewrites it on every full export, including with an empty `players` object when nobody is linked, so an email you unlinked does not come back.
 - A player named here who does not exist yet is created, so a linked player with no picks survives a re-seed.

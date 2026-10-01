@@ -1026,7 +1026,9 @@ def export_player_emails(picks_dir=None):
     Emails belong to a player, not a season, so they get their own file
     beside the season files, keyed by player name the same way. The file is
     rewritten on every export, even when nobody is linked, so a stale copy
-    cannot bring back an email that was unlinked.
+    cannot bring back an email that was unlinked. Each entry also records the
+    username, a stable key the loader does not use yet (it matches on the
+    name, like the season files).
 
     Returns the filepath written.
     """
@@ -1035,7 +1037,11 @@ def export_player_emails(picks_dir=None):
 
     linked = User.query.filter(User.email.isnot(None)).order_by(User.username)
     players = {
-        user.display_name or user.username: {"email": user.email} for user in linked
+        user.display_name or user.username: {
+            "email": user.email,
+            "username": user.username,
+        }
+        for user in linked
     }
 
     filepath = os.path.join(picks_dir, PLAYERS_FILE)
