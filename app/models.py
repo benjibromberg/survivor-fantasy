@@ -190,9 +190,13 @@ class Survivor(db.Model):
 
     @property
     def stats_url(self):
-        """Link to survivorstatsdb.com profile."""
-        if self.castaway_id and self.version_season:
-            return f"https://survivorstatsdb.com/castaway/{self.version_season}/{self.castaway_id}"
+        """Link to the castaway's career profile on survivorstatsdb.com.
+
+        The site keys profiles by "career" plus the survivoR castaway_id; the
+        older /castaway/<version_season>/<castaway_id> links now return 500.
+        """
+        if self.castaway_id:
+            return f"https://survivorstatsdb.com/castaway?id=career{self.castaway_id}"
         return None
 
     picks = db.relationship("Pick", backref="survivor", lazy=True)
