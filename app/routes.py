@@ -59,6 +59,7 @@ _EP_STAT_MAP = {
     "votes": "votes_received",
     "reward": "reward_wins",
     "tribals": "tribal_councils_attended",
+    "votes_cast": "votes_cast",
     "correct_votes": "correct_votes",
     "nullified": "votes_nullified",
     "sit_outs": "sit_outs",
@@ -73,6 +74,18 @@ def _fmt_time(secs):
         return "0s"
     m, s = divmod(int(secs), 60)
     return f"{m}m {s}s" if m else f"{s}s"
+
+
+def _voting_accuracy(correct_votes, votes_cast):
+    """Percent of votes cast that were for the person voted out, or None.
+
+    The denominator is votes cast, not tribals attended: a castaway who played
+    Shot in the Dark or lost their vote cast nothing, and revotes or extra
+    votes add a ballot each. None when no vote has been cast.
+    """
+    if not votes_cast:
+        return None
+    return (correct_votes or 0) / votes_cast * 100
 
 
 def _ensure_contrast(hex_color, min_luminance=0.15):
@@ -232,8 +245,8 @@ def _build_leaderboard(season):
                 stats_detail.append(
                     ("Tribals attended", survivor.tribal_councils_attended)
                 )
-            if survivor.tribal_councils_attended and survivor.correct_votes:
-                pct = survivor.correct_votes / survivor.tribal_councils_attended * 100
+            pct = _voting_accuracy(survivor.correct_votes, survivor.votes_cast)
+            if pct is not None and survivor.correct_votes:
                 stats_detail.append(("Voting accuracy", f"{pct:.0f}%"))
             if survivor.votes_received:
                 stats_detail.append(("Votes against", survivor.votes_received))
@@ -339,6 +352,7 @@ def _build_leaderboard(season):
             total_imm = sum(s.individual_immunity_wins or 0 for s in team_survivors)
             total_idols = sum(s.idols_found or 0 for s in team_survivors)
             total_tribals = sum(s.tribal_councils_attended or 0 for s in team_survivors)
+            total_cast = sum(s.votes_cast or 0 for s in team_survivors)
             total_correct = sum(s.correct_votes or 0 for s in team_survivors)
             total_votes_against = sum(s.votes_received or 0 for s in team_survivors)
             if total_conf:
@@ -349,9 +363,9 @@ def _build_leaderboard(season):
                 team_stats["Idols found"] = total_idols
             if total_tribals:
                 team_stats["Tribals attended"] = total_tribals
-                if total_correct:
-                    pct = total_correct / total_tribals * 100
-                    team_stats["Voting accuracy"] = f"{pct:.0f}%"
+            pct = _voting_accuracy(total_correct, total_cast)
+            if pct is not None and total_correct:
+                team_stats["Voting accuracy"] = f"{pct:.0f}%"
             if total_votes_against:
                 team_stats["Votes against"] = total_votes_against
 
@@ -429,6 +443,7 @@ def _apply_as_of(season, as_of):
         "votes_received",
         "reward_wins",
         "tribal_councils_attended",
+        "votes_cast",
         "correct_votes",
         "votes_nullified",
         "sit_outs",
@@ -978,16 +993,16 @@ def _build_stat_boards(season):
             ],
         }
 
-    def _voting_accuracy():
-        """Build voting accuracy board (correct votes / tribals attended)."""
+    def _voting_accuracy_board():
+        """Build voting accuracy board (correct votes / votes cast)."""
         rows = []
         for s in survivors:
-            if s.tribal_councils_attended and s.tribal_councils_attended > 0:
-                pct = s.correct_votes / s.tribal_councils_attended * 100
+            pct = _voting_accuracy(s.correct_votes, s.votes_cast)
+            if pct is not None:
                 rows.append(
                     {
                         "survivor": s,
-                        "value": f"{pct:.0f}% ({s.correct_votes}/{s.tribal_councils_attended})",
+                        "value": f"{pct:.0f}% ({s.correct_votes}/{s.votes_cast})",
                         "_sort": pct,
                     }
                 )
@@ -1001,7 +1016,7 @@ def _build_stat_boards(season):
         top_by("tribal_immunity_wins", "Tribal Immunity Wins"),
         top_by("reward_wins", "Challenge Wins"),
         top_by("tribal_councils_attended", "Tribal Councils Attended"),
-        _voting_accuracy(),
+        _voting_accuracy_board(),
         top_by("correct_votes", "Correct Votes"),
         top_by("votes_received", "Votes Received at Tribal"),
         top_by("votes_nullified", "Votes Nullified (by Idol)"),

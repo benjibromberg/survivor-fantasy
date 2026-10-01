@@ -85,20 +85,43 @@ def get_fire_winners(vote_history):
     ]
 
 
+def votes_cast_rows(s_vh):
+    """Vote History rows where the castaway actually cast a vote.
+
+    Vote History has one row per castaway per vote: castaway_id is the voter,
+    vote_id is who they voted for, and voted_out_id is who left at that tribal
+    (the same on every row of the tribal). vote_id is empty when no vote was
+    cast (Shot in the Dark, a lost vote, the fire-making challenge).
+    """
+    return s_vh[s_vh["vote_id"].notna()]
+
+
+def correct_vote_rows(s_vh):
+    """Vote History rows where the castaway voted for the person who left."""
+    cast = votes_cast_rows(s_vh)
+    return cast[cast["vote_id"] == cast["voted_out_id"]]
+
+
 def compute_castaway_stats(s_conf, s_vh, s_cr, s_am, idol_ids):
     """Compute per-castaway aggregate stats from pre-filtered season DataFrames.
 
-    Returns dict with: conf_totals, votes_against, indiv_imm, tribal_imm,
-    idols_found, idols_played, adv_found (non-idol), adv_played (non-idol).
+    Returns dict with: conf_totals, votes_against, votes_cast, correct_votes,
+    indiv_imm, tribal_imm, idols_found, idols_played, adv_found (non-idol),
+    adv_played (non-idol).
     """
     conf_totals = (
         s_conf.groupby("castaway_id")["confessional_count"].sum()
         if not s_conf.empty
         else pd.Series(dtype=int)
     )
-    votes_against = (
-        s_vh.groupby("voted_out_id").size() if not s_vh.empty else pd.Series(dtype=int)
-    )
+    # Votes received are counted on vote_id (the target of each vote). Grouping
+    # on voted_out_id would credit the boot with every row of their tribal.
+    if not s_vh.empty:
+        votes_against = votes_cast_rows(s_vh).groupby("vote_id").size()
+        votes_cast = votes_cast_rows(s_vh).groupby("castaway_id").size()
+        correct_votes = correct_vote_rows(s_vh).groupby("castaway_id").size()
+    else:
+        votes_against = votes_cast = correct_votes = pd.Series(dtype=int)
     indiv_imm = (
         s_cr[s_cr["won_individual_immunity"] == 1].groupby("castaway_id").size()
         if not s_cr.empty
@@ -143,6 +166,8 @@ def compute_castaway_stats(s_conf, s_vh, s_cr, s_am, idol_ids):
     return {
         "conf_totals": conf_totals,
         "votes_against": votes_against,
+        "votes_cast": votes_cast,
+        "correct_votes": correct_votes,
         "indiv_imm": indiv_imm,
         "tribal_imm": tribal_imm,
         "idols_found": idols_found,
@@ -206,6 +231,8 @@ def refresh_season(season):
     stats = compute_castaway_stats(s_conf, s_vh, s_cr, s_am, idol_ids)
     conf_totals = stats["conf_totals"]
     votes_against = stats["votes_against"]
+    votes_cast_totals = stats["votes_cast"]
+    correct_totals = stats["correct_votes"]
     indiv_imm = stats["indiv_imm"]
     tribal_imm = stats["tribal_imm"]
     idols_found = stats["idols_found"]
@@ -230,13 +257,9 @@ def refresh_season(season):
         else pd.Series(dtype=int)
     )
 
-    # Correct votes (voted for person who was actually voted out)
-    correct = s_vh[s_vh["vote_id"] == s_vh["voted_out_id"]] if not s_vh.empty else s_vh
-    correct_totals = (
-        correct.groupby("castaway_id").size()
-        if not correct.empty
-        else pd.Series(dtype=int)
-    )
+    # Votes cast, and the subset that were for the person actually voted out
+    votes_cast = votes_cast_rows(s_vh) if not s_vh.empty else s_vh
+    correct = correct_vote_rows(s_vh) if not s_vh.empty else s_vh
 
     # Votes nullified by idol plays
     nullified_totals = pd.Series(dtype=int)
@@ -422,7 +445,10 @@ def refresh_season(season):
 
     # Tribals attended per episode (unique episode counts per castaway)
     tribals_by_ep = _ep_counts(s_vh, "castaway_id", "episode")
-    # Correct votes per episode
+    # Votes cast and correct votes per episode
+    votes_cast_by_ep = (
+        _ep_counts(votes_cast, "castaway_id", "episode") if not votes_cast.empty else {}
+    )
     correct_by_ep = (
         _ep_counts(correct, "castaway_id", "episode") if not correct.empty else {}
     )
@@ -461,6 +487,7 @@ def refresh_season(season):
             "adv_play": 0,
             "votes": 0,
             "tribals": 0,
+            "votes_cast": 0,
             "correct_votes": 0,
             "nullified": 0,
             "sit_outs": 0,
@@ -482,6 +509,7 @@ def refresh_season(season):
             # Tribals: count 1 if they appeared in vote history this episode
             if tribals_by_ep.get(cid, {}).get(ep, 0) > 0:
                 running["tribals"] += 1
+            running["votes_cast"] += votes_cast_by_ep.get(cid, {}).get(ep, 0)
             running["correct_votes"] += correct_by_ep.get(cid, {}).get(ep, 0)
             # Tribe at this episode
             if ep in tribe_by_ep.get(cid, {}):
@@ -586,6 +614,7 @@ def refresh_season(season):
         surv.advantages_found = int(adv_found.get(cid, 0))
         surv.advantages_played = int(adv_played.get(cid, 0))
         surv.tribal_councils_attended = int(tribals_attended.get(cid, 0))
+        surv.votes_cast = int(votes_cast_totals.get(cid, 0))
         surv.correct_votes = int(correct_totals.get(cid, 0))
         surv.votes_nullified = int(nullified_totals.get(cid, 0))
         surv.sit_outs = int(sit_out_totals.get(cid, 0))
