@@ -496,17 +496,25 @@ nav a:hover {
     border-radius: 8px;
 }
 
+/* Win % is skipped on timeline (as_of) views of a season still in progress,
+   so the column it would occupy has to go with it.
+
+   Every .lb-standings variant is kept at exactly one class of specificity,
+   and they are ordered rather than made more specific. A finished season
+   carries both classes, so .is-finished is declared second to win the tie.
+   The reason is the phone block at the end of this file: media queries add
+   no specificity, so a base rule written with :not() out-specifies the
+   breakpoint override and wins inside it. Any new variant goes here at one
+   class AND into the phone block's selector list. */
+.lb-standings.no-win {
+    --lb-cols: 2.2rem minmax(0, 1fr) 8.5rem 5.5rem 1rem;
+    --lb-areas: "rank id torch pts chev";
+}
+
 /* Finished seasons have no torches or win % */
 .lb-standings.is-finished {
     --lb-cols: 2.2rem minmax(0, 1fr) 5.5rem 1rem;
     --lb-areas: "rank id pts chev";
-}
-
-/* Win % is skipped on timeline (as_of) views of a season still in progress,
-   so the column it would occupy has to go with it. */
-.lb-standings:not(.is-finished).no-win {
-    --lb-cols: 2.2rem minmax(0, 1fr) 8.5rem 5.5rem 1rem;
-    --lb-areas: "rank id torch pts chev";
 }
 
 .lb-standings-head {
@@ -2592,6 +2600,7 @@ section > table {
     /* Team row: rank, name, points on the first line; torches and win %
        on the second, under the name */
     .lb-standings,
+    .lb-standings.no-win,
     .lb-standings.is-finished {
         --lb-cols: 1.8rem minmax(0, 1fr) auto 0.9rem;
         --lb-areas: "rank id pts chev";
