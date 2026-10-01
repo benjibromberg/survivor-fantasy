@@ -138,6 +138,28 @@ trusts that header. For defence-in-depth you can additionally validate the
 `DEV_LOGIN=1` still works for local development (no Access in front); the
 Dockerfile sets `DEV_LOGIN=0` in the image.
 
+## Player login
+
+League members can log in as themselves to see their team and name it for the
+active season. A member's Access email has to be linked to their player first:
+
+1. As admin, open **Admin → Players** for a season and enter the member's email
+   in the **Login Email** column. It must be the same address that is on the
+   Access allowlist.
+2. The member clicks **Login**. The app matches their Access email to the linked
+   player and shows a **My Team** link in the nav.
+
+An email that is not linked to a player cannot log in, and no account is created
+for it. Players get no admin pages; `ADMIN_EMAIL` stays the only admin, and the
+admin can link that same address to their own player row to log in as both. The
+admin can also set any player's team name from the Players page.
+
+Linked emails and team names live only in the database. They are not part of the
+pick export files, so re-seeding (`seed.py` drops all tables) removes them and
+the emails have to be linked again.
+
+Locally, `/dev-login?user=<username>` logs in as a player without Access.
+
 ## How It Works
 
 - **`cloudflared`** runs the remotely-managed tunnel from the `CF_TUNNEL_TOKEN`

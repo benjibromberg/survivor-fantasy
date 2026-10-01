@@ -11,17 +11,35 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 
+TEAM_NAME_MAX_LENGTH = 40
+
+
+def normalize_email(value):
+    """Canonical form for matching emails: stripped and lowercased, or None."""
+    return (value or "").strip().lower() or None
+
+
 class User(UserMixin, db.Model):
-    """Represents both the admin (who logs in via GitHub) and fantasy players
-    (created by admin, never log in — just names on the leaderboard)."""
+    """A fantasy player, created by the admin.
+
+    A player logs in as themselves once the admin links their Cloudflare
+    Access email to their row (`email`). The admin is whichever row logs in
+    with ADMIN_EMAIL; see app/auth.py.
+    """
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     display_name = db.Column(db.String(80))
     github_username = db.Column(db.String(80), unique=True, nullable=True)
+    # Cloudflare Access email this player logs in with, stored normalized.
+    # Unique via ix_user_email rather than a column constraint: SQLite cannot
+    # ALTER TABLE ADD a UNIQUE column, so the index is synced separately.
+    email = db.Column(db.String(255), nullable=True)
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     picks = db.relationship("Pick", backref="user", lazy=True)
+
+    __table_args__ = (db.Index("ix_user_email", "email", unique=True),)
 
 
 class Season(db.Model):
@@ -252,6 +270,57 @@ def calculate_ss_streak(ss_picks, season):
             break
 
     return streak
+
+
+class TeamName(db.Model):
+    """A player's team name for one season.
+
+    No row means the player has not named their team that season, and the
+    leaderboard shows just the player's name.
+    """
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    season_id = db.Column(db.Integer, db.ForeignKey("season.id"), nullable=False)
+    name = db.Column(db.String(TEAM_NAME_MAX_LENGTH), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    __table_args__ = (
+        # Also serves lookups by user_id (leading column)
+        db.UniqueConstraint("user_id", "season_id", name="uq_team_name_user_season"),
+        db.Index("ix_team_name_season_id", "season_id"),
+    )
+
+    @classmethod
+    def for_season(cls, season_id):
+        """Return {user_id: team name} for every named team in a season."""
+        return {
+            row.user_id: row.name for row in cls.query.filter_by(season_id=season_id)
+        }
+
+    @staticmethod
+    def clean(raw):
+        """Trim a submitted team name and collapse runs of whitespace."""
+        return " ".join((raw or "").split())
+
+    @classmethod
+    def set_for(cls, user_id, season_id, name):
+        """Set a team name, or clear it when `name` is empty.
+
+        `name` must already be cleaned and length-checked. Does not commit.
+        """
+        row = cls.query.filter_by(user_id=user_id, season_id=season_id).first()
+        if not name:
+            if row:
+                db.session.delete(row)
+        elif row:
+            row.name = name
+        else:
+            db.session.add(cls(user_id=user_id, season_id=season_id, name=name))
 
 
 class Pick(db.Model):

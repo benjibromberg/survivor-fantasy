@@ -44,9 +44,12 @@
             {% endif %}
             <li><a href="{{ url_for('main.rules') }}" class="nav-btn">Rules</a></li>
             <li><a href="{{ url_for('main.scoring_analysis') }}" class="nav-btn">Analysis</a></li>
-            {% if current_user.is_authenticated and current_user.is_admin %}
+            {% if current_user.is_authenticated %}
+                <li><a href="{{ url_for('main.my_team') }}" class="nav-btn">My Team</a></li>
+                {% if current_user.is_admin %}
                 <li><a href="{{ url_for('main.admin_seasons') }}" class="nav-btn">Admin</a></li>
                 <li><a href="{{ url_for('main.settings') }}" class="nav-btn nav-btn-user">{{ current_user.display_name or current_user.username }}</a></li>
+                {% endif %}
                 <li><a href="{{ url_for('auth.logout') }}" class="nav-btn nav-btn-dim">Logout</a></li>
             {% else %}
                 {% if config.DEV_LOGIN %}

@@ -516,6 +516,15 @@ nav a:hover {
     letter-spacing: 0.03em;
 }
 
+/* Per-season team name, set by the player on My Team */
+.lb-team-name {
+    font-family: var(--font-tribal);
+    font-size: 0.9em;
+    font-style: italic;
+    color: var(--fire-glow);
+    overflow-wrap: anywhere;
+}
+
 .lb-ss-pick {
     font-size: 0.8em;
     color: var(--text-dim);
@@ -605,6 +614,131 @@ nav a:hover {
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-top: 0.75rem;
+}
+
+/* My Team page */
+.my-team-header h1 {
+    margin-bottom: 0.25rem;
+    overflow-wrap: anywhere;
+}
+
+.my-team-sub {
+    color: var(--text-dim);
+    font-size: 0.9em;
+}
+
+.my-team-seasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.my-team-season {
+    font-family: var(--font-label);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--text-dim);
+    padding: 0.15rem 0.6rem;
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.my-team-season:hover,
+.my-team-season.active {
+    color: var(--torch-gold);
+    border-color: var(--fire-bright);
+}
+
+.my-team-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.my-team-stat {
+    display: flex;
+    flex-direction: column;
+    min-width: 6.5rem;
+    padding: 0.6rem 1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+}
+
+.my-team-stat-value {
+    font-family: var(--font-label);
+    font-size: 1.8em;
+    line-height: 1.1;
+    letter-spacing: 0.03em;
+    color: var(--torch-gold);
+}
+
+.my-team-stat-value small {
+    font-size: 0.55em;
+    color: var(--text-dim);
+}
+
+.my-team-stat-text {
+    font-family: var(--font-tribal);
+    font-size: 1.15em;
+    line-height: 1.75;
+    letter-spacing: 0;
+    color: var(--sand-warm);
+}
+
+.my-team-stat-text.eliminated {
+    text-decoration: line-through;
+    opacity: 0.5;
+}
+
+.my-team-stat-label {
+    font-family: var(--font-label);
+    font-size: 0.8em;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+
+.my-team-name-form {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    max-width: 28rem;
+    margin-bottom: 0.25rem;
+}
+
+.my-team-name-form input,
+.my-team-name-form button {
+    margin-bottom: 0;
+}
+
+.my-team-name-form button {
+    width: auto;
+    white-space: nowrap;
+}
+
+/* Admin: one-field forms inside table cells */
+.admin-inline-form {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    margin: 0;
+    min-width: 14rem;
+}
+
+.admin-inline-form input,
+.admin-inline-form button {
+    margin-bottom: 0;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+    height: auto;
+}
+
+.admin-inline-form button {
+    width: auto;
 }
 
 .lb-pick {
