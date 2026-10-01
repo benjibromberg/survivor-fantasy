@@ -23,9 +23,12 @@ venv/
 # Flask
 instance/
 
-# Claude Code (project notes, session worktrees, design-hook cache)
+# Claude Code (project notes, session worktrees, skills, design-hook cache)
+# .claude/skills/ holds the agent reference split out of CLAUDE.md. It is
+# ignored for the same reason CLAUDE.md is: it names hosts on the tailnet.
 CLAUDE.md
 .claude/worktrees/
+.claude/skills/
 .impeccable/
 
 # Browser-automation scratch (Playwright MCP screenshots, snapshots, console logs)
