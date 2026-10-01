@@ -74,7 +74,7 @@ This document changes no app code.
 | Page | Pattern | Id format | Verified examples | Evidence |
 |---|---|---|---|---|
 | Castaway, one season | `/castaway?id={vs}{castaway_id}` | `version_season` and `castaway_id` joined with no separator. All 1,464 records in `data/castaways.json` follow this rule **[computed]**. | `castaway?id=US51US0771` (Rob Antonson, S51), `castaway?id=US50US0009`, `castaway?id=US08US0009`, `castaway?id=US01US0001` | `id` read from the query string at `js/castaway.js:7-8`, looked up in `castaways` at `:15`, season tabs link `castaway?id=${ps.id}` at `:181`. Example ids found in `data/castaways.json`. **[fetched]** |
-| Castaway, career | `/castaway?id=career{castaway_id}` | `career` followed by `castaway_id`. All 1,122 complete records in my partial download follow this rule **[computed]**. | `castaway?id=careerUS0009` (Jenna Lewis Dougherty, three seasons), `castaway?id=careerUS0001`, `castaway?id=careerUS0477` (Aubry Bracco) | Career detected by the `career` prefix at `js/castaway.js:9`, looked up in `careers` at `:13`, built as `` `career${castaway.castaway_id}` `` at `:173`. Example ids found in `data/castawayCareer.json`. **[fetched]** `careerUS0771` is the owner's example; my download stopped at `careerUS0676`, so its presence in the data is **[not verified]**. |
+| Castaway, career | `/castaway?id=career{castaway_id}` | `career` followed by `castaway_id`. All 1,122 complete records in my partial download follow this rule **[computed]**. | `castaway?id=careerUS0009` (Jenna Lewis Dougherty, three seasons), `castaway?id=careerUS0001`, `castaway?id=careerUS0477` (Aubry Bracco) | Career detected by the `career` prefix at `js/castaway.js:9`, looked up in `careers` at `:13`, built as `` `career${castaway.castaway_id}` `` at `:173`. Example ids found in `data/castawayCareer.json`. **[fetched]** A later complete download of `data/castawayCareer.json` (1,219 records) contains `careerUS0771` and the other Season 51 castaways checked (`US0752`, `US0754`, `US0760`), so career pages exist for the current cast **[fetched]**. |
 | Season | `/season?vs={vs}`, optionally `&tab={tab id}` | `version_season` | `season?vs=US51` (fetched, 200), `season?vs=US50`, `season?vs=US51&tab=tab-vote-history` | `vs` read at `js/season.js:96-99`. Tab links built at `js/sitemap.js:41-46`. The active tab is written to `?tab=` and restored on load (`js/season.js:2242-2298`). **[fetched]** |
 | Season list | `/seasons`, `/seasons?filter=inprogress` | none | | `js/app.js:493-505` **[fetched]** |
 | Challenge (one recurring challenge in one version) | `/challenge?v={version}&name={challenge name, URL-encoded}` | version code and challenge name, matched without regard to case (`js/challenge-data.js:40-46`) | `challenge?v=US&name=A%20Bit%20Tipsy` (from the sitemap, fetched, 200), `challenge?v=US&name=Quest%20for%20Fire`, `challenge?v=US&name=A%20Crate%20Idea` | The three names are `recurring_name` values in survivoR's Challenge Description sheet (14, 7 and 6 US rows) and `challenge_name` values in the site's `seasons.json` **[computed]**. The page reads `data/challenge_summary.json`, which was not fetched, so whether each of these names renders a profile is **[not verified]**. |
@@ -106,6 +106,10 @@ council, tribe or advantage page **[fetched]**. Episode-level data appears insid
 - `/leaderboard/episode-rank`, which ranks episodes (not fetched).
 
 ### 1.3 Castaway links: what to change in the app
+
+**Status:** the broken links are fixed. The app now links the **career** page,
+`castaway?id=career{castaway_id}` (pull request #138, deployed). This section's recommendation to
+link the **per-season** page instead still stands and is open.
 
 - The app builds `f"https://survivorstatsdb.com/castaway/{self.version_season}/{self.castaway_id}"`
   (`app/models.py:191-196`) **[read]**. `https://survivorstatsdb.com/castaway/US51/US0771`
