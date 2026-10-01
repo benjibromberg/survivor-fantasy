@@ -737,7 +737,13 @@ def generate_season_images(season):
     return matched
 
 
-PICKS_DIR = "picks"
+# Pick exports go alongside the database, for the same reason as survivoR.xlsx:
+# in Docker the working directory (/app) is a root-owned image layer, and the
+# data volume is the only place appuser can write.
+# In Docker: /app/data/picks.  Locally: ./picks (unchanged behavior).
+# Resolved per call rather than at import so it always follows DATABASE_URL.
+def default_picks_dir():
+    return os.path.join(_data_dir(), "picks")
 
 
 def export_season_picks(season, picks_dir=None):
@@ -746,9 +752,11 @@ def export_season_picks(season, picks_dir=None):
     Produces a file compatible with seed.py's load_picks_from_json, extended
     with sole_survivor_picks and custom scoring_config.
 
+    Writes to picks_dir, or default_picks_dir() when not given.
+
     Returns the filepath written, or None if no picks exist.
     """
-    picks_dir = picks_dir or PICKS_DIR
+    picks_dir = os.path.realpath(picks_dir or default_picks_dir())
     os.makedirs(picks_dir, exist_ok=True)
 
     picks = (
