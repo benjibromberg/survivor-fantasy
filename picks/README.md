@@ -62,7 +62,9 @@ python seed.py --picks-dir ./picks
 | `picks` | yes | Object keyed by fantasy player name. Each value is a list of pick entries. |
 | `sole_survivor_picks` | no | Object keyed by fantasy player name. Each value is a list of Sole Survivor entries. |
 | `team_names` | no | Object keyed by fantasy player name. Each value is that player's team name for this season (up to 40 characters). An empty, non-text or longer value is skipped with a `WARNING`. |
-| `episode2_starts_at` | no | When Episode 2 starts, as an ISO date-time in UTC (`Z`) or with an offset. Setting it turns on wildcard self-service for the season. A value that cannot be parsed is skipped with a `WARNING`. |
+| `episode2_starts_at` | no | When Episode 2 starts, as an ISO date-time in UTC (`Z`) or with an offset. Wildcard picks lock 15 minutes before it. The app normally looks this up itself for the active season. A value that cannot be parsed is skipped with a `WARNING`. |
+| `episode2_manual` | no | `true` when the admin typed the Episode 2 time in, so the automatic lookup never replaces it. Written only when `true`. |
+| `wildcard_self_service` | no | `false` when the admin switched wildcard self-service off for the season. Written only when `false`. |
 
 A file with no `picks` key is read as a bare player map (the older format). That form cannot carry the other top-level keys.
 

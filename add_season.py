@@ -192,12 +192,17 @@ def load_draft(season, filepath):
 
 
 def activate(season):
-    """Make this the only active season (same effect as the admin toggle)."""
+    """Make this the only active season (same effect as the admin toggle).
+
+    Also looks up when its Episode 2 starts, which opens wildcard self-service.
+    """
     from app.models import Season, db
+    from app.schedule import sync_episode2_time
 
     Season.query.filter(Season.id != season.id).update({"is_active": False})
     season.is_active = True
     db.session.commit()
+    sync_episode2_time(season)
 
 
 def main(argv=None):

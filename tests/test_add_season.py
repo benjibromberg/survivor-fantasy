@@ -216,9 +216,12 @@ class TestCreateSeason:
 
 
 class TestActivate:
-    def test_activating_deactivates_the_others(self, app):
+    def test_activating_deactivates_the_others(self, app, monkeypatch):
         _, db = app
         from app.models import Season
+
+        # Activation looks up Episode 2's air time; keep the test offline
+        monkeypatch.setattr("app.schedule.episode2_start", lambda n: (None, None))
 
         _season(db, number=60, active=True)
         new = _season(db, number=61)

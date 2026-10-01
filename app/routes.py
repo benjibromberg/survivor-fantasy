@@ -5,7 +5,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
-from . import wildcards
+from . import schedule, wildcards
 from .data import (
     download_survivor_data,
     export_all_picks,
@@ -666,6 +666,7 @@ def rules(season_id):
         progressive=progressive,
         examples=examples,
         PICK_TYPE_LABELS=PICK_TYPE_LABELS,
+        wildcard_self_service=bool(season) and wildcards.is_self_service(season),
     )
 
 
@@ -1774,9 +1775,11 @@ def admin_season_detail(season_id):
 @main_bp.route("/admin/season/<int:season_id>/wildcard-window", methods=["POST"])
 @login_required
 def admin_wildcard_window(season_id):
-    """Set the Episode 2 start time, which opens wildcard self-service.
+    """Switch wildcard self-service on or off, and override the Episode 2 time.
 
-    A blank value switches self-service off for the season.
+    The time is normally filled in automatically (app/schedule.py). A time
+    that differs from the one shown becomes an override that the automatic
+    lookup never replaces; a blank time goes back to automatic.
     """
     denied = _require_admin()
     if denied:
@@ -1791,7 +1794,14 @@ def admin_wildcard_window(season_id):
         return back
 
     try:
-        season.episode2_starts_at = starts_at
+        season.wildcard_self_service = "self_service" in request.form
+        if starts_at is None:
+            season.episode2_starts_at = None
+            season.episode2_manual = False
+        elif season.episode2_manual or starts_at != season.episode2_starts_at:
+            # Saving the form unchanged keeps an automatic time automatic
+            season.episode2_starts_at = starts_at
+            season.episode2_manual = True
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
@@ -1799,12 +1809,20 @@ def admin_wildcard_window(season_id):
         flash("Could not save the Episode 2 time.", "error")
         return back
 
-    if starts_at is None:
+    schedule.sync_episode2_time(season)
+
+    if not season.wildcard_self_service:
         flash("Wildcard self-service is off for this season.", "success")
-    else:
+    elif wildcards.is_self_service(season):
         flash(
             "Wildcard picks lock "
             f"{wildcards.format_league_time(wildcards.lock_at(season))}.",
+            "success",
+        )
+    else:
+        flash(
+            "Wildcard self-service starts once Episode 2's time is known. It "
+            "is looked up daily for the active season.",
             "success",
         )
     return back
@@ -1861,6 +1879,8 @@ def admin_refresh(season_id):
     except Exception as e:
         db.session.rollback()
         flash(f"Refresh failed: {e}", "error")
+
+    schedule.sync_episode2_time(season)
 
     # Auto-export picks after refresh (capture any name/id updates)
     try:
@@ -1932,6 +1952,7 @@ def admin_toggle_active(season_id):
         Season.query.filter(Season.id != season.id).update({"is_active": False})
         season.is_active = True
     db.session.commit()
+    schedule.sync_episode2_time(season)
     flash(
         f"Season {season.number} {'activated' if season.is_active else 'deactivated'}.",
         "success",

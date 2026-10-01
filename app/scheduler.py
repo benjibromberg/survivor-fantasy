@@ -8,10 +8,18 @@ scheduler = BackgroundScheduler()
 
 
 def refresh_active_seasons(app):
-    """Download latest survivoR data and refresh all active seasons."""
+    """Download latest survivoR data and refresh all active seasons.
+
+    Also looks up when Episode 2 starts (the wildcard lock), first and
+    independently, so a survivoR download failure does not hold it up.
+    """
     with app.app_context():
         from .data import download_survivor_data, export_all_picks, refresh_season
         from .models import Season
+        from .schedule import sync_episode2_time
+
+        for season in Season.query.filter_by(is_active=True).all():
+            sync_episode2_time(season)
 
         try:
             download_survivor_data()

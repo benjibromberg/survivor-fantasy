@@ -29,13 +29,28 @@
 <!-- Wildcard self-service -->
 <section>
     <h2>Wildcard Picks</h2>
-    <p><small>Enter when Episode 2 starts to let players pick their own wildcard on My Team. Picks lock 15 minutes before that time and stay hidden until every player has picked. Leave blank to keep entering wildcards yourself under Manage Picks.</small></p>
-    <form method="POST" action="{{ url_for('main.admin_wildcard_window', season_id=season.id) }}" class="admin-inline-form" style="max-width: 30rem;">
+    <p><small>Players pick their own wildcard on My Team once Episode 2's start time is known. Picks lock 15 minutes before it and stay hidden until every player has picked. The time is looked up automatically for the active season; type a different one to override it, or clear the field to go back to automatic. Untick the box to keep entering wildcards yourself under Manage Picks.</small></p>
+    <form method="POST" action="{{ url_for('main.admin_wildcard_window', season_id=season.id) }}" class="admin-inline-form" style="max-width: 40rem;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label style="display: flex; align-items: center; gap: 0.3rem; margin: 0; white-space: nowrap;">
+            <input type="checkbox" name="self_service" {% if wildcard.switched_on %}checked{% endif %} style="margin: 0;">
+            Players pick their own
+        </label>
         <label for="episode2_starts_at" style="margin: 0; white-space: nowrap;">Episode 2 starts (Eastern)</label>
         <input type="datetime-local" id="episode2_starts_at" name="episode2_starts_at" value="{{ wildcard.form_value }}">
         <button type="submit" class="outline">Save</button>
     </form>
+    <p style="font-size:0.9rem;color:var(--text-dim);">
+        {% if wildcard.manual %}
+        Episode 2 time entered by hand; the automatic lookup will not change it.
+        {% elif wildcard.known %}
+        Episode 2 time filled in automatically from the TV schedule.
+        {% elif season.is_active %}
+        Episode 2 time not known yet; it is looked up daily.
+        {% else %}
+        Episode 2 time is looked up once this season is active.
+        {% endif %}
+    </p>
     {% if wildcard.enabled %}
     <p style="font-size:0.9rem;color:var(--text-dim);">
         Locks <strong>{{ wildcard.lock_label }}</strong> &middot;
