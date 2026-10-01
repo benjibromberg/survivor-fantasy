@@ -10,7 +10,8 @@
     </div>
     <div class="finale-content">
         <p class="finale-label">The Tribe Has Spoken</p>
-        <h1 class="finale-winner-name">{{ finale_data.winner.user.display_name or finale_data.winner.user.username }}</h1>
+        {# Not a heading: the season name below is the page's one <h1> #}
+        <p class="finale-winner-name">{{ finale_data.winner.user.display_name or finale_data.winner.user.username }}</p>
         <p class="finale-subtitle">Champion of {{ season.name or 'Season ' ~ season.number }}</p>
         <div class="finale-stats">
             <div class="finale-stat">

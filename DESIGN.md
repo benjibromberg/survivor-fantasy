@@ -157,6 +157,12 @@ Used by the rules and scoring analysis pages. `<details class="fold" open><summa
 - Ember particles only on finale pages (earned spectacle)
 - Champion reveal uses `--reveal-delay` custom property for staggered entrance
 - `font-display: swap` on Survivant to prevent layout shift
+- `prefers-reduced-motion: reduce` turns off all four named animations. The finale banner keeps a steady glow and the embers are not shown.
+
+## Keyboard and Semantics
+- **Focus ring:** `outline: 2px solid var(--fire-glow)` on `:focus-visible`, offset 2px (inset -2px inside the seasons dropdown, where an outer ring would be clipped). Most links and form controls get Pico's focus ring; the custom ring is for controls whose own `box-shadow` or `all: unset` would otherwise hide it (season button and its items, contents buttons, pick pills, collapsible summaries). A new control that sets its own `box-shadow` needs this ring.
+- **Disclosure buttons** (season menu, contents panel) carry `aria-expanded` and `aria-controls`, close on Escape, and return focus to the button.
+- **One `<h1>` per page.** The finale banner's winner name is styled text, not a heading, so it also stays out of the contents list.
 
 ## Component Patterns
 

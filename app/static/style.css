@@ -198,7 +198,6 @@ nav {
     background: none !important;
     border: none !important;
     box-shadow: none !important;
-    outline: none !important;
     cursor: pointer;
     margin: 0 !important;
     padding: 0.3rem 0.6rem !important;
@@ -1571,6 +1570,7 @@ small {
     font-family: var(--font-heading) !important;
     font-size: 2.8em;
     font-weight: 900;
+    line-height: 1.125;
     letter-spacing: 0.06em;
     margin: 0.25rem 0;
     background: linear-gradient(180deg, var(--sand-light) 0%, var(--torch-gold) 50%, var(--fire-bright) 100%);
@@ -1947,6 +1947,42 @@ small {
 
     .finale-label {
         font-size: 0.9em;
+    }
+}
+
+/* --- Keyboard focus ---
+   A ring for the controls whose own styling removes the browser's and
+   Pico's indicator. Same ring as the collapsible-section summaries. */
+
+.nav-dropdown-trigger:focus-visible,
+.toc-toggle:focus-visible,
+.toc-close:focus-visible,
+.lb-pick:focus-visible {
+    outline: 2px solid var(--fire-glow);
+    outline-offset: 2px;
+}
+
+/* Inset, so the ring is not clipped by the dropdown's edge */
+#seasons-dropdown > a.nav-dropdown-item:focus-visible {
+    outline: 2px solid var(--fire-glow);
+    outline-offset: -2px;
+    color: var(--sand-warm);
+}
+
+/* --- Reduced motion ---
+   The finale effects loop forever. Stop them for anyone who asks the
+   system for less motion; the banner keeps a steady glow instead. */
+
+@media (prefers-reduced-motion: reduce) {
+    .finale-banner {
+        animation: none;
+        box-shadow: 0 0 30px rgba(244, 162, 97, 0.35), inset 0 0 40px rgba(244, 162, 97, 0.06);
+    }
+
+    .ember-particle,
+    .finale-winner-name,
+    .lb-champion {
+        animation: none;
     }
 }
 
