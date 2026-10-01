@@ -597,7 +597,7 @@ class TestDraftBeforeThePremiere:
         page = resp.get_data(as_text=True)
         assert "Bo" in page
         # Odds need the jury size, which survivoR has not published either
-        assert "Win odds will show up" in page
+        assert "Win odds appear around the merge" in page
 
     def test_the_player_can_see_their_team(self, drafted):
         _login(drafted.c, PAT_EMAIL)
