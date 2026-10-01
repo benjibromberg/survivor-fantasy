@@ -177,3 +177,25 @@ class TestGenerateSeasonImages:
         assert q.image_url == _url(46, "%22q%22")
         assert _url(46, "q") in caplog.text
         assert "boom" in caplog.text
+
+
+# ── seed.py: per-season wrapper ───────────────────────────────────────────
+
+
+class TestSeedGenerateImageUrls:
+    def test_prints_matched_over_total_per_season(self, app, monkeypatch, capsys):
+        _, db = app
+        import seed
+
+        _add_season(db, 50, ["Rizo", "Savannah"])
+        _add_season(db, 51, ["Danny", "Thien An", "Nobody"])
+        found = {50: 2, 51: 1}
+        monkeypatch.setattr(
+            seed, "generate_season_images", lambda season: found[season.number]
+        )
+
+        seed.generate_image_urls()
+
+        out = capsys.readouterr().out
+        assert "  Season 50: 2/2 images" in out
+        assert "  Season 51: 1/3 images" in out
