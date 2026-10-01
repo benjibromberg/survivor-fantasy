@@ -10,6 +10,7 @@ marker a later pass uses to match them to the dataset once it publishes.
 
 import importlib
 import io
+import json
 import os
 import sys
 
@@ -34,7 +35,15 @@ def client(tmp_path, monkeypatch):
 
     monkeypatch.setattr("app.scheduler.init_scheduler", lambda _app: None)
 
-    from app import create_app, db
+    from app import create_app, db, predictions
+
+    # No survivoR.xlsx, which is the whole point: historical rates fall back
+    # to the empty defaults rather than reaching for a dataset that has no
+    # cast for this season yet.
+    monkeypatch.setattr(
+        predictions, "SURVIVOR_DATA_FILE", str(tmp_path / "missing.xlsx")
+    )
+    predictions.clear_cache()
 
     application = create_app()
     application.config["TESTING"] = True
@@ -43,6 +52,7 @@ def client(tmp_path, monkeypatch):
         yield application.test_client(), db
         db.session.remove()
 
+    predictions.clear_cache()
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("ADMIN_EMAIL", raising=False)
     if "config" in sys.modules:
@@ -499,3 +509,80 @@ class TestRemoveCastaway:
         self._remove(league, bo)
 
         assert _cast(league) == ["Bo"]
+
+
+# ── What the whole point is: drafting a hand-entered cast ─────────────────
+
+
+class TestDraftBeforeThePremiere:
+    """A draft on a season with no survivoR data has to be viewable.
+
+    Checked through the real pages, not by calling the builders: a season
+    with no episode stats, no jury size and no finalist count is exactly the
+    shape the scoring, odds and highlights code has the least data for.
+    """
+
+    @pytest.fixture()
+    def drafted(self, league):
+        """Three hand-entered castaways, one of them drafted by Pat.
+
+        The draft goes in through the admin picks page, the way a real one
+        would, so the hand-entered castaways have to be selectable there.
+        """
+        _login(league.c)
+        for name in ("Bo", "Cy", "Dee Dee"):
+            _add(league, name)
+        resp = league.c.post(
+            f"/admin/picks/{league.pre.id}",
+            data={
+                "user_id": league.pat.id,
+                "draft": [_survivor(league, "Bo").id],
+                "sole_survivor": _survivor(league, "Cy").id,
+                "ss_episode": "1",
+            },
+        )
+        assert resp.status_code == 302
+        league.c.get("/logout")
+        return league
+
+    def test_the_draft_lands_against_the_hand_entered_castaway(self, drafted):
+        from app.models import Pick
+
+        pick = Pick.query.one()
+        assert pick.survivor.name == "Bo"
+        assert pick.survivor.is_hand_entered is True
+
+    def test_the_public_leaderboard_renders(self, drafted):
+        resp = drafted.c.get(f"/leaderboard/{drafted.pre.id}")
+
+        assert resp.status_code == 200
+        page = resp.get_data(as_text=True)
+        assert "Bo" in page
+        # Odds need the jury size, which survivoR has not published either
+        assert "Win odds will show up" in page
+
+    def test_the_player_can_see_their_team(self, drafted):
+        _login(drafted.c, PAT_EMAIL)
+
+        resp = drafted.c.get(f"/my-team/{drafted.pre.id}")
+
+        assert resp.status_code == 200
+        assert "Bo" in resp.get_data(as_text=True)
+
+    def test_the_season_stats_page_renders(self, drafted):
+        resp = drafted.c.get(f"/stats/{drafted.pre.id}")
+
+        assert resp.status_code == 200
+
+    def test_the_picks_export_names_the_hand_entered_castaways(self, drafted, tmp_path):
+        """The draft is exportable, so it is not lost to a later re-seed."""
+        from app.data import export_season_picks
+
+        path = export_season_picks(drafted.pre, picks_dir=str(tmp_path / "picks"))
+
+        with open(path) as f:
+            exported = json.load(f)
+        assert exported["picks"]["Pat"] == [{"survivor": "Bo", "type": "d", "order": 1}]
+        assert exported["sole_survivor_picks"]["Pat"] == [
+            {"survivor": "Cy", "episode": 1}
+        ]
