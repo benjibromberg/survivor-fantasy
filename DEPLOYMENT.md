@@ -161,9 +161,12 @@ Locally, `/dev-login?user=<username>` logs in as a player without Access.
 
 ### Wildcard self-service
 
-By default the admin enters every wildcard under **Manage Picks**. To let
-players pick their own, open the season's admin page and enter when Episode 2
-starts (Eastern time) under **Wildcard Picks**. From then on:
+Players pick their own wildcard once the app knows when Episode 2 starts. It
+looks that up itself for the active season: from TVmaze, which lists CBS air
+times before they air, or, if TVmaze has no answer, as one week after the
+premiere at 8 PM Eastern from the survivoR dataset. The lookup runs with the
+daily refresh, the admin **Refresh** button, and whenever a season is
+activated. From then on:
 
 - A player with draft picks chooses their wildcard on **My Team**: any castaway
   still in the game who is not already on their own team. They can change it as
@@ -176,9 +179,18 @@ starts (Eastern time) under **Wildcard Picks**. From then on:
   page shows who is still to pick.
 
 The admin can change any wildcard at any time under Manage Picks, including
-after the lock. Clearing the Episode 2 time switches self-service off and shows
-every wildcard again. The Episode 2 time is exported with the season's picks,
-so a re-seed with `--picks-dir` restores it and wildcards stay hidden.
+after the lock. Under **Wildcard Picks** on the season's admin page:
+
+- Untick **Players pick their own** to switch self-service off for the season.
+  Every wildcard is shown again and the admin enters them.
+- Type a different Episode 2 time to override the lookup; the lookup never
+  replaces a time typed in. Clear the field to go back to automatic.
+
+The lookup only changes the time while picks are still open. Once a lock has
+passed the time stays put, and a season whose Episode 2 has already started is
+not switched on after the fact, since that would hide wildcards the admin has
+already entered. The time, the override and the switch are exported with the
+season's picks, so a re-seed with `--picks-dir` restores them.
 
 ## How It Works
 
