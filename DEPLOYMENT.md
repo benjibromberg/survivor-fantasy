@@ -128,8 +128,8 @@ docker compose logs survivor-fantasy
 ## Admin login
 
 The whole site is gated by Access, so every visitor is an authenticated league
-member. **Admin** is whoever's Access email matches `ADMIN_EMAIL`: visit
-`/login` (the "Login" button) and the app promotes that email to admin. Access
+member. **Admin** is whoever's Access email matches `ADMIN_EMAIL`; the app signs
+that email in as admin automatically (see **Automatic sign-in** below). Access
 forwards the verified email in the `Cf-Access-Authenticated-User-Email` header;
 because the origin is reachable only through the tunnel behind Access, the app
 trusts that header. For defence-in-depth you can additionally validate the
@@ -146,8 +146,9 @@ active season. A member's Access email has to be linked to their player first:
 1. As admin, open **Admin → Players** for a season and enter the member's email
    in the **Login Email** column. It must be the same address that is on the
    Access allowlist.
-2. The member clicks **Login**. The app matches their Access email to the linked
-   player and shows a **My Team** link in the nav.
+2. On their next page view the app matches their Access email to the linked
+   player, signs them in, and shows a **My Team** link in the nav. No Login
+   click is needed.
 
 An email that is not linked to a player cannot log in, and no account is created
 for it. Players get no admin pages; `ADMIN_EMAIL` stays the only admin, and the
@@ -156,6 +157,22 @@ admin can also set any player's team name from the Players page.
 
 Linked emails and team names are part of the pick export (see **Data
 Persistence**), so a re-seed with `--picks-dir` restores them.
+
+### Automatic sign-in
+
+Every visitor has already proved their email to Cloudflare Access, so the app
+signs them in from that email on their first page view, using the same header
+and the same rules as the **Login** button:
+
+- A linked email signs in as its player; `ADMIN_EMAIL` signs in as the admin.
+- An unlinked email stays anonymous and sees the public pages, with the Login
+  button. Clicking it explains that the email is not linked yet.
+- If Access reports a different email than the one the session signed in with
+  (a shared browser), the session follows Access.
+- **Logout** turns this off for the rest of the browser session; clicking
+  **Login** turns it back on.
+
+Images and other static files never trigger a sign-in.
 
 Locally, `/dev-login?user=<username>` logs in as a player without Access.
 
