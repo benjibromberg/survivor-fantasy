@@ -1,6 +1,7 @@
 """Tests for where pick exports are written and how a failed export is handled."""
 
 import importlib
+import json
 import os
 import sys
 
@@ -163,6 +164,54 @@ class TestExportLocation:
         assert (elsewhere / "season99.json").is_file()
         assert os.path.realpath(path) == os.path.realpath(elsewhere / "season99.json")
         assert not (tmp_path / "data" / "picks").exists()
+
+
+class TestExportSoleSurvivorOnly:
+    def test_season_with_only_sole_survivor_picks_roundtrips(self, app, tmp_path):
+        """Sole Survivor picks are exported even when the season has no other picks."""
+        _, db = app
+        from app.data import export_season_picks
+        from app.models import SoleSurvivorPick
+        from seed import load_picks_from_json
+
+        season, user, surv = _make_season(db)
+        db.session.add(
+            SoleSurvivorPick(
+                user_id=user.id, season_id=season.id, survivor_id=surv.id, episode=2
+            )
+        )
+        db.session.commit()
+
+        path = export_season_picks(season, str(tmp_path / "out"))
+
+        assert path is not None
+        with open(path) as f:
+            data = json.load(f)
+        assert data["picks"] == {}
+        assert data["sole_survivor_picks"] == {
+            "PlayerOne": [{"survivor": "Castaway", "episode": 2}]
+        }
+
+        SoleSurvivorPick.query.delete()
+        db.session.commit()
+        load_picks_from_json(path, season, {surv.name.lower(): surv})
+
+        restored = SoleSurvivorPick.query.one()
+        assert (restored.user_id, restored.survivor_id, restored.episode) == (
+            user.id,
+            surv.id,
+            2,
+        )
+
+    def test_season_with_no_picks_at_all_writes_nothing(self, app, tmp_path):
+        _, db = app
+        from app.data import export_season_picks
+
+        season, _user, _surv = _make_season(db)
+        out = tmp_path / "out"
+
+        assert export_season_picks(season, str(out)) is None
+        assert not (out / "season99.json").exists()
 
 
 # ── seed.py pre-drop export decision ──────────────────────────────────────

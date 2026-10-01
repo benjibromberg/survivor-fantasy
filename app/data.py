@@ -754,7 +754,8 @@ def export_season_picks(season, picks_dir=None):
 
     Writes to picks_dir, or default_picks_dir() when not given.
 
-    Returns the filepath written, or None if no picks exist.
+    Returns the filepath written, or None if the season has no picks and no
+    Sole Survivor picks.
     """
     picks_dir = os.path.realpath(picks_dir or default_picks_dir())
     os.makedirs(picks_dir, exist_ok=True)
@@ -764,7 +765,12 @@ def export_season_picks(season, picks_dir=None):
         .order_by(Pick.user_id, Pick.pick_order)
         .all()
     )
-    if not picks:
+    ss_picks = (
+        SoleSurvivorPick.query.filter_by(season_id=season.id)
+        .order_by(SoleSurvivorPick.user_id, SoleSurvivorPick.episode)
+        .all()
+    )
+    if not picks and not ss_picks:
         return None
 
     surv_by_id = {s.id: s for s in Survivor.query.filter_by(season_id=season.id)}
@@ -788,11 +794,6 @@ def export_season_picks(season, picks_dir=None):
         picks_data[name].append(entry)
 
     # Build sole survivor picks
-    ss_picks = (
-        SoleSurvivorPick.query.filter_by(season_id=season.id)
-        .order_by(SoleSurvivorPick.user_id, SoleSurvivorPick.episode)
-        .all()
-    )
     ss_data = {}
     for sp in ss_picks:
         user = db.session.get(User, sp.user_id)
