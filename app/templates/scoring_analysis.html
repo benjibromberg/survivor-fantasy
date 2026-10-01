@@ -1016,11 +1016,11 @@ fetch('{{ url_for("static", filename="scoring_analysis.json") }}')
 }
 .ci-bands {
     color: #9aa5b1;
-    font-size: 0.8em;
+    font-size: max(var(--fs-floor), 0.8em);
 }
 .legacy-cmp {
     color: #9aa5b1;
-    font-size: 0.8em;
+    font-size: max(var(--fs-floor), 0.8em);
 }
 .comparison-section {
     margin-bottom: 2.5rem;

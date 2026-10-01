@@ -14,28 +14,37 @@
 
 ## Typography
 
-Four fonts, each with a distinct role. This is the core of the visual identity.
+Four brand fonts, each with a distinct role, over Pico's system sans for body text. This is the core of the visual identity.
 
 - **Logo/Branding:** `Survivant` (local @font-face, `fonts/survivant.ttf`) -- Official Survivor logo font. Used ONLY for site logo, finale labels, and logo motto. Uppercase, wide letter-spacing (0.08-0.2em). CSS var: `--font-logo`
 - **Headings/Player Names:** `Cinzel` (Google Fonts) -- Serif with classical authority. Used for h1-h3, player names, leaderboard names, TOC links. Letter-spacing 0.03-0.04em. CSS var: `--font-heading`
 - **Labels/Stats/UI:** `Bebas Neue` (Google Fonts) -- Condensed sans for data-dense UI. Nav buttons, toggle buttons, rank numbers, stat values, badge text, point displays. Uppercase with letter-spacing 0.04-0.1em. CSS var: `--font-label`
-- **Body/Castaway Names:** `Palatino Linotype` > `Palatino` > `Book Antiqua` > `serif` (system) -- Warm serif for longer text. Castaway names, pick meta text, body paragraphs. CSS var: `--font-tribal`
+- **Castaway Names:** `Palatino Linotype` > `Palatino` > `Book Antiqua` > `serif` (system) -- Warm serif for castaway names, team names and a few short labels. Not used for running text. CSS var: `--font-tribal`
+- **Body text:** Pico's system sans-serif stack (no `font-family` set on `body`). Paragraphs, pick meta lines (points, stats, result), form text. Chosen over Palatino because sans reads better at the small sizes used on phones.
 - **Loading:** Survivant is self-hosted (`/static/fonts/survivant.ttf`, `font-display: swap`). Cinzel and Bebas Neue via Google Fonts CDN.
 
 ### Type Scale
+Sizes are as declared in `style.css` (desktop, then the phone override where one exists). Pico scales the root font with the viewport: 16px on phones, 18px from 768px, 20px from 1280px, 21px from 1536px, so `em` and `rem` sizes grow on larger screens.
+
 | Element | Font | Size | Weight | Spacing |
 |---------|------|------|--------|---------|
-| Site logo | Survivant | 1.5em (1.15em mobile) | normal | 0.08em (0.04em mobile) |
-| h1, h2 | Cinzel | default | default | 0.04em |
-| h3 | Cinzel | default | default | 0.03em |
-| Nav buttons | Bebas Neue | 0.95em | 400 | 0.08em |
-| Rank numbers | Bebas Neue | 1.6em | 400 | 0.04em |
-| Points | Bebas Neue | 1.3em | 400 | 0.04em |
-| Player name | Cinzel | 1.2em | 700 | 0.02em |
-| Castaway name | Palatino | 0.9em | -- | -- |
-| Pick meta | Palatino | 0.75em | -- | -- |
-| Stat values | Bebas Neue | varies | -- | 0.02-0.04em |
-| Badge text | Bebas Neue | 0.65-0.95em | -- | 0.04em |
+| Site logo | Survivant | 1.5em (1.2em phone) | normal | 0.08em (0.05em phone) |
+| h1, h2 | Cinzel | Pico default (h1 1.6rem, h2 1.3rem phone) | default | 0.04em |
+| h3 | Cinzel | Pico default | default | 0.03em |
+| Nav buttons | Bebas Neue | 0.95em (1em phone) | 400 | 0.08em |
+| Rank numbers | Bebas Neue | 2em (1.5rem phone) | 400 | -- |
+| Points | Bebas Neue | 1.4em (1.25em phone) | 400 | 0.03em |
+| Player name | Cinzel | 1.25em (1.1em phone) | 700 | 0.03em |
+| Castaway name | Palatino | inherits the pill (0.92em phone) | 600 | 0.02em |
+| Pick meta | system sans | 0.78em, floor 12px | -- | -- |
+| Stat values | Bebas Neue | 1.2em | 400 | -- |
+| Badge text | Bebas Neue | 0.6-0.8em, floor 12px | -- | 0.5px-0.04em |
+
+### Size Floor
+- No text is smaller than `--fs-floor` (12px). The research for the design pass measured pill and badge text at 9-11px on phones, because small UI text is sized in `em` and the sizes nest (pill, then line, then badge).
+- Small text is written `font-size: max(var(--fs-floor), 0.72em)`: the `em` keeps the intended proportion where there is room, the floor stops it shrinking past 12px. Use the same form for any new small text.
+- The only text under the floor is the decorative season-menu caret, which is `aria-hidden`.
+- Write font families as variables (`--font-logo`, `--font-heading`, `--font-label`, `--font-tribal`), never by name. The one exception is the `@font-face` rule that defines Survivant.
 
 ## Color
 
