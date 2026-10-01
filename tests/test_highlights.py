@@ -682,7 +682,7 @@ class TestBadges:
         _, badges = generate_highlights(s, make_season(), None)
         imm = [b for b in badges if b.css_class == IMMUNITY]
         assert len(imm) == 1
-        assert imm[0].label == "3x Immunity"
+        assert imm[0].label == "3x immunity"
 
     def test_votes_aggregated(self):
         s = SimSurvivor(
@@ -700,7 +700,7 @@ class TestBadges:
         _, badges = generate_highlights(s, make_season(), None)
         votes = [b for b in badges if b.css_class == VOTES]
         assert len(votes) == 1
-        assert votes[0].label == "Survived 5 Votes"
+        assert votes[0].label == "Survived 5 votes"
 
     def test_no_badges_no_events(self):
         s = SimSurvivor(
