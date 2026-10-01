@@ -15,6 +15,17 @@ implementer build it in slices.
   unless a branch name is given.
 - Section 7 lists the decisions only the owner can make.
 
+## Status since this was written
+
+- The `feat/mobile-responsive-v2` and `feat/player-self-login` branches have both merged to
+  `main`. Where this document says either is "in flight", "open" or "local", read "merged".
+  The `file:line` references still point at the baseline commit above, so line numbers have
+  moved.
+- The owner chose **Direction B** (Section 4). The slices common to every direction (S1 to
+  S3) start once the wildcard self-service and pick-export work has merged, because those
+  edit the same files.
+- Question 1 in Section 7 (direction) is answered. The other questions are still open.
+
 ## How to read the evidence labels
 
 Nothing here was rendered in a browser and the app was not run. The labels say how each
