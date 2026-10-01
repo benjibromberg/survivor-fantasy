@@ -28,6 +28,9 @@ CLAUDE.md
 .claude/worktrees/
 .impeccable/
 
+# Browser-automation scratch (Playwright MCP screenshots, snapshots, console logs)
+.playwright-mcp/
+
 # Local notes
 TODO.md
 PLAYER_MESSAGE_DRAFT.md
