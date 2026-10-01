@@ -20,9 +20,14 @@
 {% if players %}
 <section>
     <h3>Current Players</h3>
+    <p><small>Link a player's Cloudflare Access email so they can log in as themselves and name their team. The email must also be on the Access allowlist.</small></p>
     <table>
         <thead>
-            <tr><th>Name</th><th>Display Name</th><th>Role</th><th></th></tr>
+            <tr>
+                <th>Name</th><th>Display Name</th><th>Role</th><th>Login Email</th>
+                {% if season %}<th>Team Name ({{ season.name or 'Season ' ~ season.number }})</th>{% endif %}
+                <th></th>
+            </tr>
         </thead>
         <tbody>
             {% for player in players %}
@@ -30,6 +35,25 @@
                 <td>{{ player.username }}</td>
                 <td>{{ player.display_name or '—' }}</td>
                 <td>{{ 'Admin' if player.is_admin else 'Player' }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('main.admin_player_email', user_id=player.id) }}" class="admin-inline-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        {% if season %}<input type="hidden" name="season_id" value="{{ season.id }}">{% endif %}
+                        <input type="email" name="email" value="{{ player.email or '' }}" placeholder="not linked"
+                               aria-label="Login email for {{ player.display_name or player.username }}">
+                        <button type="submit" class="outline">Save</button>
+                    </form>
+                </td>
+                {% if season %}
+                <td>
+                    <form method="POST" action="{{ url_for('main.admin_player_team_name', user_id=player.id, season_id=season.id) }}" class="admin-inline-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="text" name="team_name" value="{{ team_names.get(player.id, '') }}" maxlength="{{ team_name_max_length }}"
+                               placeholder="none" aria-label="Team name for {{ player.display_name or player.username }}">
+                        <button type="submit" class="outline">Save</button>
+                    </form>
+                </td>
+                {% endif %}
                 <td>
                     {% if not player.is_admin %}
                     <form method="POST" action="{{ url_for('main.admin_delete_player', user_id=player.id) }}"

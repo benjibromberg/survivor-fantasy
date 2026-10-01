@@ -3,6 +3,7 @@ import logging
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy.exc import SQLAlchemyError
 
 from .data import (
     download_survivor_data,
@@ -12,13 +13,16 @@ from .data import (
     refresh_season,
 )
 from .models import (
+    TEAM_NAME_MAX_LENGTH,
     Pick,
     Season,
     SoleSurvivorPick,
     Survivor,
+    TeamName,
     User,
     calculate_ss_streak,
     db,
+    normalize_email,
 )
 from .predictions import calculate_win_probabilities
 from .scoring import SCORING_SYSTEMS, compute_stat_overrides, get_scoring_system
@@ -144,6 +148,7 @@ def _build_leaderboard(season):
     scoring = get_scoring_system(season.scoring_system, season.get_scoring_config())
 
     users = User.query.join(Pick).filter(Pick.season_id == season.id).distinct().all()
+    team_names = TeamName.for_season(season.id)
     leaderboard_data = []
 
     # Build display results for same-day eliminations (e.g. "T-5th voted out")
@@ -398,6 +403,7 @@ def _build_leaderboard(season):
         leaderboard_data.append(
             {
                 "user": user,
+                "team_name": team_names.get(user.id),
                 "total_points": total,
                 "sole_survivor_pick": current_ss_name,
                 "sole_survivor_eliminated": current_ss_eliminated,
@@ -1253,12 +1259,95 @@ def scoring_compare(season_id):
     )
 
 
+# --- Player: My Team ---
+
+
+def _save_team_name(user, season, raw):
+    """Validate and store a team name (blank clears it). Returns True if saved."""
+    name = TeamName.clean(raw)
+    if len(name) > TEAM_NAME_MAX_LENGTH:
+        flash(f"Team name must be {TEAM_NAME_MAX_LENGTH} characters or fewer.", "error")
+        return False
+    try:
+        TeamName.set_for(user.id, season.id, name)
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception(
+            "Saving team name failed (user %s, season %s)", user.id, season.id
+        )
+        flash("Could not save the team name. Try again.", "error")
+        return False
+    return True
+
+
+@main_bp.route("/my-team")
+@login_required
+def my_team():
+    season = Season.get_active()
+    if season:
+        return redirect(url_for("main.my_team_season", season_id=season.id))
+    return render_template("my_team.html", season=None)
+
+
+@main_bp.route("/my-team/<int:season_id>")
+@login_required
+def my_team_season(season_id):
+    season = db.get_or_404(Season, season_id)
+
+    leaderboard_data, _ = _build_leaderboard(season)
+    entry = None
+    rank = None
+    for i, candidate in enumerate(leaderboard_data, start=1):
+        if candidate["user"].id == current_user.id:
+            entry, rank = candidate, i
+            break
+
+    my_seasons = (
+        Season.query.join(Pick)
+        .filter(Pick.user_id == current_user.id)
+        .distinct()
+        .order_by(Season.number.desc())
+        .all()
+    )
+
+    return render_template(
+        "my_team.html",
+        season=season,
+        entry=entry,
+        rank=rank,
+        team_count=len(leaderboard_data),
+        team_name=TeamName.for_season(season.id).get(current_user.id),
+        can_rename=season.is_active or current_user.is_admin,
+        my_seasons=my_seasons,
+        team_name_max_length=TEAM_NAME_MAX_LENGTH,
+    )
+
+
+@main_bp.route("/my-team/<int:season_id>/name", methods=["POST"])
+@login_required
+def my_team_name(season_id):
+    season = db.get_or_404(Season, season_id)
+    if not season.is_active and not current_user.is_admin:
+        flash("Team names can only be changed for the active season.", "error")
+    elif _save_team_name(current_user, season, request.form.get("team_name")):
+        flash("Team name saved!", "success")
+    return redirect(url_for("main.my_team_season", season_id=season.id))
+
+
 # --- Admin: Settings ---
 
 
 @main_bp.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
+    # Admin-only: display names key the pick export files, so a player taking
+    # another player's name would merge their picks on re-import. Players
+    # personalise through their team name instead.
+    denied = _require_admin()
+    if denied:
+        return denied
+
     if request.method == "POST":
         display_name = request.form.get("display_name", "").strip() or None
         current_user.display_name = display_name
@@ -1451,7 +1540,88 @@ def admin_players(season_id):
         return redirect(url_for("main.admin_players", season_id=season_id))
 
     players = User.query.order_by(User.username).all()
-    return render_template("admin/players.html", players=players, season=season)
+    return render_template(
+        "admin/players.html",
+        players=players,
+        season=season,
+        team_names=TeamName.for_season(season.id) if season else {},
+        team_name_max_length=TEAM_NAME_MAX_LENGTH,
+    )
+
+
+def _is_plausible_email(email):
+    """Loose shape check: one @, something on both sides, no whitespace."""
+    local, sep, domain = email.partition("@")
+    return bool(
+        sep
+        and local
+        and domain
+        and "@" not in domain
+        and not any(ch.isspace() for ch in email)
+        and len(email) <= User.email.type.length
+    )
+
+
+@main_bp.route("/admin/players/<int:user_id>/email", methods=["POST"])
+@login_required
+def admin_player_email(user_id):
+    """Link (or unlink) the Cloudflare Access email a player logs in with."""
+    denied = _require_admin()
+    if denied:
+        return denied
+
+    player = db.get_or_404(User, user_id)
+    season_id = request.form.get("season_id", type=int)
+    back = redirect(url_for("main.admin_players", season_id=season_id))
+    name = player.display_name or player.username
+
+    email = normalize_email(request.form.get("email"))
+    if email and not _is_plausible_email(email):
+        flash(f'"{email}" does not look like an email address.', "error")
+        return back
+    if email:
+        owner = User.query.filter(User.email == email, User.id != player.id).first()
+        if owner:
+            flash(
+                f"{email} is already linked to {owner.display_name or owner.username}.",
+                "error",
+            )
+            return back
+
+    try:
+        player.email = email
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception("Linking an email to player %s failed", player.id)
+        flash(f"Could not save the email for {name}.", "error")
+        return back
+
+    if email:
+        flash(f"{name} can now log in as {email}.", "success")
+    else:
+        flash(f"Email unlinked from {name}.", "success")
+    return back
+
+
+@main_bp.route(
+    "/admin/players/<int:user_id>/team-name/<int:season_id>", methods=["POST"]
+)
+@login_required
+def admin_player_team_name(user_id, season_id):
+    """Admin override of a player's team name for any season."""
+    denied = _require_admin()
+    if denied:
+        return denied
+
+    player = db.get_or_404(User, user_id)
+    season = db.get_or_404(Season, season_id)
+    if _save_team_name(player, season, request.form.get("team_name")):
+        flash(
+            f"Team name saved for {player.display_name or player.username}.",
+            "success",
+        )
+    return redirect(url_for("main.admin_players", season_id=season.id))
 
 
 @main_bp.route("/admin/players/<int:user_id>/delete", methods=["POST"])
@@ -1469,6 +1639,7 @@ def admin_delete_player(user_id):
     else:
         Pick.query.filter_by(user_id=player.id).delete()
         SoleSurvivorPick.query.filter_by(user_id=player.id).delete()
+        TeamName.query.filter_by(user_id=player.id).delete()
         db.session.delete(player)
         db.session.commit()
         flash(f'Player "{player.display_name or player.username}" deleted.', "success")
@@ -1708,11 +1879,12 @@ def admin_delete_season(season_id):
     season = Season.query.get_or_404(season_id)
     season_name = season.name or f"Season {season.number}"
 
-    # Delete picks, sole survivor picks, survivors, then season
+    # Delete picks, sole survivor picks, team names, survivors, then season
     from .models import Pick, SoleSurvivorPick
 
     Pick.query.filter_by(season_id=season.id).delete()
     SoleSurvivorPick.query.filter_by(season_id=season.id).delete()
+    TeamName.query.filter_by(season_id=season.id).delete()
     Survivor.query.filter_by(season_id=season.id).delete()
     db.session.delete(season)
     db.session.commit()

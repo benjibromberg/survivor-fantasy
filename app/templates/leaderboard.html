@@ -106,6 +106,9 @@
         {% endif %}
         <span class="lb-points">{{ "%.2f"|format(entry.total_points) }} pts</span>
         <div class="lb-sub">
+        {% if entry.team_name %}
+        <span class="lb-team-name" title="Team name">{{ entry.team_name }}</span>
+        {% endif %}
         {% if entry.sole_survivor_pick %}
         <span class="lb-ss-pick {{ 'eliminated' if entry.sole_survivor_eliminated else '' }}" title="Sole Survivor pick">
             Winner: {{ entry.sole_survivor_pick }}

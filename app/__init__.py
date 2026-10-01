@@ -72,6 +72,31 @@ def _add_missing_columns():
             log.info("Added columns to %s: %s", table.name, ", ".join(added))
 
 
+def _add_missing_indexes():
+    """Create indexes declared on models but absent from the database.
+
+    create_all() only emits indexes for tables it creates, so an index
+    declared on a table that already exists (for example on a column that
+    _add_missing_columns() just added) would otherwise never be built.
+    """
+    import logging
+
+    import sqlalchemy
+
+    log = logging.getLogger(__name__)
+    inspector = sqlalchemy.inspect(db.engine)
+
+    for table in db.Model.metadata.sorted_tables:
+        if not inspector.has_table(table.name):
+            continue
+
+        existing = {i["name"] for i in inspector.get_indexes(table.name)}
+        for index in table.indexes:
+            if index.name not in existing:
+                index.create(bind=db.engine)
+                log.info("Created index %s on %s", index.name, table.name)
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object("config.Config")
@@ -100,6 +125,7 @@ def create_app():
     with app.app_context():
         db.create_all()
         _add_missing_columns()
+        _add_missing_indexes()
 
     # Start background scheduler (skip in reloader child process)
     import os
