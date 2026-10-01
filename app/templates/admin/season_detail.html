@@ -109,9 +109,9 @@
         </thead>
         <tbody>
             {% for s in survivors %}
-            <tr style="{{ 'opacity:0.5;' if s.voted_out_order > 0 else '' }}">
+            <tr{% if s.voted_out_order > 0 %} class="eliminated"{% endif %}>
                 <td>{{ s.name }}</td>
-                <td>{% if s.tribe_color %}<span style="color:{{ s.tribe_color }};">{{ s.tribe or '-' }}</span>{% else %}{{ s.tribe or '-' }}{% endif %}</td>
+                <td>{% if s.tribe_color and s.voted_out_order == 0 %}<span style="color:{{ s.tribe_color|contrast }};">{{ s.tribe or '-' }}</span>{% else %}{{ s.tribe or '-' }}{% endif %}</td>
                 <td>{{ s.voted_out_order or '-' }}</td>
                 <td>{{ s.result or '-' }}</td>
                 <td>{{ 'Yes' if s.made_jury else '' }}</td>

@@ -55,7 +55,8 @@ Four fonts, each with a distinct role. This is the core of the visual identity.
 | `--torch-gold` | `#fca311` | Champion/winner highlight, link hover, badges |
 | `--sand-warm` | `#e8d5b7` | Primary text, h1/h2 color, nav text |
 | `--sand-light` | `#f0e6d3` | Brightest text, gradient text start |
-| `--palm-green` | `#2d6a4f` | Success messages |
+| `--palm-green` | `#2d6a4f` | Green fills and tints (merge badge background, journey dot). Too dark for text. |
+| `--palm-light` | `#52b788` | Green text: success messages, merge badge label |
 | `--text-light` | `#e8e0d6` | Body text |
 | `--text-dim` | `#9aa5b1` | Muted text, secondary labels |
 | `--card-bg` | `#162535` | Card/panel backgrounds |
@@ -75,10 +76,23 @@ Pico's dark theme variables are mapped to our palette via `[data-theme="dark"]`:
 ### Semantic Colors
 | Semantic | Color | Variable |
 |----------|-------|----------|
-| Success | `#2d6a4f` | `--palm-green` |
+| Success | `#52b788` | `--palm-light` |
 | Error | `#e85d26` | `--fire-bright` |
 | Warning | `#f4a261` | `--fire-glow` |
 | Info | `#9aa5b1` | `--text-dim` |
+
+### Contrast
+- Small text needs 4.5:1 against the surface it sits on, large text (24px and up) 3:1.
+- Do not dim text with `opacity`. It lowers contrast against the page and stacks with any dimmed parent. Use `--text-dim`, which is 5.6:1 or better on every surface except the hover surface (`--ocean-surface`, 4.2:1), where rows switch to `--sand-warm`.
+- Badge labels use a lighter tone than the badge's tint (`#f58a5e` idol and fire, `--palm-light` merge, `#e88484` votes, `#8ab8dc` advantage). The saturated hue on its own tint reads at 1.9 to 4.2:1.
+- Rank numerals are `--fire-bright` at 0.85 opacity: about 3.3:1, which passes only because they are large.
+
+### Eliminated Castaways
+One treatment everywhere a castaway appears (pick pills, stat rows, admin cards and tables):
+- Headshot in greyscale (`grayscale(1) brightness(0.8)`) with a `--card-border` ring instead of the tribe color.
+- Text in `--text-dim`. No whole-element opacity.
+- Pick pills also lose the tribe-color border and fill, and show a small snuffed torch after the name.
+- A crossed-out name is kept only where there is no photo or result line to carry it (the header's Sole Survivor pick, admin castaway cards).
 
 ### Gradient Treatments
 - **Logo text:** `linear-gradient(180deg, --sand-light 0%, --fire-glow 100%)` with `background-clip: text`
@@ -170,7 +184,7 @@ Used by the rules and scoring analysis pages. `<details class="fold" open><summa
 Card with left accent border (4px, fire-bright). Contains header (rank + name + points, plus `.lb-sub` holding Sole Survivor pick, win % and warnings: `display: contents` on desktop, its own second line on phones) and pick pills row. Champion variant gets gold border + glow. Snuffed variant dims to 0.85 opacity.
 
 ### Pick Pill (`.lb-pick`)
-Compact card showing castaway headshot (80px, 48px on mobile), name, status, and optional stats/journey. On phones pills sit in a 2-up grid; with any detail toggle on they go full width. Eliminated picks dim to 0.55 opacity. Sole Survivor picks get gold border + subtle gradient background.
+Compact card showing castaway headshot (80px, 48px on mobile), name, status, and optional stats/journey. On phones pills sit in a 2-up grid; with any detail toggle on they go full width. Eliminated picks use the eliminated treatment (see Color: Eliminated Castaways). Sole Survivor picks get gold border + subtle gradient background.
 
 ### Season Timeline (`.season-timeline`)
 Horizontal scrollable row of episode dots. The connecting line is drawn per point (`.tl-point::before`) so it scrolls with the dots. Milestone dots (Premiere, Merge, Finale) are larger with labels. Active dot gets fire-bright color and is scrolled into view on load. On phones each point is at least 2.75rem wide and only milestone and active labels show.
