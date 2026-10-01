@@ -154,9 +154,8 @@ for it. Players get no admin pages; `ADMIN_EMAIL` stays the only admin, and the
 admin can link that same address to their own player row to log in as both. The
 admin can also set any player's team name from the Players page.
 
-Linked emails and team names live only in the database. They are not part of the
-pick export files, so re-seeding (`seed.py` drops all tables) removes them and
-the emails have to be linked again.
+Linked emails and team names are part of the pick export (see **Data
+Persistence**), so a re-seed with `--picks-dir` restores them.
 
 Locally, `/dev-login?user=<username>` logs in as a player without Access.
 
@@ -178,8 +177,8 @@ starts (Eastern time) under **Wildcard Picks**. From then on:
 
 The admin can change any wildcard at any time under Manage Picks, including
 after the lock. Clearing the Episode 2 time switches self-service off and shows
-every wildcard again. The Episode 2 time is stored only in the database, like
-linked emails, so it has to be entered again after a re-seed.
+every wildcard again. The Episode 2 time is exported with the season's picks,
+so a re-seed with `--picks-dir` restores it and wildcards stay hidden.
 
 ## How It Works
 
@@ -197,7 +196,10 @@ The `data/` volume (mounted at `/app/data`) holds everything the app writes:
 - `survivor_fantasy.db`: the database.
 - `survivoR.xlsx`: the downloaded survivoR dataset.
 - `picks/season{N}.json`: pick exports, one file per season that has picks
-  (picks, Sole Survivor picks, and the season's scoring config).
+  (picks, Sole Survivor picks, the season's scoring config, the players' team
+  names for that season, and its Episode 2 start time).
+- `picks/players.json`: the login email linked to each player. It holds
+  personal email addresses, so treat the `picks/` directory as private.
 
 - `headshots/<season>/<hash>.webp`: castaway headshots mirrored from
   fantasysurvivorgame.com, resized to 160 px WebP and served at
@@ -246,10 +248,11 @@ docker compose restart survivor-fantasy
 order, it:
 
 1. Exports the picks of every season that has any to
-   `/app/data/picks/season{N}.json` (`data/picks/` on the host).
+   `/app/data/picks/season{N}.json` (`data/picks/` on the host), and the linked
+   login emails to `players.json` beside them.
 2. Stops with an error and a non-zero exit, before dropping anything, if that
-   export fails while the database holds picks, or if `--picks-dir` is not a
-   directory.
+   export fails while the database holds picks or linked emails, or if
+   `--picks-dir` is not a directory.
 3. Drops and recreates the tables, then builds the default seasons plus every
    season that has a pick file in `--picks-dir`, and loads one pick file per
    season (discovery rules: `picks/README.md`). When a season has both
@@ -270,11 +273,13 @@ Things to know before running it:
 - The export never deletes files. A leftover file for a season whose picks you
   have since removed (or a hand-placed file for such a season) is loaded again.
   Delete any `data/picks/season*.json` you do not want restored first.
-- Only seasons with picks are exported, and only their picks, Sole Survivor
-  picks, and scoring config come back. A custom scoring config on a season with
-  no picks is lost, players with no picks are not recreated, and only the
-  highest-numbered season built is marked active (pass `--active=N` to choose
-  another), so check the admin panel afterwards.
+- Only seasons with picks are exported. Their picks, Sole Survivor picks,
+  scoring config, team names and Episode 2 time come back, and so does every
+  linked login email (`players.json`). A custom scoring config, team name or
+  Episode 2 time on a season with no picks is lost. Players with no picks are
+  not recreated unless they have a linked email. Only the highest-numbered
+  season built is marked active (pass `--active=N` to choose another), so
+  check the admin panel afterwards.
 - To load a draft from a file for a season that has no picks in the database
   yet, put the file in `data/picks/` on the host and run the same command. For
   a season that already has picks, the export in step 1 overwrites

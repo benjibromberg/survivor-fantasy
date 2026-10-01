@@ -1,6 +1,6 @@
 # Pick Files
 
-Place your league's pick JSON files here. `picks/*.json` and `picks/*.xlsx` are gitignored, because each league has its own.
+Place your league's pick JSON files here. `picks/*.json` and `picks/*.xlsx` are gitignored, because each league has its own. The app's export also writes `players.json` here, which holds players' email addresses, so keep this directory private.
 
 ## Usage
 
@@ -45,7 +45,11 @@ python seed.py --picks-dir ./picks
       {"survivor": "Name", "episode": 1},
       {"survivor": "Name", "episode": 5}
     ]
-  }
+  },
+  "team_names": {
+    "PlayerA": "Torch Snuffers"
+  },
+  "episode2_starts_at": "2026-10-08T00:00:00Z"
 }
 ```
 
@@ -57,6 +61,8 @@ python seed.py --picks-dir ./picks
 | `scoring_config` | with `"custom"` | Object of scoring values, stored as the season's config. Keys you leave out fall back to `DEFAULT_CONFIG` in `app/scoring/classic.py`. If `scoring` is `"custom"` and this key is missing, the default config is used. |
 | `picks` | yes | Object keyed by fantasy player name. Each value is a list of pick entries. |
 | `sole_survivor_picks` | no | Object keyed by fantasy player name. Each value is a list of Sole Survivor entries. |
+| `team_names` | no | Object keyed by fantasy player name. Each value is that player's team name for this season (up to 40 characters). An empty, non-text or longer value is skipped with a `WARNING`. |
+| `episode2_starts_at` | no | When Episode 2 starts, as an ISO date-time in UTC (`Z`) or with an offset. Setting it turns on wildcard self-service for the season. A value that cannot be parsed is skipped with a `WARNING`. |
 
 A file with no `picks` key is read as a bare player map (the older format). That form cannot carry the other top-level keys.
 
@@ -82,3 +88,19 @@ Use the bare type codes. Matching is by substring with the longer codes checked 
 | `episode` | yes | Episode at which this pick becomes active. It stays active until the player's next entry. |
 
 A player can have one Sole Survivor entry per episode.
+
+## Linked emails (`players.json`)
+
+```json
+{
+  "players": {
+    "PlayerA": {"email": "playera@example.com", "username": "playera"}
+  }
+}
+```
+
+The login email linked to each player, keyed by fantasy player name the same way as the season files. `seed.py` reads it from `--picks-dir` after the season files. It is not a season file, so discovery ignores it. `username` is written for reference and is not read back yet: players are matched on the name, as in the season files.
+
+- The app rewrites it on every full export, including with an empty `players` object when nobody is linked, so an email you unlinked does not come back.
+- A player named here who does not exist yet is created, so a linked player with no picks survives a re-seed.
+- An email already linked to another player, or an entry that is not an object with a text `email`, is skipped with a `WARNING`. A file that cannot be parsed is reported and skipped; the picks still load.

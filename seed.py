@@ -12,8 +12,10 @@ is given, every season that has a pick file in that directory.  Without
 --active, the highest season that was built is marked active.
 """
 
+import json
 import os
 import sys
+from datetime import UTC, datetime
 
 import pandas as pd
 import requests as http_requests
@@ -23,6 +25,7 @@ load_dotenv()
 
 from app import create_app
 from app.data import (
+    PLAYERS_FILE,
     SURVIVOR_DATA_FILE,
     _build_nickname_map,
     compute_castaway_stats,
@@ -31,7 +34,17 @@ from app.data import (
     refresh_season,
     us_season_filter,
 )
-from app.models import Pick, Season, SoleSurvivorPick, Survivor, User, db
+from app.models import (
+    TEAM_NAME_MAX_LENGTH,
+    Pick,
+    Season,
+    SoleSurvivorPick,
+    Survivor,
+    TeamName,
+    User,
+    db,
+    normalize_email,
+)
 
 SURVIVOR_DATA_URL = (
     "https://github.com/doehm/survivoR/raw/refs/heads/master/dev/xlsx/survivoR.xlsx"
@@ -274,6 +287,33 @@ def _resolve_survivor(surv_name, survivor_map):
     return survivor
 
 
+def _get_or_create_player(player_name):
+    """Return the fantasy player with this name, creating them if needed.
+
+    Names match case-insensitively; the name as written becomes the display name.
+    """
+    user = User.query.filter_by(username=player_name.lower()).first()
+    if not user:
+        user = User(username=player_name.lower(), display_name=player_name)
+        db.session.add(user)
+        db.session.flush()
+    return user
+
+
+def _parse_utc(value):
+    """Parse an ISO date-time from a pick file into naive UTC.
+
+    A value with an offset (or Z) is converted; one without is taken as UTC.
+    Raises ValueError for anything else.
+    """
+    if not isinstance(value, str):
+        raise ValueError("expected an ISO date-time string")
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(UTC).replace(tzinfo=None)
+    return parsed
+
+
 def load_picks_from_json(filepath, season, survivor_map):
     """Load pick assignments, scoring config, and SS picks from a JSON file.
 
@@ -281,7 +321,9 @@ def load_picks_from_json(filepath, season, survivor_map):
         {"scoring": "legacy"|"default"|"custom",
          "scoring_config": {...},  # only when scoring="custom"
          "picks": {"Player": [{"survivor": "Name", "type": "d", "order": 1}, ...]},
-         "sole_survivor_picks": {"Player": [{"survivor": "Name", "episode": 1}, ...]}}
+         "sole_survivor_picks": {"Player": [{"survivor": "Name", "episode": 1}, ...]},
+         "team_names": {"Player": "Team Name"},
+         "episode2_starts_at": "2026-10-08T00:00:00Z"}
 
     Type codes: d=draft, w=wildcard, pmr_w=pmr_w, pmr_d=pmr_d
     """
@@ -307,12 +349,7 @@ def load_picks_from_json(filepath, season, survivor_map):
     pick_count = 0
 
     for player_name, picks in picks_data.items():
-        # Ensure fantasy player exists as User
-        user = User.query.filter_by(username=player_name.lower()).first()
-        if not user:
-            user = User(username=player_name.lower(), display_name=player_name)
-            db.session.add(user)
-            db.session.flush()
+        user = _get_or_create_player(player_name)
 
         for entry in picks:
             surv_name = entry["survivor"]
@@ -346,11 +383,7 @@ def load_picks_from_json(filepath, season, survivor_map):
     ss_count = 0
     ss_data = data.get("sole_survivor_picks", {})
     for player_name, ss_picks in ss_data.items():
-        user = User.query.filter_by(username=player_name.lower()).first()
-        if not user:
-            user = User(username=player_name.lower(), display_name=player_name)
-            db.session.add(user)
-            db.session.flush()
+        user = _get_or_create_player(player_name)
 
         for entry in ss_picks:
             survivor = _resolve_survivor(entry["survivor"], survivor_map)
@@ -369,10 +402,41 @@ def load_picks_from_json(filepath, season, survivor_map):
             )
             ss_count += 1
 
+    # Restore team names
+    team_count = 0
+    team_names = data.get("team_names") or {}
+    if not isinstance(team_names, dict):
+        print(f"    WARNING: team_names for season {season.number} is not an object")
+        team_names = {}
+    for player_name, raw in team_names.items():
+        name = TeamName.clean(raw) if isinstance(raw, str) else ""
+        if not name or len(name) > TEAM_NAME_MAX_LENGTH:
+            print(
+                f'    WARNING: team name for "{player_name}" skipped for season '
+                f"{season.number} (empty, not text, or over "
+                f"{TEAM_NAME_MAX_LENGTH} characters)"
+            )
+            continue
+        user = _get_or_create_player(player_name)
+        TeamName.set_for(user.id, season.id, name)
+        team_count += 1
+
+    # Restore the Episode 2 start time (opens wildcard self-service)
+    if data.get("episode2_starts_at") is not None:
+        try:
+            season.episode2_starts_at = _parse_utc(data["episode2_starts_at"])
+        except ValueError as e:
+            print(
+                f"    WARNING: episode2_starts_at for season {season.number} "
+                f"skipped: {e}"
+            )
+
     db.session.commit()
     ss_msg = f", {ss_count} SS picks" if ss_count else ""
+    team_msg = f", {team_count} team names" if team_count else ""
     print(
-        f"  Picks for {season.name}: {len(picks_data)} players, {pick_count} picks{ss_msg}"
+        f"  Picks for {season.name}: {len(picks_data)} players, "
+        f"{pick_count} picks{ss_msg}{team_msg}"
     )
 
 
@@ -435,6 +499,57 @@ def load_pick_files(picks_dir, pick_files):
         load_picks_from_json(filepath, season, survivor_map)
 
 
+def load_player_emails(picks_dir):
+    """Restore linked login emails from players.json in picks_dir.
+
+    The file is written by export_all_picks(). A player named in it who does
+    not exist yet is created, so a linked player with no picks survives a
+    re-seed. Returns the number of emails restored.
+
+    A missing file is not an error. An unreadable one is reported and skipped:
+    by this point the tables are already rebuilt, and the picks matter more
+    than the emails, which the admin can link again.
+    """
+    picks_dir = os.path.realpath(picks_dir)
+    filepath = os.path.realpath(os.path.join(picks_dir, PLAYERS_FILE))
+    if not filepath.startswith(picks_dir) or not os.path.isfile(filepath):
+        return 0
+
+    try:
+        with open(filepath) as f:
+            players = json.load(f)["players"]
+        if not isinstance(players, dict):
+            raise ValueError('"players" is not an object')
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        print(f"  WARNING: {PLAYERS_FILE} could not be read, no emails restored: {e}")
+        return 0
+
+    restored = 0
+    try:
+        for player_name, entry in players.items():
+            if not isinstance(entry, dict) or not isinstance(entry.get("email"), str):
+                print(f'  WARNING: {PLAYERS_FILE} entry for "{player_name}" skipped')
+                continue
+            email = normalize_email(entry["email"])
+            if not email:
+                continue
+            user = _get_or_create_player(player_name)
+            owner = User.query.filter(User.email == email, User.id != user.id).first()
+            if owner:
+                print(
+                    f'  WARNING: email for "{player_name}" skipped: already linked '
+                    f"to {owner.display_name or owner.username}"
+                )
+                continue
+            user.email = email
+            restored += 1
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    return restored
+
+
 def parse_seasons_arg(argv):
     """Return the season numbers given via --seasons, or None if it is absent.
 
@@ -492,12 +607,31 @@ def count_pick_rows():
     return total
 
 
+def count_linked_emails():
+    """Count players with a linked login email in the current database.
+
+    Zero when the user table or its email column does not exist yet.
+    """
+    from sqlalchemy import func, inspect, select
+
+    inspector = inspect(db.engine)
+    table = User.__table__
+    if table.name not in inspector.get_table_names():
+        return 0
+    if "email" not in {c["name"] for c in inspector.get_columns(table.name)}:
+        return 0
+    return db.session.execute(
+        select(func.count()).select_from(table).where(table.c.email.isnot(None))
+    ).scalar_one()
+
+
 def export_picks_before_drop():
     """Export all picks ahead of db.drop_all() and return the paths written.
 
     Fails closed: a failed export is only skipped when the database holds no
-    picks (first run, or nothing assigned yet). If picks exist and could not
-    be backed up, exit non-zero so the caller never reaches the drop.
+    picks and no linked emails (first run, or nothing entered yet). If either
+    exists and could not be backed up, exit non-zero so the caller never
+    reaches the drop.
     """
     from app.data import default_picks_dir, export_all_picks
 
@@ -506,12 +640,13 @@ def export_picks_before_drop():
     except Exception as e:
         db.session.rollback()
         pick_rows = count_pick_rows()
-        if pick_rows:
+        linked_emails = count_linked_emails()
+        if pick_rows or linked_emails:
             sys.exit(
                 f"Error: could not export picks to {default_picks_dir()}: {e}\n"
-                f"The database holds {pick_rows} pick row(s) that re-seeding "
-                "would delete, so nothing was dropped. Fix the export and run "
-                "seed.py again."
+                f"The database holds {pick_rows} pick row(s) and {linked_emails} "
+                "linked email(s) that re-seeding would delete, so nothing was "
+                "dropped. Fix the export and run seed.py again."
             )
         print(f"Pick export skipped (no picks in the database): {e}")
         return []
@@ -601,6 +736,9 @@ def main():
         if picks_dir:
             print(f"\nLoading pick assignments from {picks_dir}...")
             load_pick_files(picks_dir, pick_files)
+            restored = load_player_emails(picks_dir)
+            if restored:
+                print(f"  Linked emails restored for {restored} player(s)")
 
         # Enrich all seasons with episode_stats, elimination_episode, etc.
         print("\nRunning refresh_season for per-episode data...")
