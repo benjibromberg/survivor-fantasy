@@ -148,6 +148,32 @@ class TestHandEnteredMarker:
     def test_castaway_from_survivor_data_is_not_hand_entered(self, league):
         assert league.ada.is_hand_entered is False
 
+    def test_a_hand_entered_row_and_a_dataset_row_can_share_a_name(self, league):
+        """Which is why a refresh of a hand-entered season duplicates its cast.
+
+        refresh_season() keys existing castaways on castaway_id and skips rows
+        without one, and nothing at the database level stops the pair, so it
+        inserts the dataset's castaway beside the hand-entered one. Matching
+        the two is the deferred half of this feature.
+        """
+        from app.models import Survivor
+
+        league.db.session.add_all(
+            [
+                Survivor(season_id=league.pre.id, name="Bo", voted_out_order=0),
+                Survivor(
+                    season_id=league.pre.id,
+                    name="Bo",
+                    castaway_id="US0802",
+                    voted_out_order=0,
+                ),
+            ]
+        )
+        league.db.session.commit()
+
+        rows = Survivor.query.filter_by(season_id=league.pre.id, name="Bo").all()
+        assert [s.is_hand_entered for s in rows] == [True, False]
+
 
 # ── Adding a castaway ─────────────────────────────────────────────────────
 
@@ -359,6 +385,18 @@ class TestSeasonDetailPage:
 
         assert f"/admin/season/{league.pre.id}/survivors/add" in html
         assert "Bo" in html
+
+    def test_the_page_says_reconciliation_is_not_built_yet(self, league):
+        """Refreshing a hand-entered season duplicates its cast today.
+
+        refresh_season() keys existing castaways on castaway_id and skips rows
+        without one, so it adds the dataset's cast beside the hand-entered
+        rows. DELETE THIS TEST, and the caution it checks, when the matching
+        pass lands.
+        """
+        _login(league.c)
+
+        assert "not automatic yet" in self._page(league)
 
     def test_the_upload_field_is_labelled(self, league):
         _login(league.c)

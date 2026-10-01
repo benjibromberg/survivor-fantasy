@@ -106,7 +106,8 @@
 <!-- Survivors (read-only, apart from adding a cast by hand) -->
 <section>
     <h2>Survivors ({{ survivors|length }})</h2>
-    <p><small>survivoR publishes a season's cast when it premieres, so before then add the castaways here: a name is all that is needed, and a headshot is optional. Tribes, results and stats fill in from survivoR on the first Refresh after the premiere. A hand-entered castaway can be removed until someone picks them.</small></p>
+    <p><small>survivoR publishes a season's cast when it premieres, so before then add the castaways here: a name is all that is needed, and a headshot is optional. A hand-entered castaway can be removed until someone picks them.</small></p>
+    <p><small><strong>Matching hand-entered castaways to survivoR is not automatic yet.</strong> Refreshing after the season has aired adds the dataset's castaways as new rows beside these instead of filling these in, so hold off on Refresh for a season whose cast you entered yourself.</small></p>
     <form method="POST" action="{{ url_for('main.admin_add_survivor', season_id=season.id) }}"
           enctype="multipart/form-data" class="admin-inline-form" style="flex-wrap:wrap;margin-bottom:1rem;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

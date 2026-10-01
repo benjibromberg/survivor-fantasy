@@ -347,10 +347,15 @@ Each run first backs the database up to `data/backups/`. What the steps do:
 - **`--cast N`:** for a season survivoR has not published yet. Creates the
   season from the announced cast size, with no castaways and without reading
   survivoR at all. Add the castaways under **Survivors** on the season's admin
-  page, one name at a time with an optional headshot; the jury size and the
-  rest of the stats arrive with the first Refresh after the premiere. Those
-  castaways carry no `castaway_id` until then, which is how the admin page
-  marks them *hand-entered*, and they can be removed until someone picks them.
+  page, one name at a time with an optional headshot. They carry no
+  `castaway_id`, which is how that page marks them *hand-entered*, and they
+  can be removed until someone picks them.
+
+  **Do not Refresh a hand-entered season.** Matching those castaways to
+  survivoR once it publishes the season is not built yet: a refresh keys on
+  `castaway_id`, so it adds the dataset's castaways as new rows beside the
+  hand-entered ones. The picks keep pointing at the hand-entered rows, so
+  nothing is lost, but the season then holds each castaway twice.
 - **`--picks`:** loads a draft into a season that has no picks yet. The whole
   file is checked first: every castaway name has to match the season's
   castaways exactly, and every pick type has to be a known code. If anything is
