@@ -1,12 +1,15 @@
-"""Tests for castaway headshot URLs: candidate ordering and the HEAD-check loop."""
+"""Tests for castaway headshots: candidate URLs, mirroring, and serving."""
 
 import importlib
+import io
 import logging
+import os
+import re
 import sys
-from types import SimpleNamespace
 
 import pytest
 import requests
+from PIL import Image
 
 from app.data import generate_season_images, headshot_url_candidates
 
@@ -137,46 +140,190 @@ class TestHeadshotUrlCandidates:
         assert headshot_url_candidates(50, "  ") == []
 
 
-# ── generate_season_images: HEAD-check loop (requests.head monkeypatched) ─
+# ── generate_season_images: download, resize, store ───────────────────────
+
+
+def _jpeg_bytes(size=(440, 440), color=(200, 30, 30)):
+    buf = io.BytesIO()
+    Image.new("RGB", size, color).save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+class _FakeResponse:
+    def __init__(self, status_code=200, body=b""):
+        self.status_code = status_code
+        self._body = body
+
+    def iter_content(self, chunk_size=1):
+        yield self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+@pytest.fixture()
+def remote(monkeypatch):
+    """Fake the remote site: {url: bytes} served via app.data.requests.get."""
+    monkeypatch.setattr("app.data.HEADSHOT_REQUEST_DELAY", 0)
+    served = {}
+    calls = []
+
+    def fake_get(url, timeout=None, stream=False):
+        calls.append(url)
+        if url in served:
+            body = served[url]
+            if isinstance(body, Exception):
+                raise body
+            return _FakeResponse(200, body)
+        return _FakeResponse(404)
+
+    monkeypatch.setattr("app.data.requests.get", fake_get)
+    served["calls"] = calls
+    return served
 
 
 class TestGenerateSeasonImages:
-    def test_keeps_first_candidate_answering_200(self, app, monkeypatch):
+    def test_downloads_resizes_to_webp_and_sets_local_url(self, app, remote):
+        from app.data import headshots_dir
+
         _, db = app
         season, (danny, thien_an, nobody) = _add_season(
             db, 51, ["Danny", "Thien An", "Nobody"]
         )
-        live = {_url(51, "kilby"), _url(51, "thien%20an")}
-
-        def fake_head(url, timeout):
-            return SimpleNamespace(status_code=200 if url in live else 404)
-
-        monkeypatch.setattr("app.data.requests.head", fake_head)
+        remote[_url(51, "kilby")] = _jpeg_bytes()
+        remote[_url(51, "thien%20an")] = _jpeg_bytes(color=(10, 200, 10))
 
         assert generate_season_images(season) == 2
-        assert danny.image_url == _url(51, "kilby")
-        assert thien_an.image_url == _url(51, "thien%20an")
+
+        for surv in (danny, thien_an):
+            assert re.fullmatch(r"/headshots/51/[0-9a-f]{16}\.webp", surv.image_url)
+            path = os.path.join(headshots_dir(), *surv.image_url.split("/")[2:])
+            with Image.open(path) as img:
+                assert img.format == "WEBP"
+                assert max(img.size) == 160
+        assert danny.image_url != thien_an.image_url
         assert nobody.image_url is None
 
-    def test_request_failure_is_logged_and_next_candidate_tried(
-        self, app, monkeypatch, caplog
-    ):
+    def test_failed_fetch_leaves_image_url_none(self, app, remote, caplog):
         _, db = app
         season, (q,) = _add_season(db, 46, ["Q"])
-
-        def fake_head(url, timeout):
-            if url == _url(46, "q"):
-                raise requests.ConnectionError("boom")
-            return SimpleNamespace(status_code=200)
-
-        monkeypatch.setattr("app.data.requests.head", fake_head)
+        remote[_url(46, "q")] = requests.ConnectionError("boom")
 
         with caplog.at_level(logging.WARNING, logger="app.data"):
-            assert generate_season_images(season) == 1
+            assert generate_season_images(season) == 0
 
-        assert q.image_url == _url(46, "%22q%22")
-        assert _url(46, "q") in caplog.text
+        assert q.image_url is None
         assert "boom" in caplog.text
+
+    def test_request_failure_falls_through_to_next_candidate(self, app, remote):
+        _, db = app
+        season, (q,) = _add_season(db, 46, ["Q"])
+        remote[_url(46, "q")] = requests.ConnectionError("boom")
+        remote[_url(46, "%22q%22")] = _jpeg_bytes()
+
+        assert generate_season_images(season) == 1
+        assert q.image_url.startswith("/headshots/46/")
+
+    def test_undecodable_image_is_skipped_not_fatal(self, app, remote, caplog):
+        _, db = app
+        season, (rizo,) = _add_season(db, 50, ["Rizo"])
+        remote[_url(50, "rizo")] = b"<html>not an image</html>"
+
+        with caplog.at_level(logging.WARNING, logger="app.data"):
+            assert generate_season_images(season) == 0
+
+        assert rizo.image_url is None
+        assert "unusable" in caplog.text
+
+    def test_rerun_does_not_redownload(self, app, remote):
+        _, db = app
+        season, (rizo,) = _add_season(db, 50, ["Rizo"])
+        remote[_url(50, "rizo")] = _jpeg_bytes()
+
+        generate_season_images(season)
+        first_url = rizo.image_url
+        calls_after_first = len(remote["calls"])
+
+        assert generate_season_images(season) == 1
+        assert len(remote["calls"]) == calls_after_first
+        assert rizo.image_url == first_url
+
+    def test_force_refetches_and_keeps_same_hashed_name(self, app, remote):
+        _, db = app
+        season, (rizo,) = _add_season(db, 50, ["Rizo"])
+        remote[_url(50, "rizo")] = _jpeg_bytes()
+
+        generate_season_images(season)
+        first_url = rizo.image_url
+        calls_after_first = len(remote["calls"])
+
+        generate_season_images(season, force=True)
+        assert len(remote["calls"]) > calls_after_first
+        assert rizo.image_url == first_url
+
+    def test_missing_local_file_is_refetched(self, app, remote):
+        from app.data import _local_headshot_path
+
+        _, db = app
+        season, (rizo,) = _add_season(db, 50, ["Rizo"])
+        remote[_url(50, "rizo")] = _jpeg_bytes()
+
+        generate_season_images(season)
+        os.remove(_local_headshot_path(rizo.image_url))
+        generate_season_images(season)
+
+        assert os.path.exists(_local_headshot_path(rizo.image_url))
+
+    def test_remote_image_url_is_migrated_to_local(self, app, remote):
+        _, db = app
+        season, (rizo,) = _add_season(db, 50, ["Rizo"])
+        rizo.image_url = _url(50, "rizo")
+        remote[_url(50, "rizo")] = _jpeg_bytes()
+
+        generate_season_images(season)
+
+        assert rizo.image_url.startswith("/headshots/50/")
+
+    def test_oversized_download_is_rejected(self, app, remote, monkeypatch):
+        _, db = app
+        season, (rizo,) = _add_season(db, 50, ["Rizo"])
+        remote[_url(50, "rizo")] = _jpeg_bytes()
+        monkeypatch.setattr("app.data.HEADSHOT_MAX_BYTES", 10)
+
+        assert generate_season_images(season) == 0
+        assert rizo.image_url is None
+
+
+# ── Serving route ─────────────────────────────────────────────────────────
+
+
+class TestHeadshotRoute:
+    def test_serves_file_with_immutable_cache_headers(self, app, remote):
+        application, db = app
+        season, (rizo,) = _add_season(db, 50, ["Rizo"])
+        remote[_url(50, "rizo")] = _jpeg_bytes()
+        generate_season_images(season)
+
+        resp = application.test_client().get(rizo.image_url)
+
+        assert resp.status_code == 200
+        assert resp.mimetype == "image/webp"
+        assert resp.headers["Cache-Control"] == "public, max-age=31536000, immutable"
+        assert resp.data[:4] == b"RIFF"
+
+    def test_missing_file_is_404(self, app):
+        application, _ = app
+        resp = application.test_client().get("/headshots/50/nope.webp")
+        assert resp.status_code == 404
+
+    def test_path_traversal_is_rejected(self, app, tmp_path):
+        application, _ = app
+        (tmp_path / "secret.txt").write_text("x")
+        resp = application.test_client().get("/headshots/50/..%2F..%2Fsecret.txt")
+        assert resp.status_code == 404
 
 
 # ── seed.py: per-season wrapper ───────────────────────────────────────────
@@ -191,7 +338,8 @@ class TestSeedGenerateImageUrls:
         _add_season(db, 51, ["Danny", "Thien An", "Nobody"])
         found = {50: 2, 51: 1}
         monkeypatch.setattr(
-            seed, "generate_season_images", lambda season: found[season.number]
+            "app.data.generate_season_images",
+            lambda season, force=False: found[season.number],
         )
 
         seed.generate_image_urls()

@@ -156,6 +156,13 @@ The `data/` volume (mounted at `/app/data`) holds everything the app writes:
 - `picks/season{N}.json`: pick exports, one file per season that has picks
   (picks, Sole Survivor picks, and the season's scoring config).
 
+- `headshots/<season>/<hash>.webp`: castaway headshots mirrored from
+  fantasysurvivorgame.com, resized to 160 px WebP and served at
+  `/headshots/...` with immutable caching. Filled by the next data refresh or
+  admin **Fetch images**; existing remote `image_url` values are replaced
+  one time. Safe to delete (re-fetched on demand). Override the location with
+  `HEADSHOTS_DIR`.
+
 Container local disk is otherwise ephemeral; keep durable data in this volume.
 
 The app runs as the non-root `appuser` (UID 1000 in the current image), and the

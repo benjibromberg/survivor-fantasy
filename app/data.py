@@ -1,8 +1,11 @@
 """Refresh season data from the survivoR dataset (open-source, hosted on GitHub)."""
 
+import hashlib
+import io
 import json
 import logging
 import os
+import time
 from urllib.parse import quote
 
 import pandas as pd
@@ -735,27 +738,144 @@ def headshot_url_candidates(season_number, name):
     ]
 
 
-def generate_season_images(season):
-    """Generate biopic image URLs for a season from fantasysurvivorgame.com.
+# ── Self-hosted headshots ────────────────────────────────────────────────
+# Remote headshots are 440 px JPEGs (~86 KB) shown at <= 80 px. We mirror each
+# one once: resize to HEADSHOT_SIZE, encode as WebP, and store it on the data
+# volume under a content-hashed filename so it can be cached forever. The
+# volume is the only place appuser can write (see _data_dir()).
+HEADSHOT_SIZE = 160  # long edge in px: 2x the largest display size (80 px)
+HEADSHOT_WEBP_QUALITY = 80
+HEADSHOT_URL_PREFIX = "/headshots"  # served by app/headshots.py
+HEADSHOT_CONNECT_TIMEOUT = 5
+HEADSHOT_READ_TIMEOUT = 15
+HEADSHOT_MAX_BYTES = 5 * 1024 * 1024  # refuse anything larger than this
+HEADSHOT_REQUEST_DELAY = 0.2  # seconds between network fetches (polite)
 
-    Keeps the first URL from headshot_url_candidates() that answers 200.
-    Returns number of images found.
+
+def headshots_dir():
+    """Directory holding resized headshots (alongside the DB by default).
+
+    Override with HEADSHOTS_DIR. Resolved per call so it follows DATABASE_URL.
+    """
+    return os.environ.get("HEADSHOTS_DIR") or os.path.join(_data_dir(), "headshots")
+
+
+def _local_headshot_path(image_url):
+    """Return the on-disk path for a local image_url, or None if it isn't one."""
+    prefix = HEADSHOT_URL_PREFIX + "/"
+    if not image_url or not image_url.startswith(prefix):
+        return None
+    parts = image_url[len(prefix) :].split("/")
+    if len(parts) != 2 or not all(parts) or ".." in parts:
+        return None
+    return os.path.join(headshots_dir(), *parts)
+
+
+def _download_headshot(url):
+    """GET a headshot and return its bytes, or None if unavailable.
+
+    Failures (network error, non-200, oversized body) are logged, never raised.
+    """
+    try:
+        with requests.get(
+            url,
+            timeout=(HEADSHOT_CONNECT_TIMEOUT, HEADSHOT_READ_TIMEOUT),
+            stream=True,
+        ) as resp:
+            if resp.status_code != 200:
+                return None
+            chunks, size = [], 0
+            for chunk in resp.iter_content(chunk_size=65536):
+                size += len(chunk)
+                if size > HEADSHOT_MAX_BYTES:
+                    logger.warning("Headshot too large, skipping: %s", url)
+                    return None
+                chunks.append(chunk)
+            return b"".join(chunks)
+    except requests.RequestException as e:
+        logger.warning("Headshot download failed for %s: %s", url, e)
+        return None
+
+
+def _encode_headshot(raw):
+    """Resize image bytes to HEADSHOT_SIZE and return WebP bytes."""
+    from PIL import Image, ImageOps
+
+    with Image.open(io.BytesIO(raw)) as img:
+        img = ImageOps.exif_transpose(img)
+        img = img.convert("RGB")
+        img.thumbnail((HEADSHOT_SIZE, HEADSHOT_SIZE), Image.Resampling.LANCZOS)
+        out = io.BytesIO()
+        img.save(out, format="WEBP", quality=HEADSHOT_WEBP_QUALITY, method=6)
+        return out.getvalue()
+
+
+def _store_headshot(season_number, raw):
+    """Resize + store a downloaded headshot; return its local URL path.
+
+    The filename is a hash of the source bytes, so a changed image gets a new
+    URL (safe to cache forever) and an unchanged one is not rewritten.
+    """
+    digest = hashlib.sha256(raw).hexdigest()[:16]
+    filename = f"{digest}.webp"
+    season_dir = os.path.join(headshots_dir(), str(season_number))
+    path = os.path.join(season_dir, filename)
+    if not os.path.exists(path):
+        data = _encode_headshot(raw)
+        os.makedirs(season_dir, exist_ok=True)
+        tmp = f"{path}.{os.getpid()}.tmp"
+        try:
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, path)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+    return f"{HEADSHOT_URL_PREFIX}/{season_number}/{filename}"
+
+
+def generate_season_images(season, force=False):
+    """Mirror a season's headshots from fantasysurvivorgame.com onto our disk.
+
+    For each survivor, tries headshot_url_candidates() in order and keeps the
+    first that downloads and decodes. The image is resized to a small WebP in
+    headshots_dir() and Survivor.image_url is set to its local path.
+
+    Idempotent: a survivor whose image_url already points at an existing local
+    file is skipped without any network call (pass force=True to re-fetch).
+    Failures are logged and never raise; a survivor with no usable image keeps
+    its previous image_url (None renders the letter placeholder).
+    Returns number of survivors with a usable image.
     """
     survivors = Survivor.query.filter_by(season_id=season.id).all()
     matched = 0
+    fetched_any = False
     for surv in survivors:
+        existing = _local_headshot_path(surv.image_url)
+        if not force and existing and os.path.exists(existing):
+            matched += 1
+            continue
+
         for url in headshot_url_candidates(season.number, surv.name):
+            if fetched_any:
+                time.sleep(HEADSHOT_REQUEST_DELAY)
+            fetched_any = True
+            raw = _download_headshot(url)
+            if raw is None:
+                continue
             try:
-                resp = requests.head(url, timeout=5)
-            except requests.RequestException as e:
+                surv.image_url = _store_headshot(season.number, raw)
+            except Exception as e:  # Pillow raises many types on bad data
                 logger.warning(
-                    "Season %d image check failed for %s: %s", season.number, url, e
+                    "Season %d headshot unusable for %s (%s): %s",
+                    season.number,
+                    surv.name,
+                    url,
+                    e,
                 )
                 continue
-            if resp.status_code == 200:
-                surv.image_url = url
-                matched += 1
-                break
+            matched += 1
+            break
 
     try:
         db.session.commit()
@@ -764,6 +884,22 @@ def generate_season_images(season):
         raise
     logger.info("Season %d images: %d/%d", season.number, matched, len(survivors))
     return matched
+
+
+def generate_all_season_images(force=False):
+    """Run generate_season_images() for every season.
+
+    Returns {season_number: (matched, total_survivors)}.
+    """
+    totals = dict(
+        db.session.query(Survivor.season_id, db.func.count(Survivor.id))
+        .group_by(Survivor.season_id)
+        .all()
+    )
+    return {
+        season.number: (generate_season_images(season, force), totals.get(season.id, 0))
+        for season in Season.query.all()
+    }
 
 
 # Pick exports go alongside the database, for the same reason as survivoR.xlsx:

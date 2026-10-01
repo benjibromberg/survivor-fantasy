@@ -26,7 +26,7 @@ from app.data import (
     SURVIVOR_DATA_FILE,
     _build_nickname_map,
     compute_castaway_stats,
-    generate_season_images,
+    generate_all_season_images,
     get_idol_ids,
     refresh_season,
     us_season_filter,
@@ -377,18 +377,9 @@ def load_picks_from_json(filepath, season, survivor_map):
 
 
 def generate_image_urls():
-    """Generate biopic image URLs for every season from fantasysurvivorgame.com.
-
-    URL construction and matching live in app.data.generate_season_images().
-    """
-    totals = dict(
-        db.session.query(Survivor.season_id, db.func.count(Survivor.id))
-        .group_by(Survivor.season_id)
-        .all()
-    )
-    for season in Season.query.all():
-        matched = generate_season_images(season)
-        print(f"  Season {season.number}: {matched}/{totals.get(season.id, 0)} images")
+    """Mirror headshots for every season (see app.data.generate_season_images)."""
+    for number, (matched, total) in generate_all_season_images().items():
+        print(f"  Season {number}: {matched}/{total} images")
 
 
 def discover_pick_files(picks_dir):
