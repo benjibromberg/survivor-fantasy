@@ -160,6 +160,27 @@ the emails have to be linked again.
 
 Locally, `/dev-login?user=<username>` logs in as a player without Access.
 
+### Wildcard self-service
+
+By default the admin enters every wildcard under **Manage Picks**. To let
+players pick their own, open the season's admin page and enter when Episode 2
+starts (Eastern time) under **Wildcard Picks**. From then on:
+
+- A player with draft picks chooses their wildcard on **My Team**: any castaway
+  still in the game who is not already on their own team. They can change it as
+  often as they like.
+- Picks lock 15 minutes before Episode 2 for everyone. After that no player
+  can set or change a wildcard; enter any that are missing under Manage Picks.
+- Wildcards stay off the leaderboard, charts and win odds, and score no points,
+  until every player with draft picks has one. Each player sees their own on
+  My Team, and the admin sees all of them under Manage Picks. The season admin
+  page shows who is still to pick.
+
+The admin can change any wildcard at any time under Manage Picks, including
+after the lock. Clearing the Episode 2 time switches self-service off and shows
+every wildcard again. The Episode 2 time is stored only in the database, like
+linked emails, so it has to be entered again after a re-seed.
+
 ## How It Works
 
 - **`cloudflared`** runs the remotely-managed tunnel from the `CF_TUNNEL_TOKEN`
