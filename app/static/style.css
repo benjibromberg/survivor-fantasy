@@ -1085,6 +1085,159 @@ details.lb-pick[open] .lb-pick-stats {
     color: var(--fire-glow);
 }
 
+/* ---- Castaway sheet (what opens inside a card) ---------------------- */
+
+.lb-sheet {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+/* Hero: the tribe colour tints the band, it does not fill it. A saturated
+   tribe colour behind text would fail contrast on half the palette. */
+.lb-sheet-hero {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 8px;
+    border-left: 3px solid var(--hero-tint, var(--card-border));
+    background: linear-gradient(
+        90deg,
+        rgb(from var(--hero-tint, #2a4055) r g b / 0.18),
+        transparent 70%
+    );
+}
+
+.lb-sheet-face {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--hero-tint, var(--card-border));
+}
+
+.lb-sheet-id {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.lb-sheet-name {
+    font-family: var(--font-tribal);
+    font-size: max(var(--fs-floor), 1.05em);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--sand-warm);
+}
+
+.lb-sheet-meta {
+    font-size: max(var(--fs-floor), 0.78em);
+    color: var(--text-dim);
+}
+
+.lb-sheet-tabs {
+    display: flex;
+    gap: 0.3rem;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.lb-sheet-tab {
+    all: unset;
+    cursor: pointer;
+    padding: 0.35rem 0.7rem;
+    font-family: var(--font-label);
+    font-size: max(var(--fs-floor), 0.82em);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.lb-sheet-tab:hover {
+    color: var(--sand-warm);
+}
+
+.lb-sheet-tab[aria-selected="true"] {
+    color: var(--fire-glow);
+    border-bottom-color: var(--fire-bright);
+}
+
+/* all: unset drops the focus ring, so it has to come back. */
+.lb-sheet-tab:focus-visible {
+    outline: 2px solid var(--fire-glow);
+    outline-offset: -2px;
+}
+
+.lb-sheet-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+/* Only needed when the tabs are not running; with them the tab is the label. */
+.lb-sheet-tabs:not([hidden]) ~ .lb-sheet-panel .lb-sheet-panel-label {
+    display: none;
+}
+
+/* ---- Episodes table ---- */
+
+.lb-episodes {
+    /* Sized to content, not stretched: early in a season most columns are
+       empty, and a full-width table turns that into six columns of nothing.
+       .table-scroll handles it once a long season outgrows the card. */
+    width: auto;
+    margin: 0;
+    border-collapse: collapse;
+    font-size: max(var(--fs-floor), 0.78em);
+}
+
+.lb-episodes th,
+.lb-episodes td {
+    padding: 0.2rem 0.4rem;
+    text-align: right;
+    border: 0;
+    white-space: nowrap;
+}
+
+.lb-episodes thead th {
+    font-family: var(--font-label);
+    font-size: max(var(--fs-floor), 0.95em);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--card-border);
+}
+
+.lb-episodes tbody th,
+.lb-episodes .lb-ep-tribe {
+    text-align: left;
+}
+
+.lb-episodes tbody th {
+    font-family: var(--font-label);
+    font-weight: 400;
+    color: var(--text-dim);
+}
+
+.lb-episodes tbody tr.is-final th {
+    color: var(--fire-glow);
+}
+
+.lb-ep-final {
+    color: var(--fire-bright);
+}
+
+/* Heat is per column and scaled to this castaway's own best episode, set
+   inline as --heat. An empty cell carries no value and gets no tint. */
+.lb-ep-cell {
+    background: rgb(232 93 38 / calc(var(--heat, 0) * 0.55));
+    color: var(--text-light);
+    border-radius: 3px;
+}
+
 .lb-pick-img {
     width: var(--pick-img);
     height: var(--pick-img);

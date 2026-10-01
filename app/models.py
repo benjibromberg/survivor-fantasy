@@ -180,13 +180,24 @@ class Survivor(db.Model):
     personality_type = db.Column(db.String(10))  # MBTI e.g. ENFP
 
     def get_episode_stats(self):
-        """Return parsed episode_stats dict, or empty dict."""
-        if self.episode_stats:
+        """Return parsed episode_stats dict, or empty dict.
+
+        Parsed once per instance. The cache is keyed on the raw column text,
+        so a refresh that rewrites episode_stats invalidates it instead of
+        serving the previous values.
+        """
+        raw = self.episode_stats
+        cached = getattr(self, "_episode_stats_cache", None)
+        if cached is not None and cached[0] is raw:
+            return cached[1]
+        parsed = {}
+        if raw:
             try:
-                return json.loads(self.episode_stats)
+                parsed = json.loads(raw)
             except (json.JSONDecodeError, TypeError):
-                pass
-        return {}
+                parsed = {}
+        self._episode_stats_cache = (raw, parsed)
+        return parsed
 
     @property
     def stats_url(self):

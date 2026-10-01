@@ -152,7 +152,7 @@
     <p class="lb-section-label">Draft picks</p>
     <div class="lb-picks">
         {% for pick in draft_picks %}
-        {{ pick_card(pick, "draft", finale_data and finale_data.sole_survivor and pick.survivor == finale_data.sole_survivor.name, breakdown_labels) }}
+        {{ pick_card(pick, "draft", finale_data and finale_data.sole_survivor and pick.survivor == finale_data.sole_survivor.name, breakdown_labels, uid=entry.user.id ~ "-d" ~ loop.index) }}
         {% endfor %}
     </div>
     {% endif %}
@@ -161,7 +161,7 @@
     <p class="lb-section-label">Extra picks</p>
     <div class="lb-special-picks">
         {% for pick in special_picks %}
-        {{ pick_card(pick, "special", finale_data and finale_data.sole_survivor and pick.survivor == finale_data.sole_survivor.name, breakdown_labels) }}
+        {{ pick_card(pick, "special", finale_data and finale_data.sole_survivor and pick.survivor == finale_data.sole_survivor.name, breakdown_labels, uid=entry.user.id ~ "-s" ~ loop.index) }}
         {% endfor %}
     </div>
     {% endif %}
@@ -212,6 +212,52 @@
             teams.forEach(function(t) { t.open = open; });
             remember();
         });
+    });
+})();
+</script>
+<script>
+/* Castaway sheet tabs. The tab strip is rendered hidden and revealed here, so
+   without this script every panel stays visible under its own heading rather
+   than leaving tabs that do nothing. Delegated, because a page can hold a few
+   hundred sheets and they are all in the DOM whether their card is open. */
+(function() {
+    function tabsOf(sheet) {
+        return Array.prototype.slice.call(
+            sheet.querySelectorAll(':scope > .lb-sheet-tabs > .lb-sheet-tab'));
+    }
+    function select(sheet, tab) {
+        tabsOf(sheet).forEach(function(t) {
+            var on = t === tab;
+            t.setAttribute('aria-selected', on ? 'true' : 'false');
+            t.tabIndex = on ? 0 : -1;
+        });
+        var wanted = tab.getAttribute('aria-controls');
+        sheet.querySelectorAll(':scope > .lb-sheet-panel').forEach(function(p) {
+            p.hidden = p.id !== wanted;
+        });
+    }
+    document.querySelectorAll('.lb-sheet').forEach(function(sheet) {
+        var strip = sheet.querySelector(':scope > .lb-sheet-tabs');
+        if (!strip) return;
+        strip.hidden = false;
+        var tabs = tabsOf(sheet);
+        if (tabs.length) select(sheet, tabs[0]);
+    });
+    document.addEventListener('click', function(e) {
+        var tab = e.target.closest && e.target.closest('.lb-sheet-tab');
+        if (tab) select(tab.closest('.lb-sheet'), tab);
+    });
+    document.addEventListener('keydown', function(e) {
+        var tab = e.target.closest && e.target.closest('.lb-sheet-tab');
+        if (!tab) return;
+        var step = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+        var sheet = tab.closest('.lb-sheet');
+        var tabs = tabsOf(sheet);
+        var next = null;
+        if (step) next = tabs[(tabs.indexOf(tab) + step + tabs.length) % tabs.length];
+        else if (e.key === 'Home') next = tabs[0];
+        else if (e.key === 'End') next = tabs[tabs.length - 1];
+        if (next) { e.preventDefault(); select(sheet, next); next.focus(); }
     });
 })();
 </script>

@@ -19,10 +19,10 @@
     row is drawn in gold.
   breakdown_labels: names for the point-breakdown keys (leaderboard only).
 #}
-{% macro pick_card(pick, variant="draft", is_sole_survivor=False, breakdown_labels={}) %}
+{% macro pick_card(pick, variant="draft", is_sole_survivor=False, breakdown_labels={}, uid="") %}
 {% set gold = is_sole_survivor %}
 {% set show_journey = pick.pick_type_raw != "sole_survivor" %}
-{% set has_more = variant != "summary" and (pick.breakdown or pick.stats_detail or pick.bio_line or (pick.journey_events and show_journey) or pick.stats_url) %}
+{% set has_more = variant != "summary" and (pick.breakdown or pick.stats_detail or pick.bio_line or (pick.journey_events and show_journey) or pick.episode_rows or pick.stats_url) %}
 {% set classes -%}
 lb-pick{% if variant == 'special' %} lb-pick-special lb-pick-{{ pick.pick_type_raw }}{% endif %} {{ 'lb-pick-sole-survivor' if gold else ('eliminated' if pick.eliminated else '') }}
 {%- endset %}
@@ -32,7 +32,7 @@ lb-pick{% if variant == 'special' %} lb-pick-special lb-pick-{{ pick.pick_type_r
 {% if has_more %}
 <details class="{{ classes }}">
     <summary class="lb-pick-summary" title="{{ title }}">{{ _pick_face(pick, variant, gold, show_journey) }}</summary>
-    <div class="lb-pick-more">{{ _pick_details(pick, breakdown_labels, show_journey) }}</div>
+    <div class="lb-pick-more">{{ _pick_sheet(pick, breakdown_labels, show_journey, uid) }}</div>
 </details>
 {% elif pick.stats_url and variant == "summary" %}
 <a href="{{ pick.stats_url }}" target="_blank" rel="noopener" class="{{ classes }}" title="{{ title }}">
@@ -81,41 +81,126 @@ lb-pick{% if variant == 'special' %} lb-pick-special lb-pick-{{ pick.pick_type_r
 <span class="lb-pick-pts">{{ "%.2f"|format(pick.modified_points) }}<span class="visually-hidden"> points</span></span>
 {% endmacro %}
 
-{# What opens under a card: breakdown, stats, bio, journey, then the stats link. #}
-{% macro _pick_details(pick, breakdown_labels, show_journey=True) %}
-{% if pick.breakdown %}
-<div class="lb-pick-pts-detail">
-    <span class="lb-more-label">Points</span>
-    {% for key, val in pick.breakdown.items() %}
-    <span class="lb-breakdown-item lb-breakdown-pts">{{ breakdown_labels.get(key, key) }}: {{ "%.2f"|format(val) }}</span>
+{# What opens under a card: the player sheet.
+
+   A tribe-coloured hero header, then three panels: Summary (points and
+   stats), Journey (the narrative events) and Episodes (per-episode table).
+
+   Without JavaScript every panel is shown stacked, each under its own
+   heading, which is what this used to look like. The tab strip starts
+   hidden and the script in leaderboard.html reveals it and switches
+   panels, so the tabs never appear without something behind them.
+
+   uid makes the tab and panel ids unique. Two players can hold the same
+   castaway, so the name alone is not unique enough to build ids from. #}
+{% macro _pick_sheet(pick, breakdown_labels, show_journey=True, uid="") %}
+{% set show_episodes = pick.episode_rows %}
+{% set panels = [("summary", "Summary"), ("journey", "Journey") if (pick.journey_events and show_journey) else None, ("episodes", "Episodes") if show_episodes else None] | select | list %}
+<div class="lb-sheet">
+{{ _pick_hero(pick) }}
+{% if panels | length > 1 %}
+<div class="lb-sheet-tabs" role="tablist" aria-label="Castaway detail" hidden>
+    {% for key, label in panels %}
+    <button type="button" role="tab" class="lb-sheet-tab"
+            id="tab-{{ uid }}-{{ key }}" aria-controls="panel-{{ uid }}-{{ key }}"
+            aria-selected="{{ 'true' if loop.first else 'false' }}"
+            tabindex="{{ '0' if loop.first else '-1' }}">{{ label }}</button>
     {% endfor %}
 </div>
 {% endif %}
-{% if pick.stats_detail %}
-<div class="lb-pick-stats-detail">
-    <span class="lb-more-label">Stats</span>
-    {% for label, val in pick.stats_detail %}
-    <span class="lb-breakdown-item">{{ label }}: {{ val }}</span>
-    {% endfor %}
-</div>
-{% endif %}
-{% if pick.bio_line %}
-<div class="lb-pick-bio-detail">{{ pick.bio_line }}</div>
-{% endif %}
-{% if pick.journey_events and show_journey %}
-<div class="lb-pick-journey">
-    <div class="journey-events">
-        {% for event in pick.journey_events %}
-        <div class="journey-event">
-            <div class="journey-dot journey-dot-{{ event.event_type }}"></div>
-            <span class="journey-ep">Ep {{ event.episode }}</span>
-            <span class="journey-text">{{ event.text }}{% if event.detail_text %} <span class="journey-detail">&mdash; {{ event.detail_text }}</span>{% endif %}</span>
-        </div>
+
+<div class="lb-sheet-panel" role="tabpanel" data-panel="summary"
+     id="panel-{{ uid }}-summary" aria-labelledby="tab-{{ uid }}-summary">
+    {% if pick.breakdown %}
+    <div class="lb-pick-pts-detail">
+        <span class="lb-more-label">Points</span>
+        {% for key, val in pick.breakdown.items() %}
+        <span class="lb-breakdown-item lb-breakdown-pts">{{ breakdown_labels.get(key, key) }}: {{ "%.2f"|format(val) }}</span>
         {% endfor %}
+    </div>
+    {% endif %}
+    {% if pick.stats_detail %}
+    <div class="lb-pick-stats-detail">
+        <span class="lb-more-label">Stats</span>
+        {% for label, val in pick.stats_detail %}
+        <span class="lb-breakdown-item">{{ label }}: {{ val }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% if pick.stats_url %}
+    <a href="{{ pick.stats_url }}" target="_blank" rel="noopener" class="lb-pick-link">Full stats on survivorstatsdb<span aria-hidden="true"> ↗</span></a>
+    {% endif %}
+</div>
+
+{% if pick.journey_events and show_journey %}
+<div class="lb-sheet-panel" role="tabpanel" data-panel="journey"
+     id="panel-{{ uid }}-journey" aria-labelledby="tab-{{ uid }}-journey">
+    <span class="lb-more-label lb-sheet-panel-label">Journey</span>
+    <div class="lb-pick-journey">
+        <div class="journey-events">
+            {% for event in pick.journey_events %}
+            <div class="journey-event">
+                <div class="journey-dot journey-dot-{{ event.event_type }}"></div>
+                <span class="journey-ep">Ep {{ event.episode }}</span>
+                <span class="journey-text">{{ event.text }}{% if event.detail_text %} <span class="journey-detail">&mdash; {{ event.detail_text }}</span>{% endif %}</span>
+            </div>
+            {% endfor %}
+        </div>
     </div>
 </div>
 {% endif %}
-{% if pick.stats_url %}
-<a href="{{ pick.stats_url }}" target="_blank" rel="noopener" class="lb-pick-link">Full stats on survivorstatsdb<span aria-hidden="true"> ↗</span></a>
+
+{% if show_episodes %}
+<div class="lb-sheet-panel" role="tabpanel" data-panel="episodes"
+     id="panel-{{ uid }}-episodes" aria-labelledby="tab-{{ uid }}-episodes">
+    <span class="lb-more-label lb-sheet-panel-label">Episodes</span>
+    <div class="table-scroll">
+    <table class="lb-episodes">
+        <caption class="visually-hidden">What this castaway did in each episode. Counts are for that episode, not running totals.</caption>
+        <thead>
+            <tr>
+                <th scope="col">Ep</th>
+                <th scope="col">Tribe</th>
+                {% for cell in pick.episode_rows[0].cells %}
+                <th scope="col">{{ cell.label }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in pick.episode_rows %}
+            <tr{% if row.final %} class="is-final"{% endif %}>
+                <th scope="row">{{ row.episode }}{% if row.final %} <span class="lb-ep-final" title="Last episode in the game" aria-label="last episode in the game">&#9679;</span>{% endif %}</th>
+                <td class="lb-ep-tribe"{% if row.tribe_color %} style="color: {{ row.tribe_color|contrast }};"{% endif %}>{{ row.tribe or "" }}</td>
+                {% for cell in row.cells %}
+                <td class="lb-ep-cell"{% if cell.value %} style="--heat: {{ cell.heat }};"{% endif %}>{{ cell.value or "" }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
 {% endif %}
+</div>
+{% endmacro %}
+
+{# The sheet header: headshot, name, and the bio line as its own row. #}
+{% macro _pick_hero(pick) %}
+<div class="lb-sheet-hero"{% if pick.tribe_color %} style="--hero-tint: {{ pick.tribe_color|contrast }};"{% endif %}>
+    {% if pick.survivor_image %}
+    <img src="{{ pick.survivor_image }}" alt="" class="lb-sheet-face" loading="lazy" decoding="async">
+    {% endif %}
+    <span class="lb-sheet-id">
+        <span class="lb-sheet-name">{{ pick.full_name or pick.survivor }}</span>
+        {% set bits = [] %}
+        {% if pick.age %}{% set _ = bits.append("Age " ~ pick.age) %}{% endif %}
+        {% if pick.occupation %}{% set _ = bits.append(pick.occupation) %}{% endif %}
+        {% if pick.tribe %}{% set _ = bits.append(pick.tribe) %}{% endif %}
+        {% if bits %}
+        <span class="lb-sheet-meta">{{ bits | join(" · ") }}</span>
+        {% elif pick.bio_line %}
+        <span class="lb-sheet-meta">{{ pick.bio_line }}</span>
+        {% endif %}
+    </span>
+</div>
 {% endmacro %}
