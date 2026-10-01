@@ -1002,6 +1002,11 @@ def export_season_picks(season, picks_dir=None):
     if season.episode2_starts_at is not None:
         # Stored as naive UTC; the Z makes that explicit in the file
         result["episode2_starts_at"] = season.episode2_starts_at.isoformat() + "Z"
+    # Written only when they differ from the defaults
+    if season.episode2_manual:
+        result["episode2_manual"] = True
+    if season.wildcard_self_service is False:
+        result["wildcard_self_service"] = False
 
     filepath = os.path.join(picks_dir, f"season{season.number}.json")
     with open(filepath, "w") as f:

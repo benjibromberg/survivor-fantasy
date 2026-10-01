@@ -30,7 +30,7 @@
     <div class="fold-body">
     <p>After the first episode airs (once the first castaway has been eliminated), each fantasy player selects one <strong>Wildcard</strong> from any remaining castaway not already on another player's roster.</p>
     <p>Wildcards earn <strong>half points</strong> ({{ "%.0f"|format(config.wildcard_multiplier * 100) }}%) for everything their castaway accomplishes.</p>
-    {% if season and season.episode2_starts_at %}
+    {% if wildcard_self_service %}
     <p>Pick your Wildcard yourself on <strong>My Team</strong>. You can change it as often as you like until picks lock 15 minutes before Episode 2; after that only the league admin can enter one. Wildcards stay hidden, and score no points, until every player has picked, so two players can end up with the same Wildcard.</p>
     {% endif %}
     <details>
@@ -284,7 +284,9 @@
     <p>All game data (boot order, tribe assignments, challenge results, advantages, confessionals) comes from the
     <a href="https://github.com/doehm/survivoR" target="_blank" rel="noopener">survivoR</a> open-source dataset,
     maintained by the community. Player profiles link to
-    <a href="https://survivorstatsdb.com" target="_blank" rel="noopener">survivorstatsdb.com</a>.</p>
+    <a href="https://survivorstatsdb.com" target="_blank" rel="noopener">survivorstatsdb.com</a>.
+    Episode air times come from <a href="https://www.tvmaze.com/shows/114/survivor" target="_blank" rel="noopener">TVmaze</a>
+    (<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA</a>).</p>
     <p>Data is automatically refreshed daily at 8am EST.</p>
 </div>
 </details>

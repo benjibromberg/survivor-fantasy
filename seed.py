@@ -430,6 +430,17 @@ def load_picks_from_json(filepath, season, survivor_map):
                 f"    WARNING: episode2_starts_at for season {season.number} "
                 f"skipped: {e}"
             )
+    # ...whether the admin typed it in, and the self-service switch
+    for key in ("episode2_manual", "wildcard_self_service"):
+        if key not in data:
+            continue
+        if isinstance(data[key], bool):
+            setattr(season, key, data[key])
+        else:
+            print(
+                f"    WARNING: {key} for season {season.number} skipped "
+                "(expected true or false)"
+            )
 
     db.session.commit()
     ss_msg = f", {ss_count} SS picks" if ss_count else ""

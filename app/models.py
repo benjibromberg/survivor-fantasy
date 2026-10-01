@@ -58,10 +58,14 @@ class Season(db.Model):
     )  # from tribe_status='Merged'
     scoring_system = db.Column(db.String(50), default="Classic")
     scoring_config = db.Column(db.Text, default="{}")
-    # When Episode 2 starts, as naive UTC. Entered by the admin (survivoR has
-    # no air times). Setting it turns on wildcard self-service for the season;
-    # see app/wildcards.py.
+    # When Episode 2 starts, as naive UTC. Wildcard picks lock 15 minutes
+    # before it (app/wildcards.py). Filled in automatically for the active
+    # season (app/schedule.py) unless the admin typed one in.
     episode2_starts_at = db.Column(db.DateTime, nullable=True)
+    # True when the admin entered episode2_starts_at by hand: never overwritten
+    episode2_manual = db.Column(db.Boolean, default=False)
+    # Admin switch: False keeps wildcards admin-entered even with a known time
+    wildcard_self_service = db.Column(db.Boolean, default=True)
     survivors = db.relationship("Survivor", backref="season", lazy=True)
     picks = db.relationship("Pick", backref="season", lazy=True)
 

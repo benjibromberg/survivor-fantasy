@@ -1,6 +1,8 @@
 """Player wildcard self-service: the edit window, the lock, and the reveal.
 
-A season opts in when the admin enters its Episode 2 start time. From then on:
+A season is in self-service once its Episode 2 start time is known (looked
+up automatically, see app/schedule.py, or typed in by the admin), unless the
+admin has switched self-service off for it. From then on:
 
 - a player with draft picks sets their own wildcard and may change it freely;
 - 15 minutes before Episode 2 picks lock for everyone: no player can set or
@@ -9,8 +11,8 @@ A season opts in when the admin enters its Episode 2 start time. From then on:
   player has picked. Each player sees their own on My Team and the admin sees
   all of them on the picks page.
 
-Seasons without an Episode 2 time keep the old behaviour: the admin enters
-wildcards and they are always visible.
+Seasons without an Episode 2 time, or with self-service switched off, keep
+the old behaviour: the admin enters wildcards and they are always visible.
 """
 
 import logging
@@ -36,12 +38,15 @@ def now_utc():
 
 
 def is_self_service(season):
-    return season.episode2_starts_at is not None
+    # None (an unsaved row) counts as the column default, on
+    return season.wildcard_self_service is not False and (
+        season.episode2_starts_at is not None
+    )
 
 
 def lock_at(season):
     """Aware UTC moment the wildcard locks, or None if self-service is off."""
-    if season.episode2_starts_at is None:
+    if not is_self_service(season):
         return None
     return season.episode2_starts_at.replace(tzinfo=UTC) - LOCK_LEAD
 
@@ -247,6 +252,9 @@ def admin_view(season):
     view = {
         "form_value": to_form_value(season.episode2_starts_at),
         "enabled": is_self_service(season),
+        "switched_on": season.wildcard_self_service is not False,
+        "manual": bool(season.episode2_manual),
+        "known": season.episode2_starts_at is not None,
     }
     if view["enabled"]:
         picked, total, waiting = progress(season)
