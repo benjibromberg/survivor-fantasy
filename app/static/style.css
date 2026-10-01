@@ -20,6 +20,7 @@
     --sand-warm: #e8d5b7;
     --sand-light: #f0e6d3;
     --palm-green: #2d6a4f;
+    --palm-light: #52b788;     /* green for text: palm-green is too dark to read */
     --text-light: #e8e0d6;
     --text-dim: #9aa5b1;
     --card-bg: #162535;
@@ -279,7 +280,7 @@ nav a:hover {
 }
 
 /* Flash messages */
-.flash-success { color: var(--palm-green); }
+.flash-success { color: var(--palm-light); }
 .flash-error { color: var(--fire-bright); }
 .flash-warning { color: var(--fire-glow); }
 
@@ -502,7 +503,7 @@ nav a:hover {
     font-size: 2em;
     font-weight: 400;
     color: var(--fire-bright);
-    opacity: 0.6;
+    opacity: 0.85;
     min-width: 2.2rem;
     text-align: center;
 }
@@ -532,7 +533,6 @@ nav a:hover {
 
 .lb-ss-pick.eliminated {
     text-decoration: line-through;
-    opacity: 0.5;
 }
 
 .lb-win-pct {
@@ -690,7 +690,7 @@ nav a:hover {
 
 .my-team-stat-text.eliminated {
     text-decoration: line-through;
-    opacity: 0.5;
+    color: var(--text-dim);
 }
 
 .my-team-stat-label {
@@ -758,8 +758,37 @@ nav a:hover {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+/* Eliminated castaway: greyscale photo, quiet border, dimmed but readable
+   text, and a snuffed torch after the name. No whole-element opacity, which
+   took the text down to about 2.3:1. The same idea is used for stat rows and
+   the admin castaway cards further down. !important beats the inline tribe
+   colour on the border. */
 .lb-pick.eliminated {
-    opacity: 0.3;
+    border-color: var(--card-border) !important;
+    background: transparent;
+}
+
+.lb-pick.eliminated .lb-pick-img {
+    filter: grayscale(1) brightness(0.8);
+    border-color: var(--card-border) !important;
+}
+
+.lb-pick.eliminated .lb-pick-name,
+.lb-pick.eliminated .lb-pick-meta,
+.lb-pick.eliminated .lb-pick-stats,
+.lb-pick.eliminated .lb-pick-result,
+.lb-pick.eliminated .lb-breakdown-item {
+    color: var(--text-dim);
+}
+
+.lb-pick.eliminated .lb-pick-name::after {
+    content: "";
+    display: inline-block;
+    width: 0.55em;
+    height: 1em;
+    margin-left: 0.35em;
+    vertical-align: -0.15em;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 44'%3E%3Cpath d='M13 14c0-1 1-3 0.5-5s1-3 0-5' stroke='%239aa5b1' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3Cpath d='M6 22h12l-1.5 5h-9z' fill='%237a8590'/%3E%3Crect x='5.5' y='21' width='13' height='2' rx='1' fill='%239aa5b1'/%3E%3Crect x='10' y='27' width='4' height='16' rx='1.5' fill='%237a8590'/%3E%3C/svg%3E") no-repeat center / contain;
 }
 
 .lb-pick-img {
@@ -876,11 +905,13 @@ nav a:hover {
 
 .lb-badge-immunity    { background: rgba(252,163,17,0.15); color: var(--torch-gold); }
 .lb-badge-tribal_immunity { background: rgba(252,163,17,0.1); color: var(--fire-glow); }
-.lb-badge-idol        { background: rgba(232,93,38,0.15); color: var(--fire-bright); }
-.lb-badge-merge       { background: rgba(45,106,79,0.2); color: var(--palm-green); }
-.lb-badge-votes       { background: rgba(192,57,43,0.15); color: #e07070; }
-.lb-badge-advantage   { background: rgba(91,143,185,0.15); color: #5b8fb9; }
-.lb-badge-fire        { background: rgba(232,93,38,0.15); color: var(--fire-bright); }
+/* Text colours are lighter than the tint's own hue so each reads at 4.5:1 or
+   better on its tint (the saturated hues were 1.9 to 4.2:1) */
+.lb-badge-idol        { background: rgba(232,93,38,0.15); color: #f58a5e; }
+.lb-badge-merge       { background: rgba(45,106,79,0.2); color: var(--palm-light); }
+.lb-badge-votes       { background: rgba(192,57,43,0.15); color: #e88484; }
+.lb-badge-advantage   { background: rgba(91,143,185,0.15); color: #8ab8dc; }
+.lb-badge-fire        { background: rgba(232,93,38,0.15); color: #f58a5e; }
 
 /* ── Journey timeline (toggled by "Journey" switch) ────────────── */
 .lb-pick-journey {
@@ -1101,15 +1132,27 @@ a.stat-row:hover {
     text-decoration: none;
 }
 
-.stat-row.eliminated {
-    opacity: 0.4;
+/* The dim greys drop under 4.5:1 on the lighter hover surface */
+a.stat-row:hover .stat-rank,
+a.stat-row.eliminated:hover .stat-name,
+a.stat-row.eliminated:hover .stat-value {
+    color: var(--sand-warm);
+}
+
+.stat-row.eliminated .stat-name,
+.stat-row.eliminated .stat-value {
+    color: var(--text-dim);
+}
+
+.stat-row.eliminated .stat-img {
+    filter: grayscale(1) brightness(0.8);
+    border-color: var(--card-border) !important;
 }
 
 .stat-rank {
     font-family: var(--font-label);
     font-weight: 400;
-    color: var(--fire-bright);
-    opacity: 0.5;
+    color: var(--text-dim);
     min-width: 1.5rem;
     text-align: center;
     font-size: 1em;
@@ -1283,12 +1326,18 @@ a[role="button"].outline:hover {
     letter-spacing: 0.03em;
 }
 
-.eliminated {
-    opacity: 0.35;
+/* Admin castaway cards and the season admin table: same eliminated idea */
+.survivor-card.eliminated .survivor-name {
+    color: var(--text-dim);
+    text-decoration: line-through;
 }
 
-.eliminated .survivor-name {
-    text-decoration: line-through;
+.survivor-card.eliminated .survivor-headshot {
+    filter: grayscale(1) brightness(0.8);
+}
+
+tr.eliminated td {
+    color: var(--text-dim);
 }
 
 /* hgroup subtitle */
