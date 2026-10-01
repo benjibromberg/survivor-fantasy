@@ -237,6 +237,27 @@ class TestSeedExportBeforeDrop:
         assert (tmp_path / "data" / "picks" / "season99.json").is_file()
 
 
+class TestSeedPicksDirCheckedBeforeDrop:
+    def test_missing_picks_dir_exits_before_drop(self, app, tmp_path, monkeypatch):
+        """A bad --picks-dir must stop the seed while the old tables still exist."""
+        _, db = app
+        import seed
+        from app.models import Pick
+
+        season, user, surv = _make_season(db)
+        _add_pick(db, season, user, surv)
+        missing = tmp_path / "no-such-dir"
+        monkeypatch.setattr(
+            sys, "argv", ["seed.py", "--no-scrape", "--picks-dir", str(missing)]
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            seed.main()
+
+        assert excinfo.value.code not in (0, None)
+        assert Pick.query.count() == 1
+
+
 # ── Admin export routes ───────────────────────────────────────────────────
 
 

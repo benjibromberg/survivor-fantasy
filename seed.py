@@ -565,6 +565,14 @@ def main():
             for p in exported:
                 print(f"  {p}")
 
+        # Check --picks-dir while the old tables still exist. It runs after the
+        # export because the export may have just created the directory.
+        if picks_dir:
+            picks_dir = os.path.realpath(picks_dir)
+            if not os.path.isdir(picks_dir):
+                print(f"Error: --picks-dir {picks_dir} is not a directory")
+                sys.exit(1)
+
         print("Dropping and recreating all tables...")
         db.drop_all()
         db.create_all()
@@ -583,10 +591,6 @@ def main():
         # that has a pick file is built alongside DEFAULT_SEASONS
         pick_files = {}
         if picks_dir:
-            picks_dir = os.path.realpath(picks_dir)
-            if not os.path.isdir(picks_dir):
-                print(f"Error: --picks-dir {picks_dir} is not a directory")
-                sys.exit(1)
             pick_files = discover_pick_files(picks_dir)
         season_nums = resolve_season_nums(explicit_seasons, pick_files)
 
