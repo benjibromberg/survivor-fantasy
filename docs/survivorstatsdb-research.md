@@ -261,8 +261,8 @@ The site's JSON against the current xlsx (survivoR `master`, commit `7336413`, 2
 | `threat_challenge` | Castaway Scores `threat_challenge` | 540 of 1,441 rows. All 26 non-US seasons agree. Nearly every US row differs. |
 
 Counts match exactly. Model outputs match outside the US and differ for US seasons. The threat
-panel says "User votes are used to refine the score" (`js/castaway.js:814`), the threat buttons
-post to `/api/save_vote.php` (`:1448`), and the career file carries `r_score_top10_votes` and
+panel says "User votes are used to refine the score" (`js/castaway.js:814`), visitors can vote
+on threat levels on the page, and the career file carries `r_score_top10_votes` and
 `r_score_resi`, which have no column in the xlsx **[fetched]**. The US differences are
 therefore probably site-only inputs **[inferred]**. The site also has scores for the one US51
 castaway who is out, while the xlsx Castaway Scores sheet has no US51 rows yet **[computed]**.
@@ -302,7 +302,7 @@ with a stated rule), **site only**. "App today" says whether `refresh_season()`
 | Challenge and strategic threat levels | Threat panel | Castaway Scores: `threat_challenge`, `threat_strategic`, `threat_challenge_cat`, `threat_strategic_cat` | not read | in survivoR; site values differ for US seasons |
 | Achievements | badges | Thresholds published in the Data Dictionary over survivoR fields, for example Packin' Heat for "holding an advantage or idol for 12 or more Tribal Councils" | | derive (most) |
 | RESI awards | Game Stats, the ImpRESIve badge | `data/resi.json`. The Data Dictionary says the award is created by the hosts of the FUPASU podcast, who share the data with the site. | | site only |
-| User threat votes, Your Top 10 | threat buttons, `/top10` | `/api/get_vote_counts.php`, `/api/save_vote.php` (`js/castaway.js:1419`, `:1448`); `r_score_top10_votes` in the career file | | site only |
+| User threat votes, Your Top 10 | threat buttons, `/top10` | collected by the site itself; `r_score_top10_votes` in the career file | | site only |
 | Win probability | Predictions tab | `data/predictions.json`, finished seasons only | the app computes its own (`app/predictions.py`) | site only |
 | Portraits | hero, grids | Hosted by the site under `images/large-no-bg/{vs}/{castaway_id}.png` | the app uses fantasysurvivorgame.com | site only; the footer assigns Survivor content to CBS |
 | Hometown coordinates | Castaway Map **[inferred]**, page not fetched | `hometown_lat_lon` in `castaways.json`; no such column in the xlsx | | site only |
@@ -331,8 +331,7 @@ Each point quotes what the site or survivoR says. Where they say nothing, that i
     shapes are undocumented, they carry misspelt field names that the site's own code works
     around (`n_votes_recieved`, and `chalenge_category` at `js/castaway.js:353-357`), and their
     URLs change with every `DATA_VERSION` bump **[fetched]**;
-  - two PHP endpoints behind the threat vote buttons (`js/castaway.js:1419`, `:1448`). They are
-    not an API for others.
+  - the site's own handling of the threat vote buttons, which is not an API for others.
 - **Downloadable dataset.** Yes: survivoR.xlsx, from the Download page and the footer. survivoR's
   licence is MIT, "Copyright (c) 2021 Daniel Oehm"
   ([LICENSE.md](https://github.com/doehm/survivoR/blob/master/LICENSE.md)); `DESCRIPTION` says
