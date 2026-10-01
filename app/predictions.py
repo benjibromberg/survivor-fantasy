@@ -25,6 +25,17 @@ CACHE_TTL = 300  # 5 minutes
 # Cached historical rates (computed once from survivoR.xlsx, survives across requests)
 _rates_cache = None
 
+# Survivor columns the simulation and the scorer read. Display-only stats
+# (confessionals, tribe, bio) are left out so they don't force a recompute.
+_SURVIVOR_KEY_ATTRS = (
+    "voted_out_order",
+    "made_jury",
+    "won_fire",
+    "day_voted_out",
+    "elimination_episode",
+    *SCORING_STAT_KEYS.values(),
+)
+
 
 def _cache_key(season, scoring_config):
     """Build a cache key from season state + picks + scoring config.
@@ -47,8 +58,17 @@ def _cache_key(season, scoring_config):
         .all()
     )
     state = {
-        "season_id": season.id,
-        "vo": {s.id: s.voted_out_order for s in survivors},
+        "season": [
+            season.id,
+            season.scoring_system,
+            season.num_players,
+            season.num_episodes,
+            season.left_at_jury,
+            season.n_finalists,
+        ],
+        "survivors": {
+            s.id: [getattr(s, attr) for attr in _SURVIVOR_KEY_ATTRS] for s in survivors
+        },
         "picks": [[p.user_id, p.survivor_id, p.pick_type] for p in picks],
         # Episode matters: the streak bonus counts episodes back from the finale
         "ss_picks": [[p.user_id, p.episode, p.survivor_id] for p in ss_picks],

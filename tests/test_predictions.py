@@ -268,6 +268,57 @@ class TestCacheKeySoleSurvivorPicks:
         assert _key(league.season) == before
 
 
+# ── Cache key: scoring inputs on the season and its castaways ─────────────
+
+
+class TestCacheKeyScoringInputs:
+    @pytest.mark.parametrize(
+        ("attr", "value"),
+        [
+            ("voted_out_order", 3),
+            ("made_jury", True),
+            ("won_fire", True),
+            ("day_voted_out", 9),
+            ("elimination_episode", 4),
+            ("individual_immunity_wins", 1),
+            ("tribal_immunity_wins", 2),
+            ("idols_found", 1),
+            ("idols_played", 1),
+            ("advantages_found", 1),
+            ("advantages_played", 1),
+        ],
+    )
+    def test_changes_when_castaway_scoring_input_changes(self, league, attr, value):
+        before = _key(league.season)
+        setattr(league.survivors[2], attr, value)
+        league.db.session.commit()
+        assert _key(league.season) != before
+
+    @pytest.mark.parametrize(
+        ("attr", "value"),
+        [
+            ("num_players", 7),
+            ("num_episodes", 7),
+            ("left_at_jury", 3),
+            ("n_finalists", 2),
+            ("scoring_system", "Other"),
+        ],
+    )
+    def test_changes_when_season_structure_changes(self, league, attr, value):
+        before = _key(league.season)
+        setattr(league.season, attr, value)
+        league.db.session.commit()
+        assert _key(league.season) != before
+
+    def test_ignores_display_only_castaway_fields(self, league):
+        """Stats that never reach the scorer should not force a recompute."""
+        before = _key(league.season)
+        league.survivors[2].confessional_count = 12
+        league.survivors[2].tribe = "Purple"
+        league.db.session.commit()
+        assert _key(league.season) == before
+
+
 # ── Cache key: query count ────────────────────────────────────────────────
 
 
@@ -331,3 +382,17 @@ class TestWinProbabilityCache:
         frozen, *_ = calculate_win_probabilities(league.season)
         assert frozen[two.id]["scenarios_won"] > two_before
         assert frozen[one.id]["scenarios_won"] < one_before
+
+    def test_castaway_stat_is_scored_without_clearing_cache(self, league):
+        from app.predictions import calculate_win_probabilities
+
+        one, two = league.players
+        frozen, *_ = calculate_win_probabilities(league.season)
+        two_before = frozen[two.id]["scenarios_won"]
+
+        # Player two's castaway finds advantages (0.5 points each by default)
+        league.survivors[3].advantages_found = 4
+        league.db.session.commit()
+
+        frozen, *_ = calculate_win_probabilities(league.season)
+        assert frozen[two.id]["scenarios_won"] > two_before
