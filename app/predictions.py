@@ -401,6 +401,15 @@ def _apply_idol_protection(ordering, idol_holdings, idol_play_rate):
     return result
 
 
+def season_structure_known(season):
+    """True once the simulation knows when the jury starts and how many finalists.
+
+    survivoR publishes both for a season in progress only around the merge,
+    so until then there are no win odds (see the leaderboard note).
+    """
+    return season.merge_threshold is not None and season.n_finalists is not None
+
+
 def calculate_win_probabilities(season):
     """Calculate each fantasy player's probability of winning the season.
 
@@ -447,7 +456,7 @@ def calculate_win_probabilities(season):
         return empty
 
     # Can't simulate without knowing game structure (in-progress pre-merge season)
-    if season.merge_threshold is None or season.n_finalists is None:
+    if not season_structure_known(season):
         return empty
 
     current_max_vo = max((s.voted_out_order for s in eliminated), default=0)
