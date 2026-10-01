@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import sqlite3
 from contextlib import contextmanager
@@ -8,6 +9,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
+from werkzeug.security import safe_join
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -132,6 +134,43 @@ def _schema_sync_lock():
             fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
+# {static filename: content version}, filled on first use. A running
+# container's static files never change, so a restart is the only refresh.
+static_versions = {}
+
+
+def _static_version(static_folder, filename):
+    """First 12 hex digits of the file's SHA-256, or None if it cannot be read.
+
+    Content, not mtime: an image rebuild rewrites every mtime, and an
+    unchanged file should keep its URL (and its cache entries).
+    """
+    if filename not in static_versions:
+        path = safe_join(static_folder, filename)
+        try:
+            with open(path, "rb") as f:
+                static_versions[filename] = hashlib.sha256(f.read()).hexdigest()[:12]
+        except (OSError, TypeError):  # TypeError: safe_join refused the path
+            static_versions[filename] = None
+    return static_versions[filename]
+
+
+def _version_static_urls(app):
+    """Add ?v=<content version> to every url_for("static", ...).
+
+    A changed file then has a new URL, so no browser or Cloudflare edge can
+    keep serving an old copy of it against new page markup.
+    """
+
+    @app.url_defaults
+    def add_static_version(endpoint, values):
+        if endpoint != "static" or "v" in values or "filename" not in values:
+            return
+        version = _static_version(app.static_folder, values["filename"])
+        if version:
+            values["v"] = version
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object("config.Config")
@@ -150,6 +189,7 @@ def create_app():
     app.register_blueprint(main_bp)
 
     app.jinja_env.filters["contrast"] = _ensure_contrast
+    _version_static_urls(app)
 
     @app.context_processor
     def inject_seasons():
