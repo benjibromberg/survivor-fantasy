@@ -220,7 +220,7 @@ class TestCastawayCards:
 
         assert 'class="lb-pick-pts-detail"' in more
         assert 'class="lb-pick-link"' in more
-        assert "https://survivorstatsdb.com/castaway?id=careerUS9" in more
+        assert "https://survivorstatsdb.com/castaway?id=US99US9" in more
 
     def test_summary_holds_no_block_elements(self, league):
         """<summary> allows phrasing content only, so the card face uses spans."""
