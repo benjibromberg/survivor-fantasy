@@ -68,22 +68,8 @@
 <div class="lb-toolbar">
     <a href="{{ url_for('main.scoring_compare', season_id=season.id) }}" class="toolbar-link">Compare scoring</a>
     <div class="toolbar-toggles">
-        <label class="toolbar-toggle">
-            <input type="checkbox" id="pts-toggle" role="switch">
-            <span>Points</span>
-        </label>
-        <label class="toolbar-toggle">
-            <input type="checkbox" id="stats-toggle" role="switch">
-            <span>Stats</span>
-        </label>
-        <label class="toolbar-toggle">
-            <input type="checkbox" id="bio-toggle" role="switch">
-            <span>Bio</span>
-        </label>
-        <label class="toolbar-toggle">
-            <input type="checkbox" id="journey-toggle" role="switch">
-            <span>Journey</span>
-        </label>
+        <button type="button" class="lb-roster-all" data-roster="open">Open all</button>
+        <button type="button" class="lb-roster-all" data-roster="close">Close all</button>
         {% if win_pcts %}
         <label class="toolbar-toggle" title="Projected: estimates future immunity wins, idols, and advantages based on historical rates">
             <input type="checkbox" id="pred-toggle" role="switch">
@@ -92,39 +78,60 @@
         {% endif %}
     </div>
 </div>
+<p class="lb-hint">Tap a team to see its castaways, and a castaway to see how their points were earned.</p>
 
+<div class="lb-standings">
 {% for entry in leaderboard %}
-<article class="leaderboard-entry{{ ' lb-champion' if is_finished and loop.first else '' }}{{ ' lb-snuffed' if is_finished and not loop.first else '' }}"
+{% set roster = entry.picks|rejectattr('pick_type_raw', 'eq', 'sole_survivor')|list %}
+{% set still_in = roster|rejectattr('eliminated')|list|length %}
+{% set mine = current_user.is_authenticated and entry.user.id == current_user.id %}
+<details class="leaderboard-entry lb-team{{ ' lb-champion' if is_finished and loop.first else '' }}{{ ' lb-snuffed' if is_finished and not loop.first else '' }}"
+    data-team="{{ entry.user.id }}"{% if mine %} data-mine{% endif %} open
     {% if is_finished and loop.first %}style="--reveal-delay: 0.3s;"{% endif %}>
-    <header class="lb-header">
+    <summary class="lb-row">
         <span class="lb-rank">{% if is_finished and loop.first %}<svg class="lb-torch-icon" viewBox="0 0 24 44" width="16" height="28" aria-hidden="true"><path d="M12 0C12 0 4 9 4 16c0 4.5 3.6 7.5 8 7.5s8-3 8-7.5C20 9 12 0 12 0z" fill="var(--fire-bright)"/><path d="M12 5C12 5 8 11 8 15c0 2.2 1.8 4 4 4s4-1.8 4-4C16 11 12 5 12 5z" fill="var(--torch-gold)"/><path d="M6 22h12l-1.5 5h-9z" fill="var(--sand-warm)" opacity="0.85"/><rect x="5.5" y="21" width="13" height="2" rx="1" fill="var(--sand-warm)"/><rect x="10" y="27" width="4" height="16" rx="1.5" fill="var(--sand-warm)" opacity="0.65"/></svg>{% elif is_finished %}<svg class="lb-torch-snuffed" viewBox="0 0 24 44" width="14" height="24" aria-hidden="true"><path d="M13 14c0-1 1-3 0.5-5s1-3 0-5" stroke="#9aa5b1" stroke-width="1.2" fill="none" opacity="0.8" stroke-linecap="round"/><path d="M6 22h12l-1.5 5h-9z" fill="#7a8590"/><rect x="5.5" y="21" width="13" height="2" rx="1" fill="#9aa5b1"/><rect x="10" y="27" width="4" height="16" rx="1.5" fill="#7a8590"/></svg>{% else %}{{ loop.index }}{% endif %}</span>
-        <span class="lb-name">{{ entry.user.display_name or entry.user.username }}</span>
-        {% if past_winner_badges.get(entry.user.id) %}
-        <span class="lb-badges">
-            {% for snum in past_winner_badges[entry.user.id] %}
-            <span class="lb-season-badge" title="Won Season {{ snum }}">S{{ snum }}</span>
-            {% endfor %}
+        <span class="lb-id">
+            <span class="lb-name-line">
+                <span class="lb-name">{{ entry.user.display_name or entry.user.username }}</span>
+                {% if past_winner_badges.get(entry.user.id) %}
+                <span class="lb-badges">
+                    {% for snum in past_winner_badges[entry.user.id] %}
+                    <span class="lb-season-badge" title="Won Season {{ snum }}">S{{ snum }}</span>
+                    {% endfor %}
+                </span>
+                {% endif %}
+            </span>
+            {% if entry.team_name %}
+            <span class="lb-team-name" title="Team name">{{ entry.team_name }}</span>
+            {% endif %}
         </span>
-        {% endif %}
+        <span class="lb-row-meta">
+            {% if not is_finished and roster %}
+            <span class="lb-torches" role="img" aria-label="{{ still_in }} of {{ roster|length }} picks still in the game" title="{{ still_in }} of {{ roster|length }} picks still in the game">
+                {%- for pick in roster|sort(attribute='eliminated') %}{% if pick.eliminated %}<svg class="lb-torch lb-torch-out" viewBox="0 0 24 44" aria-hidden="true"><path d="M13 14c0-1 1-3 0.5-5s1-3 0-5" stroke="#9aa5b1" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M6 22h12l-1.5 5h-9z" fill="#7a8590"/><rect x="10" y="27" width="4" height="16" rx="1.5" fill="#7a8590"/></svg>{% else %}<svg class="lb-torch lb-torch-lit" viewBox="0 0 24 44" aria-hidden="true"><path d="M12 0C12 0 4 9 4 16c0 4.5 3.6 7.5 8 7.5s8-3 8-7.5C20 9 12 0 12 0z" fill="var(--fire-bright)"/><path d="M12 5C12 5 8 11 8 15c0 2.2 1.8 4 4 4s4-1.8 4-4C16 11 12 5 12 5z" fill="var(--torch-gold)"/><path d="M6 22h12l-1.5 5h-9z" fill="var(--sand-warm)" opacity="0.85"/><rect x="10" y="27" width="4" height="16" rx="1.5" fill="var(--sand-warm)" opacity="0.65"/></svg>{% endif %}{% endfor -%}
+                <span class="lb-torch-count" aria-hidden="true">{{ still_in }}/{{ roster|length }}</span>
+            </span>
+            {% endif %}
+            {% if win_pcts.get(entry.user.id) is not none and active_count > 0 %}
+            <span class="lb-win-pct lb-win-frozen">{{ "%.0f"|format(win_pcts[entry.user.id]) }}% win</span>
+            <span class="lb-win-pct lb-win-projected">{{ "%.0f"|format(projected_win_pcts.get(entry.user.id, 0)) }}% win</span>
+            {% endif %}
+        </span>
         <span class="lb-points">{{ "%.2f"|format(entry.total_points) }} pts</span>
-        <div class="lb-sub">
-        {% if entry.team_name %}
-        <span class="lb-team-name" title="Team name">{{ entry.team_name }}</span>
-        {% endif %}
+    </summary>
+    <div class="lb-roster">
+    {% if entry.sole_survivor_pick or entry.warnings %}
+    <p class="lb-roster-meta">
         {% if entry.sole_survivor_pick %}
         <span class="lb-ss-pick {{ 'eliminated' if entry.sole_survivor_eliminated else '' }}" title="Sole Survivor pick">
-            Winner: {{ entry.sole_survivor_pick }}
+            Winner pick: {{ entry.sole_survivor_pick }}
         </span>
-        {% endif %}
-        {% if win_pcts.get(entry.user.id) is not none and active_count > 0 %}
-        <span class="lb-win-pct lb-win-frozen">{{ "%.0f"|format(win_pcts[entry.user.id]) }}% win</span>
-        <span class="lb-win-pct lb-win-projected">{{ "%.0f"|format(projected_win_pcts.get(entry.user.id, 0)) }}% win</span>
         {% endif %}
         {% for warning in entry.warnings %}
         <span class="lb-warning">{{ warning }}</span>
         {% endfor %}
-        </div>
-    </header>
+    </p>
+    {% endif %}
 
     {# Group picks by type for visual separation #}
     {% set draft_picks = entry.picks|selectattr('pick_type_raw', 'eq', 'draft')|list %}
@@ -153,8 +160,48 @@
         {% endfor %}
     </div>
     {% endif %}
-</article>
+    </div>
+</details>
 {% endfor %}
+</div>
+<script>
+/* Rosters: open on wider screens; on phones only your own team starts open so
+   every row fits on one screen. Choices are kept for the visit (sessionStorage),
+   so moving along the timeline does not reset them. Inline, right after the
+   standings, so it runs before the charts below are parsed. */
+(function() {
+    var teams = document.querySelectorAll('.lb-team');
+    var KEY = 'lb-open-teams';
+    var saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(KEY)); } catch (e) {}
+    var phone = window.matchMedia('(max-width: 767px)').matches;
+    teams.forEach(function(t) {
+        if (Array.isArray(saved)) t.open = saved.indexOf(t.dataset.team) !== -1;
+        else if (phone) t.open = t.hasAttribute('data-mine');
+    });
+    function remember() {
+        var open = [];
+        teams.forEach(function(t) { if (t.open) open.push(t.dataset.team); });
+        try { sessionStorage.setItem(KEY, JSON.stringify(open)); } catch (e) {}
+    }
+    // Save on real clicks only (Enter and Space on a row also fire click). The
+    // 'toggle' event would also fire for the phone default set above and save
+    // it as if it were a choice. The click lands before the row opens or
+    // closes, so read the state on the next tick.
+    teams.forEach(function(t) {
+        t.querySelector(':scope > summary').addEventListener('click', function() {
+            setTimeout(remember, 0);
+        });
+    });
+    document.querySelectorAll('.lb-roster-all').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var open = btn.dataset.roster === 'open';
+            teams.forEach(function(t) { t.open = open; });
+            remember();
+        });
+    });
+})();
+</script>
 {% else %}
 <p>No picks submitted yet.</p>
 {% endif %}
@@ -390,46 +437,6 @@ const confChart = new Chart(document.getElementById('confessional-chart'), {
 })();
 </script>
 <script>
-const ptsToggle = document.getElementById('pts-toggle');
-const statsToggle = document.getElementById('stats-toggle');
-if (ptsToggle) {
-    const show = localStorage.getItem('lb-pts') === '1';
-    ptsToggle.checked = show;
-    document.body.classList.toggle('show-pts', show);
-    ptsToggle.addEventListener('change', function() {
-        document.body.classList.toggle('show-pts', this.checked);
-        localStorage.setItem('lb-pts', this.checked ? '1' : '0');
-    });
-}
-if (statsToggle) {
-    const show = localStorage.getItem('lb-stats') === '1';
-    statsToggle.checked = show;
-    document.body.classList.toggle('show-stats', show);
-    statsToggle.addEventListener('change', function() {
-        document.body.classList.toggle('show-stats', this.checked);
-        localStorage.setItem('lb-stats', this.checked ? '1' : '0');
-    });
-}
-const bioToggle = document.getElementById('bio-toggle');
-if (bioToggle) {
-    const show = localStorage.getItem('lb-bio') === '1';
-    bioToggle.checked = show;
-    document.body.classList.toggle('show-bio', show);
-    bioToggle.addEventListener('change', function() {
-        document.body.classList.toggle('show-bio', this.checked);
-        localStorage.setItem('lb-bio', this.checked ? '1' : '0');
-    });
-}
-const journeyToggle = document.getElementById('journey-toggle');
-if (journeyToggle) {
-    const show = localStorage.getItem('lb-journey') === '1';
-    journeyToggle.checked = show;
-    document.body.classList.toggle('show-journey', show);
-    journeyToggle.addEventListener('change', function() {
-        document.body.classList.toggle('show-journey', this.checked);
-        localStorage.setItem('lb-journey', this.checked ? '1' : '0');
-    });
-}
 const predToggle = document.getElementById('pred-toggle');
 if (predToggle) {
     const show = localStorage.getItem('lb-pred') === '1';

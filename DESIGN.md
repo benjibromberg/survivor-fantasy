@@ -189,11 +189,18 @@ Used by the rules and scoring analysis pages. `<details class="fold" open><summa
 
 ## Component Patterns
 
-### Leaderboard Entry (`.leaderboard-entry`)
-Card with left accent border (4px, fire-bright). Contains header (rank + name + points, plus `.lb-sub` holding Sole Survivor pick, win % and warnings: `display: contents` on desktop, its own second line on phones) and pick pills row. Champion variant gets gold border + glow. Snuffed variant dims to 0.85 opacity.
+### Standings Row (`details.lb-team`)
+Each team is a `<details>` card with the left accent border. Its `<summary class="lb-row">` is the standings row: rank, player name with past-winner badges and team name, a torch per pick (lit while the castaway is in the game, snuffed once out, with an `n/m` count; hidden on finished seasons), win %, and points. On desktop that is one line; on phones torches and win % drop to a second line under the name.
+- Opening the row shows the roster (`.lb-roster`): the Sole Survivor pick and any warnings, then the castaway cards, then team stats.
+- An open team's row is `position: sticky` so it stays in view while its roster scrolls.
+- Rosters start open from 768px up. Below that only the logged-in player's own team starts open, so every row fits on one screen. Choices are remembered for the visit (`sessionStorage`, key `lb-open-teams`); Open all and Close all sit in the toolbar.
+- Champion variant gets gold border + glow. Snuffed variant dims to 0.85 opacity.
 
-### Pick Pill (`.lb-pick`)
-Compact card showing castaway headshot (80px, 48px on mobile), name, status, and optional stats/journey. On phones pills sit in a 2-up grid; with any detail toggle on they go full width. Eliminated picks use the eliminated treatment (see Color: Eliminated Castaways). Sole Survivor picks get gold border + subtle gradient background.
+### Castaway Card (`.lb-pick`, macro `app/templates/_pick_card.html`)
+One macro renders every card. On the leaderboard a card is a `<details>`: the summary is the compact card (headshot 80px, 48px on phones; name, points, result or tribe, journey badges, and on desktop a one-line stats summary), and tapping it opens that castaway's point breakdown, stats, bio, journey and stats-site link. There are no global detail switches; detail opens one castaway at a time. On My Team a card is a plain link with no detail.
+- On phones cards sit in a 2-up grid and an open card takes the full row.
+- The summary holds spans only (`<summary>` allows phrasing content).
+- Eliminated picks use the eliminated treatment (see Color: Eliminated Castaways). Sole Survivor picks get gold border + subtle gradient background.
 
 ### Season Timeline (`.season-timeline`)
 Horizontal scrollable row of episode dots. The connecting line is drawn per point (`.tl-point::before`) so it scrolls with the dots. Milestone dots (Premiere, Merge, Finale) are larger with labels. Active dot gets fire-bright color and is scrolled into view on load. On phones each point is at least 2.75rem wide and only milestone and active labels show.
@@ -202,7 +209,7 @@ Horizontal scrollable row of episode dots. The connecting line is drawn per poin
 3-column CSS Grid for stat items. Each item has a label (Bebas Neue, dim) and value. Drops to 1-column at 576px.
 
 ### Toolbar (`.lb-toolbar`)
-Flex row with compare link left, toggle switches right (`margin-left: auto`). Toggles use Bebas Neue, uppercase. On phones the link goes full width and toggles become bordered chips (fire-bright border when on).
+Flex row with compare link left; Open all, Close all and the Projected switch right (`margin-left: auto`). Bebas Neue, uppercase. Projected is the only global switch, because it changes everyone's win %. On phones the link goes full width and the controls become bordered chips (fire-bright border when on).
 
 ### Sidebar TOC (`.page-toc`)
 Fixed-position overlay, bottom-left (full-width bottom sheet on phones, 0.95rem links). Toggle button always visible. Panel has Cinzel links with active border-left indicator (fire-bright). Uses IntersectionObserver + localStorage for persistence.

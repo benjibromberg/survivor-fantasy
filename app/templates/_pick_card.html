@@ -1,66 +1,99 @@
 {#
-  One castaway pick, as a pill. The only place this markup is written.
+  One castaway pick, as a card. The only place this markup is written.
 
   variant:
     "draft"   - a draft pick on the leaderboard. No pick-type tag; the result
                 line falls back to the tribe while the castaway is in.
     "special" - a wildcard, replacement or Sole Survivor pick on the
                 leaderboard. Shows the pick-type tag; no tribe fallback.
-    "summary" - My Team. Pick-type tag, result or tribe, no detail sections.
+    "summary" - My Team. Pick-type tag, result or tribe, no detail sections;
+                the whole card links to the castaway's stats page.
+
+  On the leaderboard a card is a <details>: the summary is the compact card
+  (photo, name, points, result, badges) and tapping it opens that castaway's
+  point breakdown, stats, bio and journey, with the stats-page link last.
 
   is_sole_survivor: this castaway won the season (finale pages only); the
-    pill is drawn in gold.
+    card is drawn in gold.
   breakdown_labels: names for the point-breakdown keys (leaderboard only).
 #}
 {% macro pick_card(pick, variant="draft", is_sole_survivor=False, breakdown_labels={}) %}
-{% set tag = "a" if pick.stats_url else "div" %}
 {% set gold = is_sole_survivor %}
-<{{ tag }}{% if pick.stats_url %} href="{{ pick.stats_url }}" target="_blank" rel="noopener"{% endif %}
-    class="lb-pick{% if variant == 'special' %} lb-pick-special lb-pick-{{ pick.pick_type_raw }}{% endif %} {{ 'lb-pick-sole-survivor' if gold else ('eliminated' if pick.eliminated else '') }}"
-    {% if gold %}style="border-color: var(--torch-gold);"
-    {% elif pick.tribe_color %}style="border-color: {{ pick.tribe_color|contrast }};"{% endif %}
-    title="{{ pick.full_name or pick.survivor }}{% if variant == 'special' %} — {{ pick.pick_type }}{% endif %}{% if pick.result %} — {{ pick.result }}{% endif %}">
-    {% if pick.survivor_image %}
-    <img src="{{ pick.survivor_image }}" alt="{{ pick.survivor }}" class="lb-pick-img"
-         loading="lazy" decoding="async"
-         {% if gold %}style="border: 2px solid var(--torch-gold);"
-         {% elif pick.tribe_color %}style="border: 2px solid {{ pick.tribe_color|contrast }};"{% endif %}>
-    {% else %}
-    <div class="lb-pick-img lb-pick-placeholder">{{ pick.survivor[:1] }}</div>
-    {% endif %}
-    <div class="lb-pick-info">
-        <span class="lb-pick-name">{{ pick.survivor }}{% if gold %} <span class="lb-pick-ss-tag">Sole Survivor</span>{% endif %}</span>
-        {% if variant == "draft" %}
-        <span class="lb-pick-meta">{{ "%.2f"|format(pick.modified_points) }} pts</span>
-        {% else %}
-        <span class="lb-pick-meta">
-            <span class="lb-pick-badge">{{ pick.pick_type }}</span>
-            &middot; {{ "%.2f"|format(pick.modified_points) }} pts
-        </span>
-        {% endif %}
-        {% if variant != "summary" and pick.stats_line %}
-        <span class="lb-pick-stats">{{ pick.stats_line }}</span>
-        {% endif %}
-        {% if variant == "special" %}
-            {% if pick.result %}
-        <span class="lb-pick-result">{{ pick.result }}</span>
-            {% endif %}
-        {% elif pick.result and not gold %}
-        <span class="lb-pick-result">{{ pick.result }}</span>
-        {% elif pick.tribe %}
-        <span class="lb-pick-result" {% if pick.tribe_color %}style="color: {{ pick.tribe_color|contrast }};"{% endif %}>{{ pick.tribe }}</span>
-        {% endif %}
-        {% if variant != "summary" %}
-        {{ _pick_details(pick, breakdown_labels, show_journey=pick.pick_type_raw != "sole_survivor") }}
-        {% endif %}
-    </div>
-</{{ tag }}>
+{% set show_journey = pick.pick_type_raw != "sole_survivor" %}
+{% set has_more = variant != "summary" and (pick.breakdown or pick.stats_detail or pick.bio_line or (pick.journey_events and show_journey) or pick.stats_url) %}
+{% set classes -%}
+lb-pick{% if variant == 'special' %} lb-pick-special lb-pick-{{ pick.pick_type_raw }}{% endif %} {{ 'lb-pick-sole-survivor' if gold else ('eliminated' if pick.eliminated else '') }}
+{%- endset %}
+{% set border -%}
+{% if gold %}border-color: var(--torch-gold);{% elif pick.tribe_color %}border-color: {{ pick.tribe_color|contrast }};{% endif %}
+{%- endset %}
+{% set title -%}
+{{ pick.full_name or pick.survivor }}{% if variant == 'special' %} — {{ pick.pick_type }}{% endif %}{% if pick.result %} — {{ pick.result }}{% endif %}
+{%- endset %}
+{% if has_more %}
+<details class="{{ classes }}"{% if border %} style="{{ border }}"{% endif %}>
+    <summary class="lb-pick-summary" title="{{ title }}">{{ _pick_face(pick, variant, gold, show_journey) }}</summary>
+    <div class="lb-pick-more">{{ _pick_details(pick, breakdown_labels, show_journey) }}</div>
+</details>
+{% elif pick.stats_url and variant == "summary" %}
+<a href="{{ pick.stats_url }}" target="_blank" rel="noopener" class="{{ classes }}"{% if border %} style="{{ border }}"{% endif %} title="{{ title }}">
+    <span class="lb-pick-summary">{{ _pick_face(pick, variant, gold, show_journey) }}</span>
+</a>
+{% else %}
+<div class="{{ classes }}"{% if border %} style="{{ border }}"{% endif %} title="{{ title }}">
+    <span class="lb-pick-summary">{{ _pick_face(pick, variant, gold, show_journey) }}</span>
+</div>
+{% endif %}
 {% endmacro %}
 
-{# Breakdown, stats, bio, badges and journey. Each is shown by a leaderboard toggle. #}
+{# Photo, name, points, result and badges: the part of a card that is always shown.
+   Spans only, so it is valid inside <summary>. #}
+{% macro _pick_face(pick, variant, gold, show_journey) %}
+{% if pick.survivor_image %}
+<img src="{{ pick.survivor_image }}" alt="{{ pick.survivor }}" class="lb-pick-img"
+     loading="lazy" decoding="async"
+     {% if gold %}style="border: 2px solid var(--torch-gold);"
+     {% elif pick.tribe_color %}style="border: 2px solid {{ pick.tribe_color|contrast }};"{% endif %}>
+{% else %}
+<span class="lb-pick-img lb-pick-placeholder" aria-hidden="true">{{ pick.survivor[:1] }}</span>
+{% endif %}
+<span class="lb-pick-info">
+    <span class="lb-pick-name">{{ pick.survivor }}{% if gold %} <span class="lb-pick-ss-tag">Sole Survivor</span>{% endif %}</span>
+    {% if variant == "draft" %}
+    <span class="lb-pick-meta">{{ "%.2f"|format(pick.modified_points) }} pts</span>
+    {% else %}
+    <span class="lb-pick-meta">
+        <span class="lb-pick-badge">{{ pick.pick_type }}</span>
+        &middot; {{ "%.2f"|format(pick.modified_points) }} pts
+    </span>
+    {% endif %}
+    {% if variant != "summary" and pick.stats_line %}
+    <span class="lb-pick-stats">{{ pick.stats_line }}</span>
+    {% endif %}
+    {% if variant == "special" %}
+        {% if pick.result %}
+    <span class="lb-pick-result">{{ pick.result }}</span>
+        {% endif %}
+    {% elif pick.result and not gold %}
+    <span class="lb-pick-result">{{ pick.result }}</span>
+    {% elif pick.tribe %}
+    <span class="lb-pick-result" {% if pick.tribe_color %}style="color: {{ pick.tribe_color|contrast }};"{% endif %}>{{ pick.tribe }}</span>
+    {% endif %}
+    {% if variant != "summary" and pick.journey_badges and show_journey %}
+    <span class="lb-pick-badges">
+        {% for badge in pick.journey_badges %}
+        <span class="lb-badge lb-badge-{{ badge.css_class }}">{{ badge.label }}</span>
+        {% endfor %}
+    </span>
+    {% endif %}
+</span>
+{% endmacro %}
+
+{# What opens under a card: breakdown, stats, bio, journey, then the stats link. #}
 {% macro _pick_details(pick, breakdown_labels, show_journey=True) %}
 {% if pick.breakdown %}
 <div class="lb-pick-pts-detail">
+    <span class="lb-more-label">Points</span>
     {% for key, val in pick.breakdown.items() %}
     <span class="lb-breakdown-item lb-breakdown-pts">{{ breakdown_labels.get(key, key) }}: {{ "%.2f"|format(val) }}</span>
     {% endfor %}
@@ -68,6 +101,7 @@
 {% endif %}
 {% if pick.stats_detail %}
 <div class="lb-pick-stats-detail">
+    <span class="lb-more-label">Stats</span>
     {% for label, val in pick.stats_detail %}
     <span class="lb-breakdown-item">{{ label }}: {{ val }}</span>
     {% endfor %}
@@ -75,13 +109,6 @@
 {% endif %}
 {% if pick.bio_line %}
 <div class="lb-pick-bio-detail">{{ pick.bio_line }}</div>
-{% endif %}
-{% if pick.journey_badges and show_journey %}
-<div class="lb-pick-badges">
-    {% for badge in pick.journey_badges %}
-    <span class="lb-badge lb-badge-{{ badge.css_class }}">{{ badge.label }}</span>
-    {% endfor %}
-</div>
 {% endif %}
 {% if pick.journey_events and show_journey %}
 <div class="lb-pick-journey">
@@ -95,5 +122,8 @@
         {% endfor %}
     </div>
 </div>
+{% endif %}
+{% if pick.stats_url %}
+<a href="{{ pick.stats_url }}" target="_blank" rel="noopener" class="lb-pick-link">Full stats on survivorstatsdb<span aria-hidden="true"> ↗</span></a>
 {% endif %}
 {% endmacro %}

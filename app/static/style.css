@@ -491,15 +491,140 @@ nav a:hover {
     border: 1px solid var(--card-border);
     border-left: 4px solid var(--fire-glow);
     border-radius: 8px;
-    padding: 1rem;
+    padding: 0;
 }
 
-.lb-header {
-    display: flex;
-    align-items: baseline;
-    gap: 0.75rem;
+/* Standings: each team is a <details>. The summary is the row (rank, name
+   and team name, torches, win %, points); opening it shows the roster.
+   Selectors carry `details` and `summary` to outrank Pico's accordion rules. */
+details.lb-team > summary.lb-row {
+    display: grid;
+    grid-template-columns: 2.2rem minmax(0, 1fr) auto auto 1rem;
+    grid-template-areas: "rank id meta pts chev";
+    align-items: center;
+    column-gap: 0.75rem;
+    margin: 0;
+    padding: 0.6rem 1rem;
+    line-height: 1.25;
+    border-radius: 8px;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* An open team's row stays at the top while its roster scrolls past */
+details.lb-team[open] > summary.lb-row {
+    position: sticky;
+    top: 0;
+    z-index: 3;
     margin-bottom: 0;
-    padding-bottom: 0.25rem;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--card-border);
+    border-radius: 8px 8px 0 0;
+}
+
+/* Pico's chevron, as the last grid cell instead of a float */
+details.lb-team > summary.lb-row::after {
+    grid-area: chev;
+    float: none;
+    margin: 0;
+    justify-self: end;
+}
+
+details.lb-team > summary.lb-row:focus-visible {
+    outline: 2px solid var(--fire-glow);
+    outline-offset: -2px;
+}
+
+.lb-row .lb-rank { grid-area: rank; }
+
+.lb-id {
+    grid-area: id;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.lb-name-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    min-width: 0;
+}
+
+.lb-row-meta {
+    grid-area: meta;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+.lb-row .lb-points {
+    grid-area: pts;
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* One torch per pick: lit while the castaway is in the game */
+.lb-torches {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.lb-torch {
+    width: 0.55rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+
+.lb-torch-count {
+    margin-left: 0.3rem;
+    font-family: var(--font-label);
+    font-size: max(var(--fs-floor), 0.85em);
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+}
+
+.lb-roster {
+    padding: 0.5rem 1rem 1rem;
+}
+
+.lb-standings .leaderboard-entry {
+    margin-bottom: 0.5rem;
+}
+
+.lb-roster-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.75rem;
+    margin: 0.25rem 0 0;
+}
+
+.lb-hint {
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.85em;
+    color: var(--text-dim);
+}
+
+.lb-roster-all {
+    width: auto;
+    margin: 0;
+    padding: 0.25rem 0.7rem;
+    font-family: var(--font-label);
+    font-size: 0.95rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    background: transparent;
+    border: 1px solid var(--card-border);
+}
+
+.lb-roster-all:hover {
+    color: var(--sand-warm);
+    border-color: var(--fire-glow);
 }
 
 .lb-rank {
@@ -541,7 +666,6 @@ nav a:hover {
 
 .lb-win-pct {
     font-family: var(--font-label);
-    margin-left: auto;
     font-size: 0.95em;
     font-weight: 400;
     color: var(--fire-glow);
@@ -570,38 +694,7 @@ nav a:hover {
     display: inline;
 }
 
-/* Secondary header items. Transparent on desktop (same flex row as before);
-   becomes a second line on phones (see mobile section at end of file). */
-.lb-sub {
-    display: contents;
-}
-
-.lb-header .lb-ss-pick,
-.lb-header .lb-win-pct { order: 1; }
-.lb-header .lb-points { order: 2; }
-.lb-header .lb-warning { order: 3; }
-
-/* Points should push right if no win-pct */
-.lb-header:not(:has(.lb-win-pct)) .lb-points {
-    margin-left: auto;
-}
-
-/* SS pick should push right when no win-pct */
-.lb-header:not(:has(.lb-win-pct)) .lb-ss-pick {
-    margin-left: auto;
-}
-.lb-header:has(.lb-ss-pick):not(:has(.lb-win-pct)) .lb-points {
-    margin-left: 0;
-}
-
-/* Leaderboard warnings */
-.lb-warnings {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-bottom: 0.25rem;
-}
-
+/* Leaderboard warnings ("Wildcard not yet picked") */
 .lb-warning {
     font-size: 0.72em;
     font-weight: 600;
@@ -612,9 +705,11 @@ nav a:hover {
     border: 1px solid rgba(252, 163, 17, 0.25);
 }
 
+/* align-items: an open card must not stretch the closed cards beside it */
 .lb-picks {
     display: flex;
     flex-wrap: wrap;
+    align-items: flex-start;
     gap: 0.5rem;
     margin-top: 0.75rem;
 }
@@ -744,11 +839,14 @@ nav a:hover {
     width: auto;
 }
 
+/* A castaway card. On the leaderboard it is a <details>: the summary is the
+   compact card and opening it shows that castaway's detail. On My Team it
+   is a plain link. --pick-img sizes the photo and the detail's indent. */
 .lb-pick {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 1rem 0.4rem 0.35rem;
+    --pick-img: 80px;
+    display: block;
+    margin: 0;
+    padding: 0;
     border: 2px solid var(--card-border);
     border-radius: 2rem;
     font-size: 0.85em;
@@ -757,7 +855,7 @@ nav a:hover {
     overflow: hidden;
 }
 
-.lb-pick:hover {
+.lb-pick:not([open]):hover {
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
@@ -795,9 +893,74 @@ nav a:hover {
     background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 44'%3E%3Cpath d='M13 14c0-1 1-3 0.5-5s1-3 0-5' stroke='%239aa5b1' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3Cpath d='M6 22h12l-1.5 5h-9z' fill='%237a8590'/%3E%3Crect x='5.5' y='21' width='13' height='2' rx='1' fill='%239aa5b1'/%3E%3Crect x='10' y='27' width='4' height='16' rx='1.5' fill='%237a8590'/%3E%3C/svg%3E") no-repeat center / contain;
 }
 
+.lb-pick-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem 0.4rem 0.35rem;
+}
+
+details.lb-pick > summary.lb-pick-summary {
+    margin: 0;
+    line-height: inherit;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Small chevron at the card's right edge, so it reads as openable */
+details.lb-pick > summary.lb-pick-summary::after {
+    float: none;
+    flex-shrink: 0;
+    align-self: center;
+    width: 0.8rem;
+    height: 0.8rem;
+    margin: 0 0 0 auto;
+    background-size: 0.8rem auto;
+    opacity: 0.6;
+}
+
+details.lb-pick[open] > summary.lb-pick-summary {
+    margin-bottom: 0;
+}
+
+/* Inset ring: the card clips anything outside its rounded edge */
+details.lb-pick > summary.lb-pick-summary:focus-visible {
+    outline: 2px solid var(--fire-glow);
+    outline-offset: -4px;
+    border-radius: 2rem;
+}
+
+details.lb-pick[open] {
+    border-radius: 1rem;
+}
+
+/* The compact stats line repeats what the open detail lists */
+details.lb-pick[open] .lb-pick-stats {
+    display: none;
+}
+
+.lb-pick-more {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0 1rem 0.8rem calc(var(--pick-img) + 0.85rem);
+}
+
+.lb-more-label {
+    font-family: var(--font-label);
+    font-size: max(var(--fs-floor), 0.8em);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+
+.lb-pick-link {
+    font-size: max(var(--fs-floor), 0.78em);
+    color: var(--fire-glow);
+}
+
 .lb-pick-img {
-    width: 80px;
-    height: 80px;
+    width: var(--pick-img);
+    height: var(--pick-img);
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
@@ -837,55 +1000,18 @@ nav a:hover {
     color: var(--text-light);
 }
 
-/* Point breakdowns — toggled by "Point breakdowns" switch */
-.lb-pick-pts-detail {
-    display: none;
-    flex-direction: column;
-    gap: 0.1rem;
-    margin-top: 0.15rem;
-}
-
-.show-pts .lb-pick-pts-detail {
-    display: flex;
-}
-
-/* Game stats — toggled by "Game stats" switch */
+/* Detail sections inside an open card */
+.lb-pick-pts-detail,
 .lb-pick-stats-detail {
-    display: none;
+    display: flex;
     flex-direction: column;
     gap: 0.1rem;
-    margin-top: 0.15rem;
 }
 
-.show-stats .lb-pick-stats-detail {
-    display: flex;
-}
-
-/* Hide compact stats line when game stats detail is shown */
-.show-stats .lb-pick-stats {
-    display: none;
-}
-
-/* Bio detail — toggled by "Bio" switch */
 .lb-pick-bio-detail {
-    display: none;
     font-size: max(var(--fs-floor), 0.68em);
     color: var(--text-dim);
-    margin-top: 0.15rem;
     font-style: italic;
-}
-
-.show-bio .lb-pick-bio-detail {
-    display: block;
-}
-
-/* Expand pill border-radius when any detail is shown */
-.show-pts .lb-pick,
-.show-stats .lb-pick,
-.show-bio .lb-pick,
-.show-journey .lb-pick {
-    border-radius: 1rem;
-    padding: 0.5rem 1rem 0.5rem 0.35rem;
 }
 
 /* ── Journey badges (always visible) ───────────────────────────── */
@@ -917,16 +1043,10 @@ nav a:hover {
 .lb-badge-advantage   { background: rgba(91,143,185,0.15); color: #8ab8dc; }
 .lb-badge-fire        { background: rgba(232,93,38,0.15); color: #f58a5e; }
 
-/* ── Journey timeline (toggled by "Journey" switch) ────────────── */
+/* ── Journey timeline (inside an open card) ────────────────────── */
 .lb-pick-journey {
-    display: none;
-    margin-top: 8px;
     padding-top: 8px;
     border-top: 1px solid var(--ocean-surface);
-}
-
-.show-journey .lb-pick-journey {
-    display: block;
 }
 
 .journey-events {
@@ -1037,6 +1157,7 @@ nav a:hover {
 .lb-special-picks {
     display: flex;
     flex-wrap: wrap;
+    align-items: flex-start;
     gap: 0.5rem;
     margin-top: 0.35rem;
     padding-top: 0.35rem;
@@ -2011,7 +2132,7 @@ small {
 .nav-dropdown-trigger:focus-visible,
 .toc-toggle:focus-visible,
 .toc-close:focus-visible,
-.lb-pick:focus-visible {
+a.lb-pick:focus-visible {
     outline: 2px solid var(--fire-glow);
     outline-offset: 2px;
 }
@@ -2393,15 +2514,30 @@ section > table {
         color: var(--sand-light);
     }
 
-    /* Card header: rank, name, points on one line; extras on a second line */
-    .leaderboard-entry {
-        padding: 0.75rem;
+    /* Team row: rank, name, points on the first line; torches and win %
+       on the second, under the name */
+    details.lb-team > summary.lb-row {
+        grid-template-columns: 1.8rem minmax(0, 1fr) auto 0.9rem;
+        grid-template-areas:
+            "rank id pts chev"
+            "rank meta meta meta";
+        row-gap: 0.3rem;
+        column-gap: 0.5rem;
+        padding: 0.55rem 0.75rem;
     }
 
-    .lb-header {
+    .lb-row .lb-rank {
+        align-self: start;
+    }
+
+    .lb-row-meta {
+        justify-content: flex-start;
         flex-wrap: wrap;
-        align-items: center;
-        gap: 0.2rem 0.5rem;
+        gap: 0.3rem 0.75rem;
+    }
+
+    .lb-roster {
+        padding: 0.4rem 0.6rem 0.75rem;
     }
 
     .lb-rank {
@@ -2411,36 +2547,12 @@ section > table {
 
     .lb-name {
         font-size: 1.1em;
-        flex: 1 1 auto;
         min-width: 0;
         overflow-wrap: anywhere;
     }
 
-    .lb-header .lb-points,
-    .lb-header:not(:has(.lb-win-pct)) .lb-points,
-    .lb-header:has(.lb-ss-pick):not(:has(.lb-win-pct)) .lb-points {
-        order: 0;
-        margin-left: auto;
-        width: auto;
-        padding-left: 0;
+    .lb-row .lb-points {
         font-size: 1.25em;
-    }
-
-    .lb-sub {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.2rem 0.6rem;
-        flex-basis: 100%;
-        padding-left: 2.3rem;
-    }
-
-    .lb-header .lb-ss-pick,
-    .lb-header .lb-win-pct,
-    .lb-header .lb-warning,
-    .lb-header:not(:has(.lb-win-pct)) .lb-ss-pick {
-        order: 0;
-        margin-left: 0;
     }
 
     .lb-win-pct {
@@ -2460,22 +2572,35 @@ section > table {
     }
 
     .lb-pick {
+        --pick-img: 48px;
         min-width: 0;
-        gap: 0.4rem;
-        padding: 0.3rem 0.5rem 0.3rem 0.3rem;
         font-size: 0.85em;
         border-radius: 1.6rem;
-        align-items: center;
     }
 
-    .lb-pick-img {
-        width: 48px;
-        height: 48px;
+    .lb-pick-summary {
+        gap: 0.4rem;
+        padding: 0.3rem 0.5rem 0.3rem 0.3rem;
     }
 
+    /* An open card takes the full row; its detail starts at the left edge */
+    details.lb-pick[open] {
+        grid-column: 1 / -1;
+    }
+
+    .lb-pick-more {
+        padding: 0 0.75rem 0.7rem;
+    }
+
+    /* Break only words that cannot fit a line on their own */
     .lb-pick-info {
         min-width: 0;
-        overflow-wrap: anywhere;
+        overflow-wrap: break-word;
+    }
+
+    /* Compact cards stay compact: the stats line is in the card's detail */
+    .lb-pick-stats {
+        display: none;
     }
 
     .lb-pick-name {
@@ -2491,29 +2616,6 @@ section > table {
         font-size: max(var(--fs-floor), 0.78em);
     }
 
-    .lb-pick-stats {
-        font-size: max(var(--fs-floor), 0.75em);
-    }
-
-    /* A pill showing extra detail needs the full row */
-    .show-pts .lb-picks,
-    .show-stats .lb-picks,
-    .show-bio .lb-picks,
-    .show-journey .lb-picks,
-    .show-pts .lb-special-picks,
-    .show-stats .lb-special-picks,
-    .show-bio .lb-special-picks,
-    .show-journey .lb-special-picks {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
-    .show-pts .lb-pick,
-    .show-stats .lb-pick,
-    .show-bio .lb-pick,
-    .show-journey .lb-pick {
-        align-items: flex-start;
-        padding: 0.5rem 0.75rem 0.5rem 0.4rem;
-    }
 
     /* Keep secondary text legible: nothing under ~11px */
     .lb-breakdown-item { font-size: max(var(--fs-floor), 0.78rem); white-space: normal; }
