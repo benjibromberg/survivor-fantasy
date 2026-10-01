@@ -23,6 +23,7 @@
                 <span class="stat-rank">{{ loop.index }}</span>
                 {% if surv.image_url %}
                 <img src="{{ surv.image_url }}" alt="{{ surv.name }}" class="stat-img"
+                     loading="lazy" decoding="async"
                      {% if surv.tribe_color %}style="border-color: {{ surv.tribe_color }};"{% endif %}>
                 {% endif %}
                 <span class="stat-name">{{ surv.name }}</span>
