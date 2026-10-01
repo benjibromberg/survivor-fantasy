@@ -201,14 +201,22 @@ class Survivor(db.Model):
 
     @property
     def stats_url(self):
-        """Link to the castaway's career profile on survivorstatsdb.com.
+        """Link to this castaway's season page on survivorstatsdb.com.
 
-        The site keys profiles by "career" plus the survivoR castaway_id; the
-        older /castaway/<version_season>/<castaway_id> links now return 500.
+        The season page id is version_season and castaway_id joined (US51US0771).
+        It holds the per-challenge and per-vote history and links on to the
+        career page (career + castaway_id), which is the fallback when the season
+        is unknown. The older /castaway/<version_season>/<castaway_id> paths
+        return 500.
         """
-        if self.castaway_id:
-            return f"https://survivorstatsdb.com/castaway?id=career{self.castaway_id}"
-        return None
+        if not self.castaway_id:
+            return None
+        if self.version_season:
+            return (
+                "https://survivorstatsdb.com/castaway"
+                f"?id={self.version_season}{self.castaway_id}"
+            )
+        return f"https://survivorstatsdb.com/castaway?id=career{self.castaway_id}"
 
     picks = db.relationship("Pick", backref="survivor", lazy=True)
 
