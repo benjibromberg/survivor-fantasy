@@ -11,8 +11,9 @@
 
 <!-- Pick summary per user -->
 <section>
-    <h2>Current Picks</h2>
-    <table>
+    <h2 class="section-title">Current Picks</h2>
+    <div class="table-scroll">
+    <table class="admin-table">
         <thead>
             <tr><th>Player</th><th>Draft</th><th>Wildcard</th><th>Repl (½)</th><th>Repl</th><th>Sole Survivor</th></tr>
         </thead>
@@ -31,11 +32,12 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
 </section>
 
 <!-- Edit picks for a user -->
 <section>
-    <h2>Set Picks for Player</h2>
+    <h2 class="section-title">Set Picks for Player</h2>
     <form method="POST" id="picks-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -158,16 +160,16 @@ function loadUserPicks() {
     if (picks.length === 0) {
         ssDiv.innerHTML = '<p><small>No sole survivor picks yet.</small></p>';
     } else {
-        let html = '<table><thead><tr><th>Episode</th><th>Pick</th><th></th></tr></thead><tbody>';
+        let html = '<div class="table-scroll"><table class="admin-table"><thead><tr><th>Episode</th><th>Pick</th><th></th></tr></thead><tbody>';
         picks.forEach(p => {
             html += `<tr><td>Ep ${p.episode}+</td><td>${p.survivor_name}</td><td>
                 <form method="POST" action="/admin/picks/{{ season.id }}/ss/${p.id}/delete" style="margin:0">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="outline secondary" style="padding:0.15rem 0.4rem;font-size:0.75em"
+                    <button type="submit" class="outline secondary admin-btn-sm"
                             onclick="return confirm('Delete this SS pick?')">×</button>
                 </form></td></tr>`;
         });
-        html += '</tbody></table>';
+        html += '</tbody></table></div>';
         ssDiv.innerHTML = html;
     }
 

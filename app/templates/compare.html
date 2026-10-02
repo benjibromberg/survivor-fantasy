@@ -11,7 +11,7 @@
 {% for comp in comparisons %}
 <article>
     <header>
-        <h2>{{ comp.name }}</h2>
+        <h2 class="section-title">{{ comp.name }}</h2>
         <div class="compare-config">
             {% for key, val in comp.config.items() %}
             {% if val %}
@@ -24,9 +24,9 @@
     </header>
 
     <div>
-        <h3>Final Standings</h3>
+        <h3 class="subsection-title">Final Standings</h3>
         {% for entry in comp.entries %}
-        <div class="compare-row">
+        <div class="compare-row{% if loop.index <= 3 %} compare-podium-{{ loop.index }}{% endif %}">
             <span class="compare-rank">{{ loop.index }}</span>
             <span class="compare-name">{{ entry.user.display_name or entry.user.username }}</span>
             <span class="compare-pts">{{ "%.2f"|format(entry.total_points) }}</span>
@@ -35,11 +35,11 @@
     </div>
     <div class="charts-row" style="margin-top: 1rem;">
         <div class="chart-card">
-            <h3>Season Progression</h3>
+            <h3 class="subsection-title">Season Progression</h3>
             <div class="chart-wrap"><canvas id="chart-{{ loop.index0 }}"></canvas></div>
         </div>
         <div class="chart-card">
-            <h3>Point Breakdown</h3>
+            <h3 class="subsection-title">Point Breakdown</h3>
             <div class="chart-wrap"><canvas id="breakdown-{{ loop.index0 }}"></canvas></div>
         </div>
     </div>

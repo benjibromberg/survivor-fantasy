@@ -27,7 +27,7 @@
 {% if entry %}
 <div class="my-team-stats">
     <div class="my-team-stat">
-        <span class="my-team-stat-value">{{ rank }}<small>/{{ team_count }}</small></span>
+        <span class="my-team-stat-value{{ ' is-leading' if rank == 1 }}">{{ rank }}<small>/{{ team_count }}</small></span>
         <span class="my-team-stat-label">Rank</span>
     </div>
     <div class="my-team-stat">
@@ -44,7 +44,7 @@
 {% endif %}
 
 <article>
-    <h3>Team Name</h3>
+    <h2 class="section-title">Team Name</h2>
     {% if can_rename %}
     <form method="POST" action="{{ url_for('main.my_team_name', season_id=season.id) }}" class="my-team-name-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -61,7 +61,7 @@
 
 {% if wildcard %}
 <article>
-    <h3>Wildcard</h3>
+    <h2 class="section-title">Wildcard</h2>
     {% if wildcard.pick %}
     <p class="my-wildcard-current">
         Your wildcard: <strong>{{ wildcard.pick.survivor.name }}</strong>
@@ -102,7 +102,7 @@
 </article>
 {% endif %}
 
-<h2>Picks</h2>
+<h2 class="section-title">Picks</h2>
 {% if entry and entry.picks %}
 {% for warning in entry.warnings %}
 <p class="lb-warning">{{ warning }}</p>

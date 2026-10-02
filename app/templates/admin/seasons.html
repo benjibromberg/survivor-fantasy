@@ -2,36 +2,37 @@
 {% block title %}Admin - Seasons{% endblock %}
 {% block content %}
 <h1>Manage Seasons</h1>
-<p><a href="{{ url_for('main.admin_players') }}" role="button" class="outline" style="padding:0.25rem 0.75rem;font-size:0.85rem;">Manage Players</a></p>
+<p><a href="{{ url_for('main.admin_players') }}" role="button" class="outline admin-btn-sm">Manage Players</a></p>
 
 <section>
-    <h3>Create New Season</h3>
+    <h2 class="section-title">Create New Season</h2>
     <form method="POST" style="max-width: 28rem;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <label style="margin: 0; font-size: 0.85rem;">
+        <div class="admin-form-row">
+            <label>
                 Season #
-                <input type="number" name="number" required placeholder="50" style="margin: 0; width: 5rem; padding: 0.3rem 0.4rem; font-size: 0.85rem;">
+                <input type="number" name="number" required placeholder="50">
             </label>
-            <label style="display: flex; align-items: center; gap: 0.3rem; margin: 0; font-size: 0.85rem; white-space: nowrap;">
-                <input type="checkbox" name="fetch_images" checked style="margin: 0;">
+            <label>
+                <input type="checkbox" name="fetch_images" checked>
                 Fetch images
             </label>
-            <button type="submit" style="margin: 0; padding: 0.3rem 0.75rem; font-size: 0.85rem; width: auto; white-space: nowrap;">Create</button>
+            <button type="submit">Create</button>
         </div>
     </form>
 </section>
 
 {% if seasons %}
 <section>
-    <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-        <h3 style="margin:0;">Existing Seasons</h3>
+    <div class="admin-form-row">
+        <h2 class="section-title">Existing Seasons</h2>
         <form method="POST" action="{{ url_for('main.admin_export_all_picks') }}" style="margin:0;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="outline" style="padding:0.25rem 0.75rem;font-size:0.85rem;margin:0;">Export All Picks</button>
+            <button type="submit" class="outline admin-btn-sm">Export All Picks</button>
         </form>
     </div>
-    <table>
+    <div class="table-scroll">
+    <table class="admin-table">
         <thead>
             <tr>
                 <th>#</th>
@@ -54,23 +55,27 @@
                 <td>
                     <form method="POST" action="{{ url_for('main.admin_toggle_active', season_id=season.id) }}" style="margin:0">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="checkbox" {% if season.is_active %}checked{% endif %}
-                            onchange="this.form.submit()" style="margin:0">
+                        <label class="admin-check">
+                            <input type="checkbox" {% if season.is_active %}checked{% endif %}
+                                onchange="this.form.submit()">
+                            <span class="visually-hidden">Active season</span>
+                        </label>
                     </form>
                 </td>
-                <td><a href="{{ url_for('main.admin_season_detail', season_id=season.id) }}" role="button" class="outline" style="padding:0.25rem 0.75rem;font-size:0.85rem;">Manage</a></td>
-                <td><a href="{{ url_for('main.admin_players', season_id=season.id) }}" role="button" class="outline" style="padding:0.25rem 0.75rem;font-size:0.85rem;">Players</a></td>
+                <td><a href="{{ url_for('main.admin_season_detail', season_id=season.id) }}" role="button" class="outline admin-btn-sm">Manage</a></td>
+                <td><a href="{{ url_for('main.admin_players', season_id=season.id) }}" role="button" class="outline admin-btn-sm">Players</a></td>
                 <td>
                     <form method="POST" action="{{ url_for('main.admin_delete_season', season_id=season.id) }}" style="margin:0"
                           onsubmit="var c = prompt('This will permanently delete {{ season.name or 'Season ' ~ season.number }} and all its survivors and picks.\n\nType \'delete season\' to confirm:'); return c &amp;&amp; c.trim().toLowerCase() === 'delete season';">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="outline secondary" style="padding:0.25rem 0.75rem;font-size:0.85rem;">Delete</button>
+                        <button type="submit" class="outline secondary admin-btn-sm">Delete</button>
                     </form>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    </div>
 </section>
 {% endif %}
 {% endblock %}

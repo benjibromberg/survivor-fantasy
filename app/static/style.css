@@ -843,9 +843,12 @@ details.lb-team > summary.lb-row:focus-visible {
 }
 
 .my-team-season {
-    font-family: var(--font-label);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-ui);
+    font-size: max(var(--fs-floor), 0.85rem);
+    letter-spacing: 0;
+    text-transform: none;
     text-decoration: none;
     color: var(--text-dim);
     padding: 0.15rem 0.6rem;
@@ -882,6 +885,13 @@ details.lb-team > summary.lb-row:focus-visible {
     font-size: 1.8em;
     line-height: 1.1;
     letter-spacing: 0.03em;
+    color: var(--sand-light);
+}
+
+/* Accent means state, so the rank carries it only while you are leading.
+   Both tiles used to be --torch-gold unconditionally, which made the colour
+   say nothing: identical at rank 1 of 4 and rank 4 of 4. */
+.my-team-stat-value.is-leading {
     color: var(--torch-gold);
 }
 
@@ -948,6 +958,159 @@ details.lb-team > summary.lb-row:focus-visible {
 
 .admin-inline-form button {
     width: auto;
+}
+
+/* Labels sitting beside a field inside an inline form. */
+.admin-inline-form label {
+    margin: 0;
+    white-space: nowrap;
+}
+
+/* --- Admin: shared controls ---------------------------------------------
+   These were inline style attributes repeated across the admin templates.
+   They are lifted here because an inline padding cannot be overridden by the
+   phone block without !important, and a broad !important is what captured the
+   tab bar once already (see the nav:not(.tabbar) rule). Lifting them is what
+   makes the phone tap-target sizes below possible at all. */
+
+/* A row of controls above a table. It wraps rather than squeezing its first
+   field: measured at 375px, the create-season row needed 341px of a 343px
+   box, and the "Season #" label absorbed the 2px shortfall by growing to
+   three text lines while both its siblings stayed on one. */
+.admin-form-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin: 0;
+}
+
+/* :not(.admin-field) matters. This selector is (0,1,1) and .admin-field is
+   (0,1,0), so without it a stacked label/value field placed in this row would
+   be silently flattened back to a row. Media queries add no specificity and
+   neither does source order across classes; exclude rather than out-weigh. */
+.admin-form-row label:not(.admin-field) {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin: 0;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.admin-form-row h2 {
+    margin: 0;
+}
+
+.admin-form-row input {
+    margin: 0;
+    padding: 0.3rem 0.4rem;
+    font-size: 0.85rem;
+}
+
+.admin-form-row input[type="number"] {
+    width: 5rem;
+}
+
+.admin-form-row input[type="checkbox"] {
+    width: auto;
+}
+
+.admin-form-row button {
+    margin: 0;
+    width: auto;
+    white-space: nowrap;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+.admin-form-row form {
+    margin: 0;
+}
+
+/* Label above value, per the pattern the rest of the site uses. The label is
+   a micro-label: condensed caps are right here because it sits above data and
+   carries one word, not a phrase. */
+.admin-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin: 0;
+}
+
+.admin-field-label {
+    font-family: var(--font-label);
+    font-size: max(var(--fs-floor), 0.72rem);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+
+/* Hit area for a bare checkbox. The glyph stays its natural size and the
+   label carries the target, because a 2.5rem checkbox reads as a button. The
+   wrapping label is also what gives the control an accessible name. */
+.admin-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+}
+
+.admin-check input[type="checkbox"] {
+    margin: 0;
+}
+
+/* The compact admin button: Manage, Players, Export, Delete. */
+.admin-btn-sm {
+    width: auto;
+    margin: 0;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+/* A section heading below the page title. It carries a phrase, so it is
+   sentence case in the interface font: condensed caps are for labels that sit
+   above data and carry a word or two, never a phrase.
+
+   Deliberately a class and not a bare `h2` rule. The phone block's h2
+   treatment is being rewritten in another branch right now, and two branches
+   editing one element selector produces a conflict that is also a design
+   disagreement. A class is (0,1,0) and beats the element rule either way, so
+   this is correct before that branch lands and after it. */
+.section-title {
+    font-family: var(--font-ui);
+    font-size: 1.3rem;
+    font-weight: 650;
+    letter-spacing: -0.005em;
+    text-transform: none;
+    color: var(--sand-warm);
+    margin-bottom: 0.5rem;
+}
+
+/* One step below .section-title. Needed because the compare page rendered
+   its h2 at 12.8px and its h3 at 24px, so a section heading was smaller than
+   the subsections inside it. */
+.subsection-title {
+    font-family: var(--font-ui);
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--sand-warm);
+    margin-bottom: 0.4rem;
+}
+
+/* The back link above an admin h1. */
+.admin-page-nav {
+    font-size: 0.9rem;
+}
+
+/* The dim meta line under an admin h1. Uses --text-dim rather than opacity,
+   which would stack with any dimmed parent and lower contrast. */
+.admin-page-meta {
+    font-size: 0.9rem;
+    color: var(--text-dim);
 }
 
 /* A castaway row. On the leaderboard it is a <details>: the summary is the
@@ -1792,30 +1955,34 @@ small {
     border-radius: 4px;
 }
 
-.compare-row:nth-child(1) { background: rgba(252, 163, 17, 0.15); }
-.compare-row:nth-child(2) { background: rgba(252, 163, 17, 0.08); }
-.compare-row:nth-child(3) { background: rgba(252, 163, 17, 0.04); }
+.compare-podium-1 { background: rgba(252, 163, 17, 0.15); }
+.compare-podium-2 { background: rgba(252, 163, 17, 0.08); }
+.compare-podium-3 { background: rgba(252, 163, 17, 0.04); }
 
 .compare-rank {
     font-family: var(--font-label);
     font-weight: 400;
-    color: var(--fire-bright);
-    opacity: 0.6;
+    color: var(--text-dim);
     min-width: 1.5rem;
 }
 
+/* Accent marks the leader, not every row. */
+.compare-podium-1 .compare-rank {
+    color: var(--fire-bright);
+}
+
 .compare-name {
-    font-family: var(--font-heading);
+    font-family: var(--font-ui);
     flex: 1;
     font-weight: 600;
     color: var(--sand-light);
-    letter-spacing: 0.03em;
+    letter-spacing: 0;
 }
 
 .compare-pts {
     font-family: var(--font-label);
     font-weight: 400;
-    color: var(--torch-gold);
+    color: var(--sand-light);
     font-size: 1.1em;
     letter-spacing: 0.03em;
 }
@@ -3189,5 +3356,72 @@ section > table {
     .toc-close {
         font-size: 1.6rem;
         padding: 0.2rem 0.6rem;
+    }
+
+    /* Admin controls are thumb-sized on phones. Measured on main at 375px:
+       36 interactive targets on /admin/players and 31 on /admin/seasons were
+       under the 2.5rem floor, the smallest at 19px. Desktop keeps the denser
+       sizing, which is what draft night actually wants. */
+    .admin-btn-sm,
+    .admin-form-row button,
+    .admin-form-row input:not([type="checkbox"]),
+    .admin-inline-form input,
+    .admin-inline-form button {
+        min-height: 2.5rem;
+    }
+
+    .section-title {
+        font-size: 1.15rem;
+    }
+
+    .admin-page-nav a {
+        display: inline-block;
+        padding: 0.5rem 0;
+        min-height: 2.5rem;
+    }
+
+    /* Season chips were 30.8px and the meta-line link 17px. */
+    .my-team-season {
+        min-height: 2.5rem;
+        padding: 0.15rem 0.75rem;
+    }
+
+    .my-team-sub a {
+        display: inline-block;
+        padding: 0.4rem 0;
+        min-height: 2.5rem;
+    }
+
+    /* Checkboxes were 17-20px. The label takes the target, not the glyph. */
+    .admin-check {
+        min-height: 2.5rem;
+        min-width: 2.5rem;
+    }
+
+    .admin-form-row label:not(.admin-field) {
+        min-height: 2.5rem;
+    }
+
+    /* Opening a row is the main thing you do on these pages from a phone, and
+       the name is the control that does it. Measured at 17px before this.
+       role="button" links already carry .admin-btn-sm and are excluded so they
+       keep their own padding. */
+    .admin-table td a:not([role="button"]) {
+        display: inline-block;
+        padding: 0.5rem 0;
+        min-height: 2.5rem;
+    }
+
+    /* Let a field take the row and push the button onto the next line
+       rather than both shrinking. This targets the field WRAPPER and only
+       direct children, never the input itself: .admin-field is a column flex
+       container, so a flex-basis set on an input inside it is a basis on the
+       VERTICAL axis and renders a 10rem-tall text box. Same family as the
+       flex:1 collapse noted in CLAUDE.md -- in a column container the basis
+       is a height. */
+    .admin-form-row > .admin-field,
+    .admin-form-row > input[type="text"],
+    .admin-form-row > input[type="email"] {
+        flex: 1 1 10rem;
     }
 }
