@@ -202,6 +202,19 @@ class Survivor(db.Model):
     occupation = db.Column(db.String(150))
     personality_type = db.Column(db.String(10))  # MBTI e.g. ENFP
 
+    @property
+    def is_hand_entered(self):
+        """True when an admin typed this castaway in rather than survivoR.
+
+        survivoR has no cast for a season until it premieres, so a league that
+        drafts beforehand enters the castaways by hand (see the admin season
+        page). Every row the dataset produces carries its castaway_id, so a
+        missing one means this castaway has not been matched to the dataset
+        yet: that is what a later reconciliation pass looks for, and why
+        nothing here ever deletes and recreates a Survivor row.
+        """
+        return not self.castaway_id
+
     def get_episode_stats(self):
         """Return parsed episode_stats dict, or empty dict.
 

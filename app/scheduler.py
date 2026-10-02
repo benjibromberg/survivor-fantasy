@@ -14,7 +14,12 @@ def refresh_active_seasons(app):
     independently, so a survivoR download failure does not hold it up.
     """
     with app.app_context():
-        from .data import download_survivor_data, export_all_picks, refresh_season
+        from .data import (
+            download_survivor_data,
+            export_all_picks,
+            hand_entered_survivor_count,
+            refresh_season,
+        )
         from .models import Season
         from .schedule import sync_episode2_time
 
@@ -35,6 +40,15 @@ def refresh_active_seasons(app):
 
         active = Season.query.filter_by(is_active=True).all()
         for season in active:
+            held = hand_entered_survivor_count(season)
+            if held:
+                logger.warning(
+                    f"Auto-refresh skipped season {season.number}: {held} "
+                    "hand-entered castaway(s) would be duplicated rather than "
+                    "matched. This runs unattended, so it declines rather than "
+                    "corrupting the cast."
+                )
+                continue
             try:
                 count, day_warnings = refresh_season(season)
                 logger.info(

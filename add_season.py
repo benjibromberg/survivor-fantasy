@@ -8,6 +8,7 @@ Usage:
     python add_season.py 52 --picks picks/season52.json   # ...and load its draft
     python add_season.py 52 --picks FILE --activate       # ...and make it the active season
     python add_season.py 52 --no-scrape                   # Skip the survivoR download and headshots
+    python add_season.py 52 --cast 18                     # Pre-premiere: no survivoR data yet
 
 If the season already exists, --picks loads a draft into it (only when it has
 no picks yet) and --activate activates it. Pick file format: picks/README.md.
@@ -21,6 +22,21 @@ import sys
 import time
 
 PICK_TYPES = ("d", "w", "pmr_w", "pmr_d")
+
+# A new-era season sends three castaways to the final tribal council, so a
+# smaller announced cast than that is a typo rather than a season.
+MIN_CAST_SIZE = 3
+
+# Substring of the error app.data.refresh_season raises when survivoR has no
+# cast for a season. Only used to add the --cast hint to that one failure; if
+# the wording upstream changes the error still prints, just without the hint.
+NO_UPSTREAM_DATA = "No survivoR data"
+
+CAST_HINT = (
+    "survivoR has no cast for a season until it premieres. To draft before "
+    "then, re-run with --cast N (the announced cast size) and enter the "
+    "castaways on the admin season page."
+)
 
 
 def backup_database(label):
@@ -53,20 +69,66 @@ def backup_database(label):
     return backup_path
 
 
-def create_season(number, scrape=True):
-    """Create a season and populate it from survivoR. Returns the Season.
-
-    The season is created inactive, so the homepage keeps showing the current
-    season until activate() is called. If the data load fails, the empty
-    season is removed again and the error is re-raised.
-    """
-    from app import data
-    from app.models import Season, Survivor, db
+def _check_new_season(number):
+    """Raise ValueError unless this season can be created. No writes."""
+    from app.models import Season
 
     if number < 41:
         raise ValueError("Only new-era seasons (41+) are supported.")
     if Season.query.filter_by(number=number).first():
         raise ValueError(f"Season {number} already exists.")
+
+
+def create_manual_season(number, cast_size):
+    """Create a season whose cast is entered by hand. Returns the Season.
+
+    survivoR publishes a season's cast at its premiere, so a league drafting
+    before then has nothing to read: this creates the (inactive) season from
+    the announced cast size alone, with no castaways and no survivoR access.
+    The admin adds the castaways on the admin season page, and the first
+    Refresh after the premiere fills in everything else.
+
+    cast_size is required rather than defaulted because num_players decides
+    who the winner is and feeds the win probabilities; a silent 18 would be a
+    guess. n_jury and n_finalists stay unknown, the same state as any
+    in-progress season, until survivoR supplies them.
+    """
+    from app.models import Season, db
+
+    _check_new_season(number)
+    if cast_size < MIN_CAST_SIZE:
+        raise ValueError(
+            f"A new-era cast is at least {MIN_CAST_SIZE} (its finalists); "
+            f"got {cast_size}."
+        )
+
+    season = Season(
+        number=number,
+        name=f"Season {number}",
+        is_active=False,
+        num_players=cast_size,
+    )
+    try:
+        db.session.add(season)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    return season
+
+
+def create_season(number, scrape=True):
+    """Create a season and populate it from survivoR. Returns the Season.
+
+    The season is created inactive, so the homepage keeps showing the current
+    season until activate() is called. If the data load fails, the empty
+    season is removed again and the error is re-raised. Before a season has
+    premiered survivoR has no cast for it: use create_manual_season() then.
+    """
+    from app import data
+    from app.models import Season, Survivor, db
+
+    _check_new_season(number)
 
     if scrape:
         data.download_survivor_data()
@@ -219,6 +281,13 @@ def main(argv=None):
         action="store_true",
         help="skip the survivoR download and the headshot fetch",
     )
+    parser.add_argument(
+        "--cast",
+        type=int,
+        metavar="N",
+        help="announced cast size, for a season survivoR has not published "
+        "yet: creates it with no castaways, to be entered on the admin page",
+    )
     args = parser.parse_args(argv)
 
     from dotenv import load_dotenv
@@ -237,6 +306,16 @@ def main(argv=None):
             season = Season.query.filter_by(number=args.season).first()
             if season:
                 print(f"Season {args.season} already exists; not recreating it.")
+            elif args.cast is not None:  # --cast 0 must fail, not fall through
+                print(
+                    f"Creating season {args.season} for a hand-entered cast "
+                    f"of {args.cast}..."
+                )
+                season = create_manual_season(args.season, args.cast)
+                print(
+                    "  No castaways yet: add them in the admin panel, under "
+                    f"{season.name} → Survivors."
+                )
             else:
                 print(f"Creating season {args.season}...")
                 season = create_season(args.season, scrape=not args.no_scrape)
@@ -253,7 +332,8 @@ def main(argv=None):
                     "the toggle on the admin seasons page, when it is ready."
                 )
         except ValueError as e:
-            sys.exit(f"Error: {e}")
+            hint = f"\n{CAST_HINT}" if NO_UPSTREAM_DATA in str(e) else ""
+            sys.exit(f"Error: {e}{hint}")
 
 
 if __name__ == "__main__":
