@@ -2633,8 +2633,12 @@ details.fold[open] > summary {
 
 details.fold > summary h2 {
     margin: 0;
-    font-size: 1.25rem;
-    color: var(--sand-warm);
+    font-family: var(--font-ui);
+    font-size: 1.05rem;
+    font-weight: 650;
+    letter-spacing: -0.005em;
+    text-transform: none;
+    color: var(--sand-light);
 }
 
 /* Pico's chevron floats right; make it a flex item instead */
@@ -2698,18 +2702,29 @@ details.fold > summary:focus-visible {
 
 .fold-controls {
     display: flex;
-    gap: 0.5rem;
-    margin: 0 0 1rem;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin: 0 0 0.75rem;
 }
 
 .fold-controls .fold-all {
-    width: auto;
-    margin: 0;
-    padding: 0.3rem 0.8rem;
-    font-family: var(--font-label);
-    font-size: 0.95rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    all: unset;
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: max(var(--fs-floor), 0.82rem);
+    color: var(--text-dim);
+    border-bottom: 1px solid transparent;
+}
+
+.fold-controls .fold-all:hover {
+    color: var(--fire-glow);
+    border-bottom-color: var(--fire-glow);
+}
+
+/* all: unset drops the focus ring */
+.fold-controls .fold-all:focus-visible {
+    outline: 2px solid var(--fire-glow);
+    outline-offset: 2px;
 }
 
 /* --- Scrollable tables (with edge shadows as a "there is more" hint) --- */
@@ -3309,9 +3324,10 @@ section > table {
         padding: 0.85rem 0.85rem 1rem;
     }
 
+    /* They are links now, not buttons; keep a tap-sized hit area without
+       stretching them across the row. */
     .fold-controls .fold-all {
-        flex: 1;
-        min-height: 2.5rem;
+        padding: 0.5rem 0;
     }
 
     /* Tables: keep columns readable and scroll instead of crushing them */
