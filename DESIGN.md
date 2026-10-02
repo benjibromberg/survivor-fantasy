@@ -297,6 +297,13 @@ Flex row with compare link left; Open all, Close all and the Projected switch ri
 ### Sidebar TOC (`.page-toc`)
 Fixed-position overlay, bottom-left (full-width bottom sheet on phones, 0.95rem links). Toggle button always visible. Panel has Cinzel links with active border-left indicator (fire-bright). Uses IntersectionObserver + localStorage for persistence.
 
+Hidden on phones, and the breakpoint rule names `.page-toc.open` as well as
+`.page-toc`. Without it the base `.page-toc.open` is (0,2,0) and beats a bare
+`.page-toc` inside the breakpoint, so a panel opened at desktop width stayed on
+screen over the tab bar when the window was narrowed or a tablet rotated. The
+script only restores the open state above 1200px, so a reload never showed it
+and only a live resize did. `tests/test_selector_cascade.py` guards it.
+
 ## Decisions Log
 | Date | Decision | Rationale |
 |------|----------|-----------|

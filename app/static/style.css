@@ -3123,8 +3123,15 @@ section > table {
     /* The tab bar is the navigation on phones, so the floating contents
        button goes rather than competing with it for the same corner. The
        page is a scroll and the sections are short. */
+    /* .page-toc.open is (0,2,0) in the base section and would beat a bare
+       .page-toc here, so the open state has to be named. Reachable without a
+       reload: open the contents at desktop width, then narrow or rotate to a
+       phone, and the panel renders over the tab bar, which is the corner the
+       bar is supposed to own. The script only restores the open state above
+       1200px, so a reload clears it and only a live resize shows it. */
     .toc-toggle,
-    .page-toc {
+    .page-toc,
+    .page-toc.open {
         display: none;
     }
 
@@ -3502,8 +3509,15 @@ section > table {
        so the tab-bar clearance has to be repeated rather than inherited. */
     /* Hidden in the 640px block; repeated because this one is later and
        would otherwise bring them back. */
+    /* .page-toc.open is (0,2,0) in the base section and would beat a bare
+       .page-toc here, so the open state has to be named. Reachable without a
+       reload: open the contents at desktop width, then narrow or rotate to a
+       phone, and the panel renders over the tab bar, which is the corner the
+       bar is supposed to own. The script only restores the open state above
+       1200px, so a reload clears it and only a live resize shows it. */
     .toc-toggle,
-    .page-toc {
+    .page-toc,
+    .page-toc.open {
         display: none;
     }
 
