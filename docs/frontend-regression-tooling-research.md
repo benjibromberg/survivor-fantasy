@@ -239,7 +239,7 @@ does exactly this
 ([sync_playwright.py](https://github.com/pamelafox/axe-playwright-python/blob/main/axe_playwright_python/sync_playwright.py)):
 
 ```python
-page.evaluate(self.axe_script)                 # re-injects axe on every call
+page.evaluate(self.axe_script)  # re-injects axe on every call
 command = "axe.run(%s).then(results => {return results;})" % args_str
 response = page.evaluate(command)
 ```
