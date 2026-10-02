@@ -277,7 +277,10 @@ nav {
 
 .nav-dropdown-badge {
     font-family: var(--font-label);
-    font-size: 0.7em;
+    /* The only small item in this file that was a bare em. It rendered at
+       11.3px, under the 12px floor, which also made DESIGN.md's claim that
+       the decorative caret is the only sub-floor text untrue. */
+    font-size: max(var(--fs-floor), 0.7em);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--fire-bright);
@@ -492,6 +495,11 @@ nav:not(.tabbar) a:hover {
 .nav-link-back {
     display: inline-flex;
     align-items: center;
+    /* Its height came from padding in rem while the target floor is 2.5rem,
+       so it cleared the floor at a 16px root and fell under it at 19px: 42px
+       against 47.5px on a 1024pt tablet. A minimum states the intent rather
+       than leaving it to arithmetic that only holds at one root size. */
+    min-height: 2.5rem;
     gap: 0.4rem;
     font-family: var(--font-label);
     font-size: 1em;
@@ -2727,6 +2735,70 @@ details.lb-champion[open] > summary.lb-row {
     .tabbar-sheet-item {
         min-height: 3rem;
     }
+
+    /* ---- Touch targets ------------------------------------------------
+       Everything below was written for phones and lived in the 576 block,
+       which meant none of it reached a tablet. A 1024pt iPad is a touch
+       device with no cursor, so the 2.5rem floor applies there for exactly
+       the reason it applies on a phone. Admin is included deliberately:
+       draft night may happen at a desk, but the same pages get opened on
+       the iPad the rest of the season. */
+
+    .toolbar-toggle {
+        min-height: 2.5rem;
+        padding: 0 0.7rem 0 0.55rem;
+        border: 1px solid var(--card-border);
+        border-radius: 999px;
+        background: var(--deep-ocean);
+        font-size: 1em;
+    }
+    .fold-controls .fold-all {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.5rem;
+    }
+    .admin-btn-sm,
+    .admin-form-row button,
+    .admin-form-row input:not([type="checkbox"]),
+    .admin-inline-form input,
+    .admin-inline-form button {
+        min-height: 2.5rem;
+    }
+    .admin-page-nav a {
+        display: inline-block;
+        padding: 0.5rem 0;
+        min-height: 2.5rem;
+    }
+    /* Season chips were 30.8px and the meta-line link 17px. */
+    .my-team-season {
+        min-height: 2.5rem;
+        padding: 0.15rem 0.75rem;
+    }
+    .my-team-sub a {
+        display: inline-block;
+        padding: 0.4rem 0;
+        min-height: 2.5rem;
+    }
+    /* Checkboxes were 17-20px. The label takes the target, not the glyph. */
+    .admin-check {
+        min-height: 2.5rem;
+        min-width: 2.5rem;
+    }
+    .admin-form-row label:not(.admin-field) {
+        min-height: 2.5rem;
+    }
+    /* The external link at the foot of an open castaway sheet. 18px before,
+       and the only tappable thing on that panel. */
+    .lb-pick-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.5rem;
+    }
+    .admin-table td a:not([role="button"]) {
+        display: inline-block;
+        padding: 0.5rem 0;
+        min-height: 2.5rem;
+    }
 }
 
 .chart-card .chart-wrap canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: 100% !important; }
@@ -3241,6 +3313,13 @@ section > table {
 }
 
 .lb-compare a {
+    /* An inline link is only as tall as its line box, which put this at 20px
+       in the touch band. It is the only route from the leaderboard to the
+       scoring comparison, so it gets a target rather than staying a line of
+       text that happens to be clickable. */
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
     color: var(--text-dim);
     text-decoration: none;
     border-bottom: 1px solid transparent;
@@ -3470,14 +3549,6 @@ section > table {
         gap: 0.4rem;
     }
 
-    .toolbar-toggle {
-        min-height: 2.5rem;
-        padding: 0 0.7rem 0 0.55rem;
-        border: 1px solid var(--card-border);
-        border-radius: 999px;
-        background: var(--deep-ocean);
-        font-size: 1em;
-    }
 
     .toolbar-toggle:has(input:checked) {
         border-color: var(--fire-bright);
@@ -3668,11 +3739,6 @@ section > table {
        stretching them across the row. `all: unset` leaves these display:
        inline, where vertical padding paints but does not give the box layout
        height, so the padding alone measured 37px against the 2.5rem floor. */
-    .fold-controls .fold-all {
-        display: inline-flex;
-        align-items: center;
-        min-height: 2.5rem;
-    }
 
     /* Tables: keep columns readable and scroll instead of crushing them */
     .table-scroll > table {
@@ -3693,67 +3759,25 @@ section > table {
        36 interactive targets on /admin/players and 31 on /admin/seasons were
        under the 2.5rem floor, the smallest at 19px. Desktop keeps the denser
        sizing, which is what draft night actually wants. */
-    .admin-btn-sm,
-    .admin-form-row button,
-    .admin-form-row input:not([type="checkbox"]),
-    .admin-inline-form input,
-    .admin-inline-form button {
-        min-height: 2.5rem;
-    }
 
     .section-title {
         font-size: 1.15rem;
     }
 
-    .admin-page-nav a {
-        display: inline-block;
-        padding: 0.5rem 0;
-        min-height: 2.5rem;
-    }
 
-    /* Season chips were 30.8px and the meta-line link 17px. */
-    .my-team-season {
-        min-height: 2.5rem;
-        padding: 0.15rem 0.75rem;
-    }
 
-    .my-team-sub a {
-        display: inline-block;
-        padding: 0.4rem 0;
-        min-height: 2.5rem;
-    }
 
     .admin-table form {
         margin: 0;
     }
 
-    /* Checkboxes were 17-20px. The label takes the target, not the glyph. */
-    .admin-check {
-        min-height: 2.5rem;
-        min-width: 2.5rem;
-    }
 
-    .admin-form-row label:not(.admin-field) {
-        min-height: 2.5rem;
-    }
 
-    /* The external link at the foot of an open castaway sheet. 18px before,
-       and the only tappable thing on that panel. */
-    .lb-pick-link {
-        display: inline-flex;
-        align-items: center;
-        min-height: 2.5rem;
-    }
 
     /* Opening a row is the main thing you do on these pages from a phone, and
        the name is the control that does it. Measured at 17px before this.
        role="button" links already carry .admin-btn-sm and are excluded so they
        keep their own padding. */
-    .admin-table td a:not([role="button"]) {
-        display: inline-block;
-        padding: 0.5rem 0;
-        min-height: 2.5rem;
-    }
 
     /* Let a field take the row and push the button onto the next line
        rather than both shrinking. This targets the field WRAPPER and only
