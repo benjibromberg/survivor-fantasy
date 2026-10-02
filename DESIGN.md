@@ -25,21 +25,24 @@ Four brand fonts, each with a distinct role, over Pico's system sans for body te
 - **Loading:** Survivant is self-hosted (`/static/fonts/survivant.ttf`, `font-display: swap`). Cinzel and Bebas Neue via Google Fonts CDN.
 
 ### Type Scale
-Sizes are as declared in `style.css` (desktop, then the phone override where one exists). Pico scales the root font with the viewport: 16px on phones, 18px from 768px, 20px from 1280px, 21px from 1536px, so `em` and `rem` sizes grow on larger screens.
+Sizes are as declared in `style.css` (desktop, then the phone override where one exists). Pico scales the root font with the viewport: 16px on phones, 18px from 768px, 20px from 1280px, 21px from 1536px, so `em` and `rem` sizes grow on larger screens. A `rem` figure here is therefore not a pixel figure: `1.05rem` is 16.8px on a phone and 21px at 1280px, and converting one against an assumed 16px root is how a reading of this table goes wrong.
+
+Every row below was read out of a rendered page with `getComputedStyle` rather than from the stylesheet source, because the two disagreed. The font column was stale for five rows after #149 moved the interface on to one sans: it still claimed Cinzel for `h2`, `h3` and player names, and Bebas for ranks, points and badges. Anyone building a new page from the old table would have put Cinzel back on every heading, which is the thing #149 removed.
 
 | Element | Font | Size | Weight | Spacing |
 |---------|------|------|--------|---------|
 | Site logo | Survivant | 1.5em (1.2em phone) | normal | 0.08em (0.05em phone) |
-| h1, h2 | Cinzel | Pico default (h1 1.6rem, h2 1.3rem phone) | default | 0.04em |
-| h3 | Cinzel | Pico default | default | 0.03em |
+| h1 | Cinzel | Pico default (1.6rem phone) | 700 | 0.02em |
+| h2 | system sans (`--font-ui`) | Pico default (1.3rem phone) | 650 | -0.01em |
+| h3 | system sans (`--font-ui`) | Pico default | 600 | -0.005em |
 | Nav buttons | Bebas Neue | 0.95em (1em phone) | 400 | 0.08em |
-| Rank numbers | Bebas Neue | 2em (1.5rem phone) | 400 | -- |
-| Points | Bebas Neue | 1.4em (1.25em phone) | 400 | 0.03em |
-| Player name | Cinzel | 1.25em (1.1em phone) | 700 | 0.03em |
+| Rank numbers | system sans (`--font-ui`) | 0.95em (1.5rem phone) | 600 | -- |
+| Points | system sans (`--font-ui`) | 1.05em (1.25em phone) | 650 | -0.01em |
+| Player name | system sans (`--font-ui`) | 1em (1.1em phone) | 650 | -0.005em |
 | Castaway name | Palatino | inherits the pill (0.92em phone) | 600 | 0.02em |
 | Pick meta | system sans | 0.78em, floor 12px | -- | -- |
 | Stat values | Bebas Neue | 1.2em | 400 | -- |
-| Badge text | Bebas Neue | 0.6-0.8em, floor 12px | -- | 0.5px-0.04em |
+| Badge text | system sans (`--font-ui`) | max(12px, 0.72em) | 600 | -- |
 
 ### Size Floor
 - No text is smaller than `--fs-floor` (12px). The research for the design pass measured pill and badge text at 9-11px on phones, because small UI text is sized in `em` and the sizes nest (pill, then line, then badge).
@@ -227,6 +230,52 @@ Below 640px the top nav's links are hidden and the primary destinations live in 
 ### Season Timeline (`.season-timeline`)
 Horizontal scrollable row of episode dots. Point widths on phones are tuned so a typical in-progress season fits **without** scrolling, because the script scrolls the active dot into view on load: when the row overflows by even a little, that pushes the first milestone label off the left edge, where it reads as a truncated word rather than as something scrolled. A long season still scrolls, which is fine. The connecting line is drawn per point (`.tl-point::before`) so it scrolls with the dots. Milestone dots (Premiere, Merge, Finale) are larger with labels. Active dot gets fire-bright color and is scrolled into view on load. On phones each point is at least 2.75rem wide and only milestone and active labels show.
 
+### Section Headings (`.section-title`, `.subsection-title`)
+A page's section headings carry a phrase, so they are sentence case in
+`--font-ui`: condensed caps are for labels that sit above data and carry a word
+or two. `.section-title` is 1.3rem (1.15rem on phones) in `--sand-warm`;
+`.subsection-title` is 1.05rem and sits one step below it.
+
+Both are classes rather than bare `h2` / `h3` rules, and deliberately so. The
+element rules are shared with every page and are being changed in more than one
+branch at a time; a class is (0,1,0) and wins over an element rule regardless of
+source order or media query, so a page's headings cannot be quietly restyled by
+work happening elsewhere. Use these on any new page rather than relying on what
+the bare `h2` rule happens to be.
+
+Heading levels follow document order with no skipped levels: an `h1` is followed
+by `h2`, not by `h3`. Several pages used `h3` directly under the page title,
+which both skipped a level and painted a section heading in `--fire-glow`.
+
+### Admin Controls (`.admin-*`)
+The admin templates kept their styling in inline `style` attributes. They are
+components now, and the reason is mechanical rather than tidiness: an inline
+`padding` cannot be overridden by the phone block without `!important`, so the
+tap-target floor could not be met while the inline styles remained, and a broad
+`!important` is what captured the tab bar in #149.
+
+- `.admin-form-row` -- a row of controls above a table. Wraps rather than
+  squeezing its first field. Its label rule is written `:not(.admin-field)`,
+  because at (0,1,1) it would otherwise out-specify a stacked `.admin-field`
+  and silently flatten it back into a row.
+- `.admin-field` -- label above value, with `.admin-field-label` as the micro
+  label. Note it is a **column** flex container, so a `flex-basis` set on a
+  child is a basis on the vertical axis; size the wrapper, never the input.
+- `.admin-btn-sm` -- the compact admin button. Dense on desktop, which is what
+  draft night wants; at least 2.5rem tall on phones.
+- `.admin-check` -- hit area for a bare checkbox. The glyph stays its natural
+  size and the wrapping label carries the 2.5rem target, because a 2.5rem
+  checkbox reads as a button. The label is also what gives the control an
+  accessible name.
+- `.admin-page-nav`, `.admin-page-meta` -- the back link and the dim meta line
+  under an admin `h1`.
+
+Admin tables are wrapped in `.table-scroll`. They already scrolled without it,
+via `article > table, section > table`, but only `.table-scroll` paints the
+edge-shadow gradients, so nothing told you the content continued. The wrapper
+also returns the table to `display: table` rather than the `display: block`
+the fallback needs.
+
 ### Stats Grid (`.stats-grid`)
 3-column CSS Grid for stat items. Each item has a label (Bebas Neue, dim) and value. Drops to 1-column at 576px.
 
@@ -250,4 +299,6 @@ Fixed-position overlay, bottom-left (full-width bottom sheet on phones, 0.95rem 
 | 2026-10-01 | Phone tab bar; one interface font | Navigation moved to a bottom bar so the phone header stops wrapping to three rows. Cinzel narrowed to h1 and Bebas to micro-labels, with a system sans carrying the interface, because three decorative families at once read as unpolished. Survivant, Palatino on castaway names, the torches and the fire accent stay: they carry the theme without being in the way of the data. |
 | 2026-10-01 | Castaway sheet | Tribe-tinted hero plus Summary / Journey / Episodes tabs, replacing the stacked detail block. Tabs are progressive: the strip is hidden until script reveals it. |
 | 2026-10-01 | Rosters as list rows | Replaced the 2-up pill grid. Denser, and it gives points a consistent right-aligned column. |
+| 2026-10-02 | Accent means state, applied beyond the leaderboard | My Team and compare painted rank and points in the champion colour unconditionally, so rank 1 of 4 and rank 4 of 4 looked identical and the colour carried no information. The accent now marks the leader and live state only, which is what #149 established on the leaderboard. |
+| 2026-10-02 | Type Scale table corrected against the rendered page | Five rows still named Cinzel or Bebas for things #149 had moved to the interface sans, and the tracking figures for h1-h3 were from before that pass. The table is the first thing a new page is built from, so a stale row re-introduces exactly what the pass removed. |
 | 2026-10-01 | Responsive + readability pass (v2) | Consolidated all breakpoints at end of `style.css`; nav wraps instead of overflowing; header split via `.lb-sub`; 2-up pick grid; chips for toolbar toggles; scrollable timeline; collapsible `details.fold` sections with TOC integration for rules and analysis; `68ch` reading measure |
