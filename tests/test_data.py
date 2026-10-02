@@ -484,14 +484,19 @@ class TestReadEpisodes:
         import pathlib
         import re
 
-        app_dir = pathlib.Path(__file__).resolve().parent.parent / "app"
-        reads = [
-            f"{path.name}: {line.strip()}"
-            for path in sorted(app_dir.rglob("*.py"))
-            for line in path.read_text().splitlines()
-            if re.search(r"read_excel\(.*Episodes", line)
-        ]
+        # Matched over each file's whole text, not line by line, so a call
+        # split across lines (which is what a formatter does to a long one)
+        # is still found. Counting rather than comparing a source line also
+        # means reformatting data.py cannot fail this test spuriously.
+        pattern = re.compile(r"read_excel\(\s*[^)]*?[\"']Episodes[\"']", re.DOTALL)
 
-        assert reads == [
-            'data.py: return pd.read_excel(SURVIVOR_DATA_FILE, "Episodes")'
-        ]
+        app_dir = pathlib.Path(__file__).resolve().parent.parent / "app"
+        reads = {
+            path.relative_to(app_dir).as_posix(): len(pattern.findall(path.read_text()))
+            for path in sorted(app_dir.rglob("*.py"))
+        }
+        reads = {name: n for name, n in reads.items() if n}
+
+        assert reads == {"data.py": 1}, (
+            f"the Episodes sheet should be read once, in data.read_episodes(); found {reads}"
+        )
