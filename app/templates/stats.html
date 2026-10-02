@@ -28,7 +28,7 @@
                 {% endif %}
                 <span class="stat-name">{{ surv.name }}</span>
                 {% if surv.tribe %}
-                <span class="stat-tribe" {% if surv.tribe_color %}style="color: {{ surv.tribe_color }};"{% endif %}>{{ surv.tribe }}</span>
+                <span class="stat-tribe" {% if surv.tribe_color %}style="color: {{ surv.tribe_color|contrast }};"{% endif %}>{{ surv.tribe }}</span>
                 {% endif %}
                 <span class="stat-value">{{ row.value }}</span>
             </{% if surv.stats_url %}a{% else %}div{% endif %}>

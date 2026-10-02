@@ -1773,10 +1773,14 @@ a.stat-row.eliminated:hover .stat-value {
     white-space: nowrap;
 }
 
+/* No opacity. DESIGN.md rules out dimming text with it, and here it was
+   compositing a tribe colour down to 3.57:1 (Cila) and 2.80:1 (Vatu) at 12px,
+   under the 4.5:1 AA threshold. Without it the same three measure 7.51, 5.40
+   and 10.09. The colour is the information on this label, so it is carried at
+   full strength and the contrast filter keeps it legible. */
 .stat-tribe {
     font-size: 0.75em;
     text-transform: uppercase;
-    opacity: 0.6;
     justify-self: center;
 }
 
@@ -3529,9 +3533,13 @@ section > table {
     }
 
     /* They are links now, not buttons; keep a tap-sized hit area without
-       stretching them across the row. */
+       stretching them across the row. `all: unset` leaves these display:
+       inline, where vertical padding paints but does not give the box layout
+       height, so the padding alone measured 37px against the 2.5rem floor. */
     .fold-controls .fold-all {
-        padding: 0.5rem 0;
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.5rem;
     }
 
     /* Tables: keep columns readable and scroll instead of crushing them */
@@ -3621,6 +3629,14 @@ section > table {
     }
 
     .admin-form-row label:not(.admin-field) {
+        min-height: 2.5rem;
+    }
+
+    /* The external link at the foot of an open castaway sheet. 18px before,
+       and the only tappable thing on that panel. */
+    .lb-pick-link {
+        display: inline-flex;
+        align-items: center;
         min-height: 2.5rem;
     }
 
