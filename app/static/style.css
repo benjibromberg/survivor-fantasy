@@ -3180,7 +3180,14 @@ section > table {
         margin-bottom: 0.15rem;
     }
 
-    h2 {
+    /* On the leaderboard the column header already names the table, so the
+       heading above it is a quiet label. Everywhere else the h2 is how you
+       navigate the page and has to keep its presence, which is why this is
+       scoped by id rather than applied to every h2 on the site. */
+    h2#standings,
+    h2#progression,
+    h2#charts,
+    h2#stats {
         font-size: max(var(--fs-floor), 0.8rem);
         font-weight: 600;
         letter-spacing: 0.1em;
@@ -3188,6 +3195,8 @@ section > table {
         color: var(--text-dim);
         margin-bottom: 0.5rem;
     }
+
+    h2 { font-size: 1.15rem; }
 
     hgroup {
         margin-bottom: 0.75rem;

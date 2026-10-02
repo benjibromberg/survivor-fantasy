@@ -1,8 +1,10 @@
 import json
 import logging
+from datetime import date
 
 from flask import (
     Blueprint,
+    abort,
     current_app,
     flash,
     redirect,
@@ -19,7 +21,9 @@ from .data import (
     export_all_picks,
     export_season_picks,
     generate_season_images,
+    hand_entered_survivor_count,
     refresh_season,
+    store_uploaded_headshot,
 )
 from .models import (
     TEAM_NAME_MAX_LENGTH,
@@ -168,7 +172,18 @@ EPISODE_COLUMNS = (
 )
 
 
-def _episode_rows(survivor, as_of_episode=None):
+def _air_date_label(iso_date):
+    """An ISO air date as "Oct 2, 2024", or None if it cannot be read."""
+    if not iso_date:
+        return None
+    try:
+        day = date.fromisoformat(iso_date)
+    except (TypeError, ValueError):
+        return None
+    return f"{day:%b} {day.day}, {day.year}"
+
+
+def _episode_rows(survivor, as_of_episode=None, episode_info=None):
     """Per-episode activity for one castaway, for the sheet's Episodes tab.
 
     Two things about episode_stats make the obvious reading wrong. Its totals
@@ -176,7 +191,12 @@ def _episode_rows(survivor, as_of_episode=None):
     episode before it. And it keeps repeating the final totals for every
     episode after the castaway is voted out, so rows have to stop at the
     elimination episode or the table shows a boot still playing.
+
+    episode_info is the season's titles and air dates (Season.episode_info),
+    passed in rather than read per castaway. Either can be missing: survivoR
+    lists a scheduled episode before it has a title.
     """
+    info = episode_info or {}
     raw = survivor.get_episode_stats()
     if not raw:
         return []
@@ -197,9 +217,12 @@ def _episode_rows(survivor, as_of_episode=None):
             (label, (cur.get(key) or 0) - (prev.get(key) or 0))
             for key, label in EPISODE_COLUMNS
         ]
+        episode = info.get(str(ep), {})
         rows.append(
             {
                 "episode": ep,
+                "title": episode.get("title"),
+                "air_date": _air_date_label(episode.get("date")),
                 "tribe": cur.get("tribe"),
                 "tribe_color": cur.get("tribe_color"),
                 # The end of this castaway's game, which is NOT the same as
@@ -869,6 +892,9 @@ def leaderboard(season_id):
     target_episode = (
         elim_to_episode.get(effective_as_of, 0) if as_of is not None else None
     )
+    # One parse for the whole page: the titles are the season's, not each
+    # castaway's, so this does not belong inside the loop.
+    episode_info = season.get_episode_info()
     for entry in leaderboard_data:
         for pick in entry["picks"]:
             surv = pick.get("survivor_obj")
@@ -878,7 +904,7 @@ def leaderboard(season_id):
                 )
                 pick["journey_events"] = events
                 pick["journey_badges"] = badges
-                pick["episode_rows"] = _episode_rows(surv, target_episode)
+                pick["episode_rows"] = _episode_rows(surv, target_episode, episode_info)
             else:
                 pick["journey_events"] = []
                 pick["journey_badges"] = []
@@ -2139,6 +2165,7 @@ def admin_season_detail(season_id):
         "admin/season_detail.html",
         season=season,
         survivors=survivors,
+        removable_ids=_removable_survivor_ids(survivors),
         scoring_systems=SCORING_SYSTEMS,
         config_labels=CONFIG_LABELS,
         current_config=current_config,
@@ -2239,6 +2266,17 @@ def admin_refresh(season_id):
         return denied
 
     season = Season.query.get_or_404(season_id)
+
+    held = hand_entered_survivor_count(season)
+    if held:
+        flash(
+            f"Not refreshed. Season {season.number} has {held} hand-entered "
+            "castaway(s), and a refresh would add survivoR's cast beside them "
+            "instead of matching them, leaving every castaway in the season "
+            "twice. Matching is not built yet.",
+            "error",
+        )
+        return redirect(url_for("main.admin_season_detail", season_id=season.id))
 
     # Auto-export picks before refresh (so picks are preserved if refresh changes data)
     try:
@@ -2359,7 +2397,156 @@ def admin_delete_season(season_id):
     return redirect(url_for("main.admin_seasons"))
 
 
-# --- Admin: Update Survivors ---
+# --- Admin: Survivors ---
+
+# Survivor.name's column width. A castaway's name is also how picks are
+# exported and how a hand-entered castaway will later be matched to survivoR,
+# so names have to be unique within a season.
+SURVIVOR_NAME_MAX_LENGTH = 100
+
+
+def _picked_survivor_ids(survivor_ids):
+    """Which of these castaways a player has picked, in two queries, never N+1.
+
+    Matched on survivor_id alone rather than also on season_id, so a pick whose
+    season_id disagrees with its castaway's still counts as a pick.
+    """
+    if not survivor_ids:
+        return set()
+    picked = set()
+    for model in (Pick, SoleSurvivorPick):
+        picked.update(
+            sid
+            for (sid,) in db.session.query(model.survivor_id)
+            .filter(model.survivor_id.in_(survivor_ids))
+            .distinct()
+        )
+    return picked
+
+
+def _removable_survivor_ids(survivors):
+    """Ids of hand-entered castaways nobody has picked, which Remove undoes."""
+    hand_entered = [s.id for s in survivors if s.is_hand_entered]
+    return set(hand_entered) - _picked_survivor_ids(hand_entered)
+
+
+@main_bp.route("/admin/season/<int:season_id>/survivors/add", methods=["POST"])
+@login_required
+def admin_add_survivor(season_id):
+    """Add one castaway to a season by hand, with an optional headshot.
+
+    survivoR publishes a season's cast at its premiere, so before then this is
+    the only way to have castaways to draft. The row is created with no
+    castaway_id (see Survivor.is_hand_entered), which is what marks it as not
+    yet matched to the dataset.
+    """
+    denied = _require_admin()
+    if denied:
+        return denied
+
+    season = db.get_or_404(Season, season_id)
+    back = redirect(url_for("main.admin_season_detail", season_id=season.id))
+
+    name = " ".join((request.form.get("name") or "").split())
+    if not name:
+        flash("Enter the castaway's name.", "error")
+        return back
+    if len(name) > SURVIVOR_NAME_MAX_LENGTH:
+        flash(
+            f"A castaway's name can be at most {SURVIVOR_NAME_MAX_LENGTH} characters.",
+            "error",
+        )
+        return back
+    clash = Survivor.query.filter(
+        Survivor.season_id == season.id,
+        db.func.lower(Survivor.name) == name.lower(),
+    ).first()
+    if clash:
+        flash(
+            f"{clash.name} is already in {season.name or f'season {season.number}'}.",
+            "error",
+        )
+        return back
+
+    # Stored before the row is created, so a bad image adds nobody at all
+    image_url = None
+    upload = request.files.get("headshot")
+    if upload and upload.filename:
+        try:
+            image_url = store_uploaded_headshot(season.number, upload.stream)
+        except ValueError as e:
+            flash(str(e), "error")
+            return back
+
+    try:
+        db.session.add(
+            Survivor(
+                season_id=season.id,
+                name=name,
+                voted_out_order=0,  # still in the game
+                image_url=image_url,
+            )
+        )
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception("Adding castaway %r to season %s failed", name, season.id)
+        flash(f"Could not add {name}.", "error")
+        return back
+
+    flash(f"Added {name}.", "success")
+    return back
+
+
+@main_bp.route(
+    "/admin/season/<int:season_id>/survivors/<int:survivor_id>/remove",
+    methods=["POST"],
+)
+@login_required
+def admin_remove_survivor(season_id, survivor_id):
+    """Undo a hand entry: delete a castaway nobody has picked.
+
+    Only ever an undo of admin_add_survivor. It refuses a castaway that came
+    from survivoR, and refuses one that any player has picked, because a pick
+    is the one thing that must survive: nothing in this feature deletes and
+    recreates a Survivor row.
+    """
+    denied = _require_admin()
+    if denied:
+        return denied
+
+    season = db.get_or_404(Season, season_id)
+    survivor = db.session.get(Survivor, survivor_id)
+    if survivor is None or survivor.season_id != season.id:
+        abort(404)
+    back = redirect(url_for("main.admin_season_detail", season_id=season.id))
+
+    if not survivor.is_hand_entered:
+        flash(
+            f"{survivor.name} came from survivoR, so they cannot be removed here.",
+            "error",
+        )
+        return back
+    if _picked_survivor_ids([survivor.id]):
+        flash(
+            f"{survivor.name} is on someone's team. Change the picks first, "
+            "under Manage Picks.",
+            "error",
+        )
+        return back
+
+    name = survivor.name
+    try:
+        db.session.delete(survivor)
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception("Removing castaway %s failed", survivor_id)
+        flash(f"Could not remove {name}.", "error")
+        return back
+
+    flash(f"Removed {name}.", "success")
+    return back
 
 
 @main_bp.route("/admin/season/<int:season_id>/survivors", methods=["POST"])

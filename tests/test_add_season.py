@@ -215,6 +215,122 @@ class TestCreateSeason:
             add_season.create_season(40, scrape=False)
 
 
+class TestCreateManualSeason:
+    """The pre-premiere path: survivoR has no cast for a season until it airs."""
+
+    def test_creates_an_inactive_season_with_no_castaways(self, app):
+        _, db = app
+        from app.models import Season, Survivor
+
+        _season(db, number=60, active=True)
+
+        season = add_season.create_manual_season(61, 18)
+
+        assert season.is_active is False
+        assert Survivor.query.filter_by(season_id=season.id).count() == 0
+        assert [s.number for s in Season.query.filter_by(is_active=True)] == [60]
+
+    def test_records_the_announced_cast_size(self, app):
+        """num_players would otherwise be the model's silent default of 18."""
+        _, _db = app
+
+        season = add_season.create_manual_season(61, 24)
+
+        assert season.num_players == 24
+
+    def test_leaves_the_jury_unknown_until_survivor_data_arrives(self, app):
+        """n_jury and n_finalists are survivoR's to supply, never guessed here."""
+        _, _db = app
+
+        season = add_season.create_manual_season(61, 18)
+
+        assert season.left_at_jury is None
+        assert season.n_finalists is None
+
+    def test_reads_nothing_from_survivor_data(self, app, monkeypatch):
+        _, _db = app
+
+        def boom(*_args, **_kwargs):
+            raise AssertionError("the hand-entered path must not touch survivoR")
+
+        monkeypatch.setattr("app.data.download_survivor_data", boom)
+        monkeypatch.setattr("app.data.refresh_season", boom)
+
+        assert add_season.create_manual_season(61, 18).number == 61
+
+    def test_refuses_an_existing_season(self, app):
+        _, db = app
+        _season(db, number=61)
+
+        with pytest.raises(ValueError, match="already exists"):
+            add_season.create_manual_season(61, 18)
+
+    def test_refuses_pre_new_era_seasons(self, app):
+        with pytest.raises(ValueError, match="41"):
+            add_season.create_manual_season(40, 18)
+
+    def test_refuses_a_cast_too_small_to_be_a_season(self, app):
+        _, _db = app
+        from app.models import Season
+
+        with pytest.raises(ValueError, match="cast"):
+            add_season.create_manual_season(61, 0)
+
+        assert Season.query.filter_by(number=61).first() is None
+
+
+class TestMainHandEnteredHint:
+    def test_missing_survivor_data_points_at_the_cast_flag(self, app, monkeypatch):
+        """The dead end this path exists for should say how to get past it."""
+        _, _db = app
+
+        def boom(_season):
+            raise ValueError("No survivoR data for season 61")
+
+        monkeypatch.setattr("app.data.refresh_season", boom)
+
+        with pytest.raises(SystemExit) as exit_info:
+            add_season.main(["61", "--no-scrape"])
+
+        assert "--cast" in str(exit_info.value)
+
+    def test_the_flag_creates_the_season_without_survivor_data(self, app, monkeypatch):
+        _, _db = app
+        from app.models import Season
+
+        def boom(*_args, **_kwargs):
+            raise AssertionError("the hand-entered path must not touch survivoR")
+
+        monkeypatch.setattr("app.data.download_survivor_data", boom)
+        monkeypatch.setattr("app.data.refresh_season", boom)
+
+        add_season.main(["61", "--cast", "18"])
+
+        season = Season.query.filter_by(number=61).first()
+        assert season is not None
+        assert season.num_players == 18
+        assert season.is_active is False
+
+    def test_a_cast_size_of_zero_fails_instead_of_reading_survivor_data(
+        self, app, monkeypatch
+    ):
+        """A falsy --cast must not fall through to the survivoR path."""
+        _, _db = app
+        from app.models import Season
+
+        def boom(*_args, **_kwargs):
+            raise AssertionError("the hand-entered path must not touch survivoR")
+
+        monkeypatch.setattr("app.data.download_survivor_data", boom)
+        monkeypatch.setattr("app.data.refresh_season", boom)
+
+        with pytest.raises(SystemExit) as exit_info:
+            add_season.main(["61", "--cast", "0"])
+
+        assert "cast" in str(exit_info.value)
+        assert Season.query.filter_by(number=61).first() is None
+
+
 class TestActivate:
     def test_activating_deactivates_the_others(self, app, monkeypatch):
         _, db = app

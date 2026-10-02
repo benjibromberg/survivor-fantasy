@@ -107,11 +107,16 @@ def episode2_from_premiere(episodes, season_number):
 
 
 def survivor_episode2_start(season_number):
-    """Episode 2 estimated from the local survivoR dataset, or None."""
+    """Episode 2 estimated from the local survivoR dataset, or None.
+
+    The sheet is read by data.read_episodes(), which also feeds the stored
+    episode titles, so the air date here and the dates shown on a castaway's
+    sheet cannot come from different reads.
+    """
     from . import data
 
     try:
-        episodes = pd.read_excel(data.SURVIVOR_DATA_FILE, "Episodes")
+        episodes = data.read_episodes()
     except (OSError, ValueError, KeyError) as e:
         logger.warning("survivoR Episodes sheet unavailable: %s", e)
         return None

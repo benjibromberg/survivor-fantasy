@@ -66,6 +66,9 @@ class Season(db.Model):
     episode2_manual = db.Column(db.Boolean, default=False)
     # Admin switch: False keeps wildcards admin-entered even with a known time
     wildcard_self_service = db.Column(db.Boolean, default=True)
+    # JSON: {episode: {title, date}} from the survivoR Episodes sheet, keyed by
+    # episode number as a string so it lines up with Survivor.episode_stats.
+    episode_info = db.Column(db.Text)
     survivors = db.relationship("Survivor", backref="season", lazy=True)
     picks = db.relationship("Pick", backref="season", lazy=True)
 
@@ -129,6 +132,26 @@ class Season(db.Model):
         except json.JSONDecodeError:
             return {}
 
+    def get_episode_info(self):
+        """Parsed episode_info ({episode: {title, date}}), or an empty dict.
+
+        Parsed once per instance, cached on the raw column text so a refresh
+        that rewrites it invalidates the cache rather than serving the old
+        titles (the same pattern as Survivor.get_episode_stats).
+        """
+        raw = self.episode_info
+        cached = getattr(self, "_episode_info_cache", None)
+        if cached is not None and cached[0] is raw:
+            return cached[1]
+        parsed = {}
+        if raw:
+            try:
+                parsed = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                parsed = {}
+        self._episode_info_cache = (raw, parsed)
+        return parsed
+
 
 class Survivor(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -178,6 +201,19 @@ class Survivor(db.Model):
     state = db.Column(db.String(100))
     occupation = db.Column(db.String(150))
     personality_type = db.Column(db.String(10))  # MBTI e.g. ENFP
+
+    @property
+    def is_hand_entered(self):
+        """True when an admin typed this castaway in rather than survivoR.
+
+        survivoR has no cast for a season until it premieres, so a league that
+        drafts beforehand enters the castaways by hand (see the admin season
+        page). Every row the dataset produces carries its castaway_id, so a
+        missing one means this castaway has not been matched to the dataset
+        yet: that is what a later reconciliation pass looks for, and why
+        nothing here ever deletes and recreates a Survivor row.
+        """
+        return not self.castaway_id
 
     def get_episode_stats(self):
         """Return parsed episode_stats dict, or empty dict.
