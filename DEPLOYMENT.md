@@ -351,11 +351,15 @@ Each run first backs the database up to `data/backups/`. What the steps do:
   `castaway_id`, which is how that page marks them *hand-entered*, and they
   can be removed until someone picks them.
 
-  **Do not Refresh a hand-entered season.** Matching those castaways to
-  survivoR once it publishes the season is not built yet: a refresh keys on
-  `castaway_id`, so it adds the dataset's castaways as new rows beside the
-  hand-entered ones. The picks keep pointing at the hand-entered rows, so
-  nothing is lost, but the season then holds each castaway twice.
+  **A hand-entered season will not refresh, by design.** Matching those
+  castaways to survivoR once it publishes the season is not built yet: a
+  refresh keys on `castaway_id`, so it would add the dataset's castaways as new
+  rows beside the hand-entered ones, leaving the season holding each castaway
+  twice (the picks keep pointing at the hand-entered rows, so nothing is lost).
+  Rather than relying on the admin remembering, both paths decline: the Refresh
+  button flashes why, and the daily 8am job logs and skips the season. The
+  unattended path is the one that matters, because a pre-premiere season is
+  normally the active one. Both resume automatically once matching lands.
 - **`--picks`:** loads a draft into a season that has no picks yet. The whole
   file is checked first: every castaway name has to match the season's
   castaways exactly, and every pick type has to be a known code. If anything is

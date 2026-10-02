@@ -624,3 +624,86 @@ class TestDraftBeforeThePremiere:
         assert exported["sole_survivor_picks"]["Pat"] == [
             {"survivor": "Cy", "episode": 1}
         ]
+
+
+# ── Refresh is held back until reconciliation exists ──────────────────────
+
+
+class TestRefreshIsHeldBack:
+    """A refresh of a hand-entered season would duplicate its cast.
+
+    refresh_season() keys existing castaways on castaway_id and skips rows
+    that have none, so it inserts the dataset's cast beside the hand-entered
+    one. Telling the admin not to press Refresh is documentation; this is the
+    guard. Both entry points are covered, because the daily job runs
+    unattended and a pre-premiere season is exactly the kind that is active.
+    """
+
+    @pytest.fixture()
+    def spy(self, monkeypatch):
+        """Record refresh_season calls instead of performing them."""
+        from app import data, routes
+
+        called = []
+
+        def fake_refresh(season):
+            called.append(season.number)
+            return 0, []
+
+        monkeypatch.setattr(routes, "refresh_season", fake_refresh)
+        monkeypatch.setattr(data, "refresh_season", fake_refresh)
+        monkeypatch.setattr(routes, "download_survivor_data", lambda: None)
+        monkeypatch.setattr(data, "download_survivor_data", lambda: None)
+        return called
+
+    def _refresh(self, league, season):
+        return league.c.post(f"/admin/season/{season.id}/refresh")
+
+    def test_the_admin_button_refuses_a_hand_entered_season(self, league, spy):
+        _login(league.c)
+        _add(league, "Bo")
+
+        self._refresh(league, league.pre)
+
+        assert spy == [], "refresh_season ran on a season it would have duplicated"
+
+    def test_the_admin_button_says_why_it_refused(self, league, spy):
+        _login(league.c)
+        _add(league, "Bo")
+
+        self._refresh(league, league.pre)
+
+        assert any("hand-entered" in m for m in _errors(league.c))
+
+    def test_the_admin_button_still_refreshes_a_published_season(self, league, spy):
+        _login(league.c)
+
+        self._refresh(league, league.published)
+
+        assert spy == [51]
+
+    def test_the_daily_job_skips_a_hand_entered_season(self, league, spy):
+        from flask import current_app
+
+        from app.scheduler import refresh_active_seasons
+
+        _login(league.c)
+        _add(league, "Bo")
+        league.pre.is_active = True
+        league.db.session.commit()
+
+        refresh_active_seasons(current_app._get_current_object())
+
+        assert 52 not in spy
+
+    def test_the_daily_job_still_refreshes_a_published_season(self, league, spy):
+        from flask import current_app
+
+        from app.scheduler import refresh_active_seasons
+
+        league.published.is_active = True
+        league.db.session.commit()
+
+        refresh_active_seasons(current_app._get_current_object())
+
+        assert spy == [51]

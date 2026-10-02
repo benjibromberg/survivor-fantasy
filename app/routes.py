@@ -20,6 +20,7 @@ from .data import (
     export_all_picks,
     export_season_picks,
     generate_season_images,
+    hand_entered_survivor_count,
     refresh_season,
     store_uploaded_headshot,
 )
@@ -2242,6 +2243,17 @@ def admin_refresh(season_id):
         return denied
 
     season = Season.query.get_or_404(season_id)
+
+    held = hand_entered_survivor_count(season)
+    if held:
+        flash(
+            f"Not refreshed. Season {season.number} has {held} hand-entered "
+            "castaway(s), and a refresh would add survivoR's cast beside them "
+            "instead of matching them, leaving every castaway in the season "
+            "twice. Matching is not built yet.",
+            "error",
+        )
+        return redirect(url_for("main.admin_season_detail", season_id=season.id))
 
     # Auto-export picks before refresh (so picks are preserved if refresh changes data)
     try:
