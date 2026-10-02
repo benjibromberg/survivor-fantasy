@@ -2560,6 +2560,175 @@ details.lb-champion[open] > summary.lb-row {
 .chart-card { flex: 1; min-width: 0; }
 .chart-card h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
 .chart-card .chart-wrap { position: relative; height: 300px; }
+/* ---- Touch navigation bar ------------------------------------------
+   Hidden by default; the block below turns it on at 1024 and under, and
+   hides the top nav's links in the same breath.
+
+   This default must sit BEFORE that block. A base rule written after a
+   media block beats it at equal specificity, which is how this rule, 700
+   lines further down the file, silently kept the bar hidden on a tablet
+   while the top nav links were already gone: no navigation at all. Block
+   ordering does not catch that; only the base-before-breakpoint rule does. */
+
+.tabbar,
+.tabbar-sheet {
+    display: none;
+}
+
+/* ── Touch navigation: phones and tablets (<= 1024px) ──────────────
+   The bottom bar is the navigation for anything held in the hands, so it
+   runs to 1024px rather than stopping at 640: an iPad Pro 13in is 1024pt
+   in portrait, which is inside this band by one pixel and would otherwise
+   get a nav built for a mouse.
+
+   Placed before every narrower block so the phone sizes further down win.
+   Media queries add no specificity; source order is the whole mechanism.
+   Sizes here are the tablet ones; the 640 block shrinks them for phones. */
+
+@media (max-width: 1024px) {
+    /* The links live in the tab bar at the bottom instead */
+    .nav-links {
+        display: none;
+    }
+
+    nav {
+        flex-wrap: nowrap;
+    }
+
+    .tabbar {
+        display: flex;
+        position: fixed;
+        left: 0.5rem;
+        right: 0.5rem;
+        bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+        z-index: 60;
+        justify-content: space-around;
+        gap: 0.15rem;
+        padding: 0.3rem 0.2rem;
+        border: 1px solid var(--card-border);
+        border-radius: 999px;
+        background: rgba(22, 37, 53, 0.97);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    .tabbar-item {
+        all: unset;
+        cursor: pointer;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.15rem;
+        min-height: 3rem;
+        padding: 0.35rem 0.2rem;
+        border-radius: 999px;
+        color: var(--text-dim);
+        text-align: center;
+        transition: color 0.15s;
+    }
+
+    .tabbar-item svg {
+        width: 22px;
+        height: 22px;
+        fill: currentColor;
+    }
+
+    .tabbar-item span {
+        font-family: var(--font-label);
+        font-size: max(var(--fs-floor), 0.68rem);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        line-height: 1;
+    }
+
+    .tabbar-item.is-active {
+        color: var(--fire-glow);
+    }
+
+    .tabbar-item:focus-visible {
+        outline: 2px solid var(--fire-glow);
+        outline-offset: -2px;
+    }
+
+    /* The sheet sits above the bar, not over it */
+    .tabbar-sheet {
+        display: block;
+        position: fixed;
+        left: 0.5rem;
+        right: 0.5rem;
+        bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+        z-index: 61;
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 0.4rem;
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        background: var(--deep-ocean);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    }
+
+    .tabbar-sheet[hidden] {
+        display: none;
+    }
+
+    .tabbar-sheet-label {
+        margin: 0.35rem 0.6rem 0.2rem;
+        font-family: var(--font-label);
+        font-size: max(var(--fs-floor), 0.72rem);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+    }
+
+    .tabbar-sheet-item {
+        display: block;
+        min-height: 2.75rem;
+        padding: 0.7rem 0.6rem;
+        border-radius: 6px;
+        color: var(--text-light);
+        text-decoration: none;
+    }
+
+    .tabbar-sheet-item:hover,
+    .tabbar-sheet-item:focus-visible {
+        background: var(--ocean-surface);
+        color: var(--sand-warm);
+    }
+
+    /* Content must clear the bar, and the bar occupies more than its own
+       height: it is inset from the bottom and its items overshoot their
+       min-height. Measured rather than derived. At 1024 with a 19px root its
+       footprint is 135px from the viewport bottom; 8rem is 152px. */
+    body {
+        padding-bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Held further from the face than a phone, so the targets grow. */
+    .tabbar-item {
+        min-height: 3.5rem;
+        gap: 0.25rem;
+        padding: 0.45rem 0.3rem;
+    }
+
+    .tabbar-item svg {
+        width: 26px;
+        height: 26px;
+    }
+
+    .tabbar-item span {
+        font-size: max(var(--fs-floor), 0.78rem);
+    }
+
+    .tabbar-sheet {
+        bottom: calc(4.9rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .tabbar-sheet-item {
+        min-height: 3rem;
+    }
+}
+
 .chart-card .chart-wrap canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: 100% !important; }
 @media (max-width: 768px) {
     .charts-row { flex-direction: column; }
@@ -3082,16 +3251,6 @@ section > table {
     border-bottom-color: var(--fire-glow);
 }
 
-/* ---- Phone tab bar -------------------------------------------------
-   Hidden above 640px; the desktop nav is unchanged. Below it, the top
-   nav's links are hidden and these are the primary destinations, so the
-   header stays one row instead of wrapping to three. */
-
-.tabbar,
-.tabbar-sheet {
-    display: none;
-}
-
 /* --- Phones, nav (<= 640px) --- */
 
 @media (max-width: 640px) {
@@ -3125,119 +3284,36 @@ section > table {
         letter-spacing: 0.05em;
     }
 
-    /* The links live in the tab bar at the bottom instead */
-    .nav-links {
-        display: none;
-    }
 
-    nav {
-        flex-wrap: nowrap;
-    }
-
-    .tabbar {
-        display: flex;
-        position: fixed;
-        left: 0.5rem;
-        right: 0.5rem;
-        bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
-        z-index: 60;
-        justify-content: space-around;
-        gap: 0.15rem;
-        padding: 0.3rem 0.2rem;
-        border: 1px solid var(--card-border);
-        border-radius: 999px;
-        background: rgba(22, 37, 53, 0.97);
-        backdrop-filter: blur(8px);
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
-    }
-
+    /* Phone sizes, overriding the tablet ones set in the 1024 block. */
     .tabbar-item {
-        all: unset;
-        cursor: pointer;
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.15rem;
         min-height: 3rem;
+        gap: 0.15rem;
         padding: 0.35rem 0.2rem;
-        border-radius: 999px;
-        color: var(--text-dim);
-        text-align: center;
-        transition: color 0.15s;
     }
 
     .tabbar-item svg {
         width: 22px;
         height: 22px;
-        fill: currentColor;
     }
 
     .tabbar-item span {
-        font-family: var(--font-label);
         font-size: max(var(--fs-floor), 0.68rem);
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        line-height: 1;
     }
 
-    .tabbar-item.is-active {
-        color: var(--fire-glow);
-    }
-
-    .tabbar-item:focus-visible {
-        outline: 2px solid var(--fire-glow);
-        outline-offset: -2px;
-    }
-
-    /* The sheet sits above the bar, not over it */
     .tabbar-sheet {
-        display: block;
-        position: fixed;
-        left: 0.5rem;
-        right: 0.5rem;
         bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
-        z-index: 61;
-        max-height: 60vh;
-        overflow-y: auto;
-        padding: 0.4rem;
-        border: 1px solid var(--card-border);
-        border-radius: 12px;
-        background: var(--deep-ocean);
-        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
-    }
-
-    .tabbar-sheet[hidden] {
-        display: none;
-    }
-
-    .tabbar-sheet-label {
-        margin: 0.35rem 0.6rem 0.2rem;
-        font-family: var(--font-label);
-        font-size: max(var(--fs-floor), 0.72rem);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--text-dim);
     }
 
     .tabbar-sheet-item {
-        display: block;
         min-height: 2.75rem;
-        padding: 0.7rem 0.6rem;
-        border-radius: 6px;
-        color: var(--text-light);
-        text-decoration: none;
     }
 
-    .tabbar-sheet-item:hover,
-    .tabbar-sheet-item:focus-visible {
-        background: var(--ocean-surface);
-        color: var(--sand-warm);
-    }
-
-    /* Content must clear the bar */
+    /* 4.5rem was 72px against a 95px footprint, so this has been 23px short
+       since the bar shipped. Nothing was covered because no page's content
+       reached that far; the taller tablet bar is what surfaced it. */
     body {
-        padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+        padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
     }
 
     .nav-btn {
