@@ -843,9 +843,12 @@ details.lb-team > summary.lb-row:focus-visible {
 }
 
 .my-team-season {
-    font-family: var(--font-label);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-ui);
+    font-size: max(var(--fs-floor), 0.85rem);
+    letter-spacing: 0;
+    text-transform: none;
     text-decoration: none;
     color: var(--text-dim);
     padding: 0.15rem 0.6rem;
@@ -882,6 +885,13 @@ details.lb-team > summary.lb-row:focus-visible {
     font-size: 1.8em;
     line-height: 1.1;
     letter-spacing: 0.03em;
+    color: var(--sand-light);
+}
+
+/* Accent means state, so the rank carries it only while you are leading.
+   Both tiles used to be --torch-gold unconditionally, which made the colour
+   say nothing: identical at rank 1 of 4 and rank 4 of 4. */
+.my-team-stat-value.is-leading {
     color: var(--torch-gold);
 }
 
@@ -3341,6 +3351,18 @@ section > table {
     .admin-page-nav a {
         display: inline-block;
         padding: 0.5rem 0;
+        min-height: 2.5rem;
+    }
+
+    /* Season chips were 30.8px and the meta-line link 17px. */
+    .my-team-season {
+        min-height: 2.5rem;
+        padding: 0.15rem 0.75rem;
+    }
+
+    .my-team-sub a {
+        display: inline-block;
+        padding: 0.4rem 0;
         min-height: 2.5rem;
     }
 
