@@ -575,7 +575,7 @@ nav:not(.tabbar) a:hover {
     background: rgba(255, 255, 255, 0.015);
 }
 
-.leaderboard-entry:last-child {
+.leaderboard-entry:last-of-type {
     border-bottom: 0;
 }
 
