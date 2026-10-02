@@ -1,24 +1,24 @@
 {% extends "base.html" %}
 {% block title %}Admin - {{ season.name or 'Season ' ~ season.number }}{% endblock %}
 {% block content %}
-<p><a href="{{ url_for('main.admin_seasons') }}">&larr; All Seasons</a></p>
+<p class="admin-page-nav"><a href="{{ url_for('main.admin_seasons') }}">&larr; All Seasons</a></p>
 <h1>{{ season.name or 'Season ' ~ season.number }} &mdash; Admin</h1>
 
-<div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem;">
-    <a href="{{ url_for('main.admin_picks', season_id=season.id) }}" role="button" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;">Manage Picks</a>
-    <a href="{{ url_for('main.scoring_compare', season_id=season.id) }}" role="button" class="outline" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;">Compare Scoring</a>
-    <form method="POST" action="{{ url_for('main.admin_refresh', season_id=season.id) }}" style="margin:0;">
+<div class="admin-toolbar">
+    <a href="{{ url_for('main.admin_picks', season_id=season.id) }}" role="button" class="admin-btn-sm">Manage Picks</a>
+    <a href="{{ url_for('main.scoring_compare', season_id=season.id) }}" role="button" class="outline admin-btn-sm">Compare Scoring</a>
+    <form method="POST" action="{{ url_for('main.admin_refresh', season_id=season.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="outline" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;">Refresh from survivoR</button>
+        <button type="submit" class="outline admin-btn-sm">Refresh from survivoR</button>
     </form>
-    <form method="POST" action="{{ url_for('main.admin_export_picks', season_id=season.id) }}" style="margin:0;">
+    <form method="POST" action="{{ url_for('main.admin_export_picks', season_id=season.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="outline" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;">Export Picks</button>
+        <button type="submit" class="outline admin-btn-sm">Export Picks</button>
     </form>
 </div>
 
 <!-- Season Info -->
-<p style="font-size:0.9rem;color:var(--text-dim);">
+<p class="admin-page-meta">
     <strong>{{ season.num_players }}</strong> players &middot;
     <strong>{{ season.num_episodes }}</strong> episodes &middot;
     Jury at <strong>{{ season.left_at_jury if season.left_at_jury is not none else '?' }}</strong> left &middot;
@@ -28,19 +28,19 @@
 
 <!-- Wildcard self-service -->
 <section>
-    <h2>Wildcard Picks</h2>
+    <h2 class="section-title">Wildcard Picks</h2>
     <p><small>Players pick their own wildcard on My Team once Episode 2's start time is known. Picks lock 15 minutes before it and stay hidden until every player has picked. The time is looked up automatically for the active season; type a different one to override it, or clear the field to go back to automatic. Untick the box to keep entering wildcards yourself under Manage Picks.</small></p>
-    <form method="POST" action="{{ url_for('main.admin_wildcard_window', season_id=season.id) }}" class="admin-inline-form" style="max-width: 40rem;">
+    <form method="POST" action="{{ url_for('main.admin_wildcard_window', season_id=season.id) }}" class="admin-inline-form admin-form-wide">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label style="display: flex; align-items: center; gap: 0.3rem; margin: 0; white-space: nowrap;">
-            <input type="checkbox" name="self_service" {% if wildcard.switched_on %}checked{% endif %} style="margin: 0;">
+        <label class="admin-check">
+            <input type="checkbox" name="self_service" {% if wildcard.switched_on %}checked{% endif %}>
             Players pick their own
         </label>
-        <label for="episode2_starts_at" style="margin: 0; white-space: nowrap;">Episode 2 starts (Eastern)</label>
+        <label for="episode2_starts_at">Episode 2 starts (Eastern)</label>
         <input type="datetime-local" id="episode2_starts_at" name="episode2_starts_at" value="{{ wildcard.form_value }}">
         <button type="submit" class="outline">Save</button>
     </form>
-    <p style="font-size:0.9rem;color:var(--text-dim);">
+    <p class="admin-page-meta">
         {% if wildcard.manual %}
         Episode 2 time entered by hand; the automatic lookup will not change it.
         {% elif wildcard.known %}
@@ -52,7 +52,7 @@
         {% endif %}
     </p>
     {% if wildcard.enabled %}
-    <p style="font-size:0.9rem;color:var(--text-dim);">
+    <p class="admin-page-meta">
         Locks <strong>{{ wildcard.lock_label }}</strong> &middot;
         <strong>{{ wildcard.picked }} of {{ wildcard.total }}</strong> players have picked
         {% if wildcard.waiting %}
@@ -66,14 +66,14 @@
 
 <!-- Scoring -->
 <section>
-    <h2>Scoring Components</h2>
+    <h2 class="section-title">Scoring Components</h2>
     <form method="POST" action="{{ url_for('main.admin_season_settings', season_id=season.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <p><small>Set a value to 0 to disable a component. Changes apply immediately to the leaderboard.</small></p>
-        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.75rem;">
-            <button type="submit" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;width:auto;">Save Settings</button>
-            <button type="button" class="outline" onclick="loadDefaults()" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;width:auto;">Load Default</button>
-            <button type="button" class="outline secondary" onclick="loadLegacy()" style="padding:0.3rem 0.75rem;font-size:0.85rem;margin:0;width:auto;">Load Legacy</button>
+        <div class="admin-toolbar">
+            <button type="submit" class="admin-btn-sm">Save Settings</button>
+            <button type="button" class="outline" onclick="loadDefaults()" class="admin-btn-sm">Load Default</button>
+            <button type="button" class="outline secondary" onclick="loadLegacy()" class="admin-btn-sm">Load Legacy</button>
         </div>
         <table class="scoring-table">
             <thead><tr><th>Component</th><th>Value</th><th>Description</th></tr></thead>
@@ -81,7 +81,7 @@
                 {% for key, (label, desc) in config_labels.items() %}
                 <tr>
                     <td><strong>{{ label }}</strong></td>
-                    <td><input type="number" name="scoring_{{ key }}" id="scoring_{{ key }}" value="{{ current_config.get(key, 0) }}" step="0.25" style="width:5rem;margin:0;padding:0.25rem 0.4rem;font-size:0.85rem;"></td>
+                    <td><input type="number" name="scoring_{{ key }}" id="scoring_{{ key }}" value="{{ current_config.get(key, 0) }}" step="0.25"></td>
                     <td><small>{{ desc }}</small></td>
                 </tr>
                 {% endfor %}
@@ -105,22 +105,22 @@
 
 <!-- Survivors (read-only, apart from adding a cast by hand) -->
 <section>
-    <h2>Survivors ({{ survivors|length }})</h2>
+    <h2 class="section-title">Survivors ({{ survivors|length }})</h2>
     <p><small>survivoR publishes a season's cast when it premieres, so before then add the castaways here: a name is all that is needed, and a headshot is optional. A hand-entered castaway can be removed until someone picks them.</small></p>
     <p><small><strong>Matching hand-entered castaways to survivoR is not automatic yet.</strong> A refresh would add the dataset's castaways as new rows beside these rather than filling these in, so Refresh declines while this season has any hand-entered castaway, and the daily refresh skips it. Both resume once matching is built.</small></p>
     <form method="POST" action="{{ url_for('main.admin_add_survivor', season_id=season.id) }}"
-          enctype="multipart/form-data" class="admin-inline-form" style="flex-wrap:wrap;margin-bottom:1rem;">
+          enctype="multipart/form-data" class="admin-inline-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label for="add-survivor-name" style="margin:0;white-space:nowrap;">Castaway name</label>
+        <label for="add-survivor-name">Castaway name</label>
         <input type="text" id="add-survivor-name" name="name" maxlength="100" required
                autocomplete="off" placeholder="e.g. Dee Dee">
-        <label for="add-survivor-headshot" style="margin:0;white-space:nowrap;">Headshot (optional)</label>
+        <label for="add-survivor-headshot">Headshot (optional)</label>
         <input type="file" id="add-survivor-headshot" name="headshot" accept="image/*">
         <button type="submit" class="outline">Add Castaway</button>
     </form>
     {% if survivors %}
-    <div style="overflow-x: auto;">
-    <table style="font-size:0.85rem;">
+    <div class="table-scroll">
+    <table class="admin-table admin-table-dense">
         <thead>
             <tr>
                 <th>Name</th>
@@ -138,7 +138,7 @@
         <tbody>
             {% for s in survivors %}
             <tr{% if s.voted_out_order > 0 %} class="eliminated"{% endif %}>
-                <td>{{ s.name }}{% if s.is_hand_entered %}<br><small style="color:var(--text-dim);">hand-entered</small>{% endif %}</td>
+                <td>{{ s.name }}{% if s.is_hand_entered %}<br><small class="admin-marker">hand-entered</small>{% endif %}</td>
                 <td>{% if s.tribe_color and s.voted_out_order == 0 %}<span style="color:{{ s.tribe_color|contrast }};">{{ s.tribe or '-' }}</span>{% else %}{{ s.tribe or '-' }}{% endif %}</td>
                 <td>{{ s.voted_out_order or '-' }}</td>
                 <td>{{ s.result or '-' }}</td>
@@ -150,9 +150,9 @@
                 <td>
                     {% if s.id in removable_ids %}
                     <form method="POST" action="{{ url_for('main.admin_remove_survivor', season_id=season.id, survivor_id=s.id) }}"
-                          style="margin:0;" onsubmit="return confirm('Remove {{ s.name|e }} from this season?')">
+                          onsubmit="return confirm('Remove {{ s.name|e }} from this season?')">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="outline secondary" style="padding:0.1rem 0.5rem;font-size:0.8rem;margin:0;width:auto;">Remove</button>
+                        <button type="submit" class="outline secondary admin-btn-sm">Remove</button>
                     </form>
                     {% endif %}
                 </td>
@@ -168,11 +168,11 @@
 
 <!-- Delete -->
 <section>
-    <h2>Danger Zone</h2>
+    <h2 class="section-title">Danger Zone</h2>
     <form method="POST" action="{{ url_for('main.admin_delete_season', season_id=season.id) }}"
           onsubmit="var c = prompt('This will permanently delete {{ season.name or 'Season ' ~ season.number }} and all its survivors and picks.\n\nType \'delete season\' to confirm:'); return c &amp;&amp; c.trim().toLowerCase() === 'delete season';">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="secondary" style="padding:0.3rem 0.75rem;font-size:0.85rem;width:auto;">Delete Season</button>
+        <button type="submit" class="secondary admin-btn-sm">Delete Season</button>
     </form>
 </section>
 {% endblock %}
