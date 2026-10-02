@@ -131,6 +131,7 @@ Survivor tribe colors come from the survivoR dataset (`tribe_colour`). These can
 - **Max content width:** Pico's default container (1200px approx)
 - **Grid usage:** CSS Grid for stats grids (`repeat(3, 1fr)`, drops to `1fr` at 576px), survivor admin grids
 - **Flexbox usage:** Leaderboard entries, pick pills, toolbar, nav, progression layout, charts row
+- **Grid items carry an implicit minimum.** A grid item defaults to `min-width: auto`, so a `1fr` track cannot shrink below that item's min-content width. Anything with an intrinsic width in the cell sets that floor: a chart canvas, an image, a long unbroken string. The card then renders wider than its own column and hangs past it, which reads as a misaligned border rather than as an overflow. Measured on the analysis page: a card came out 326px inside a 313.8px column. Put `min-width: 0` on the items of any grid holding a canvas or an image.
 
 ### Border Radius Scale
 | Context | Radius |
@@ -165,7 +166,15 @@ Used by the rules and scoring analysis pages. `<details class="fold" open><summa
 - `data-mobile-collapsed` starts a section closed at <= 576px (rules: all but the first; analysis: the text-heavy ones, charts stay open so Chart.js sizes them at load)
 - The sidebar contents (TOC) opens the target section before jumping; deep links (`#scoring`) open their section
 - `.fold-body` caps paragraphs and lists at `68ch`, line-height 1.6
-- Rules page has Expand all / Collapse all
+- Rules page has Expand all / Collapse all. They are quiet right-aligned links
+  rather than a button pair, and they set their own focus ring because
+  `all: unset` drops it.
+- The summary heading is sentence case in `--font-ui`, like every other section
+  heading. Ten uppercase wide-tracked phrases down a page is the case the
+  Typography section rules out by name. Note a phone override at 1.1rem has the
+  same specificity as the base rule at 1.05rem and comes later, so below 576px
+  the phone value wins; the two are close enough that this is not worth
+  resolving, but it is worth knowing before editing either.
 
 ## Motion
 - **Approach:** Intentional. Motion is tied to narrative moments (finale reveals, champion cards), not applied generically.
@@ -299,6 +308,7 @@ Fixed-position overlay, bottom-left (full-width bottom sheet on phones, 0.95rem 
 | 2026-10-01 | Phone tab bar; one interface font | Navigation moved to a bottom bar so the phone header stops wrapping to three rows. Cinzel narrowed to h1 and Bebas to micro-labels, with a system sans carrying the interface, because three decorative families at once read as unpolished. Survivant, Palatino on castaway names, the torches and the fire accent stay: they carry the theme without being in the way of the data. |
 | 2026-10-01 | Castaway sheet | Tribe-tinted hero plus Summary / Journey / Episodes tabs, replacing the stacked detail block. Tabs are progressive: the strip is hidden until script reveals it. |
 | 2026-10-01 | Rosters as list rows | Replaced the 2-up pill grid. Denser, and it gives points a consistent right-aligned column. |
+| 2026-10-02 | Page CSS lives in `style.css`, not in the template | The scoring analysis page kept 128 lines in an inline `<style>` block, which came after the stylesheet and so won every equal-specificity tie. It is in `style.css` now, base rules at the end of the base section and its media rules appended to the matching breakpoint blocks, which was only safe because none of its selectors existed elsewhere in the file. A second stylesheet in a template is a second place to look and a silent tie-breaker. |
 | 2026-10-02 | Accent means state, applied beyond the leaderboard | My Team and compare painted rank and points in the champion colour unconditionally, so rank 1 of 4 and rank 4 of 4 looked identical and the colour carried no information. The accent now marks the leader and live state only, which is what #149 established on the leaderboard. |
 | 2026-10-02 | Type Scale table corrected against the rendered page | Five rows still named Cinzel or Bebas for things #149 had moved to the interface sans, and the tracking figures for h1-h3 were from before that pass. The table is the first thing a new page is built from, so a stale row re-introduces exactly what the pass removed. |
 | 2026-10-01 | Responsive + readability pass (v2) | Consolidated all breakpoints at end of `style.css`; nav wraps instead of overflowing; header split via `.lb-sub`; 2-up pick grid; chips for toolbar toggles; scrollable timeline; collapsible `details.fold` sections with TOC integration for rules and analysis; `68ch` reading measure |
