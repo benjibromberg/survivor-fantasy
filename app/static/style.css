@@ -2036,110 +2036,6 @@ small {
     letter-spacing: 0.03em;
 }
 
-/* --- Sidebar TOC --- */
-
-/* TOC toggle — bottom-left corner, out of the way */
-.toc-toggle {
-    position: fixed;
-    left: 0.75rem;
-    bottom: 1.5rem;
-    z-index: 100;
-    background: var(--deep-ocean);
-    border: 1px solid var(--card-border);
-    border-radius: 8px;
-    color: var(--text-dim);
-    padding: 0.55rem;
-    cursor: pointer;
-    transition: all 0.2s;
-    line-height: 0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.toc-toggle:hover {
-    color: var(--fire-glow);
-    border-color: var(--fire-glow);
-}
-
-/* TOC panel — overlays content, doesn't push it */
-.page-toc {
-    position: fixed;
-    left: 0.75rem;
-    bottom: 3.5rem;
-    width: 200px;
-    max-height: calc(100vh - 8rem);
-    background: var(--deep-ocean);
-    border: 1px solid var(--card-border);
-    border-radius: 10px;
-    z-index: 200;
-    display: none;
-    flex-direction: column;
-    overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-}
-
-.page-toc.open {
-    display: flex;
-}
-
-.toc-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.7rem 0.8rem 0.5rem;
-    border-bottom: 1px solid var(--card-border);
-}
-
-.toc-title {
-    font-family: var(--font-label);
-    font-size: 0.85em;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--fire-glow);
-}
-
-.toc-close {
-    background: none;
-    border: none;
-    color: var(--text-dim);
-    font-size: 1.1em;
-    cursor: pointer;
-    padding: 0.1rem 0.25rem;
-    line-height: 1;
-    border-radius: 4px;
-    transition: all 0.15s;
-}
-
-.toc-close:hover {
-    color: var(--fire-glow);
-}
-
-.toc-nav {
-    padding: 0.4rem 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.toc-link {
-    font-family: var(--font-heading);
-    font-size: 0.7em;
-    color: var(--text-dim) !important;
-    text-decoration: none !important;
-    padding: 0.4rem 0.8rem;
-    border-left: 2px solid transparent;
-    transition: all 0.12s;
-    line-height: 1.3;
-}
-
-.toc-link:hover {
-    color: var(--sand-warm) !important;
-    border-left-color: var(--card-border);
-}
-
-.toc-link.active {
-    color: var(--fire-glow) !important;
-    border-left-color: var(--fire-bright);
-}
-
 /* --- Site footer --- */
 
 .site-footer {
@@ -2789,8 +2685,6 @@ details.lb-champion[open] > summary.lb-row {
    Pico's indicator. Same ring as the collapsible-section summaries. */
 
 .nav-dropdown-trigger:focus-visible,
-.toc-toggle:focus-visible,
-.toc-close:focus-visible,
 a.lb-pick:focus-visible {
     outline: 2px solid var(--fire-glow);
     outline-offset: 2px;
@@ -3346,21 +3240,6 @@ section > table {
         padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
     }
 
-    /* The tab bar is the navigation on phones, so the floating contents
-       button goes rather than competing with it for the same corner. The
-       page is a scroll and the sections are short. */
-    /* .page-toc.open is (0,2,0) in the base section and would beat a bare
-       .page-toc here, so the open state has to be named. Reachable without a
-       reload: open the contents at desktop width, then narrow or rotate to a
-       phone, and the panel renders over the tab bar, which is the corner the
-       bar is supposed to own. The script only restores the open state above
-       1200px, so a reload clears it and only a live resize shows it. */
-    .toc-toggle,
-    .page-toc,
-    .page-toc.open {
-        display: none;
-    }
-
     .nav-btn {
         display: inline-flex;
         align-items: center;
@@ -3732,33 +3611,6 @@ section > table {
 
     .nav-link-back {
         padding: 0.55rem 0.9rem;
-    }
-
-    /* Contents: bottom sheet, thumb-sized links */
-    /* Both this block and the 640px one match here, and this one is later,
-       so the tab-bar clearance has to be repeated rather than inherited. */
-    /* Hidden in the 640px block; repeated because this one is later and
-       would otherwise bring them back. */
-    /* .page-toc.open is (0,2,0) in the base section and would beat a bare
-       .page-toc here, so the open state has to be named. Reachable without a
-       reload: open the contents at desktop width, then narrow or rotate to a
-       phone, and the panel renders over the tab bar, which is the corner the
-       bar is supposed to own. The script only restores the open state above
-       1200px, so a reload clears it and only a live resize shows it. */
-    .toc-toggle,
-    .page-toc,
-    .page-toc.open {
-        display: none;
-    }
-
-    .toc-link {
-        font-size: 0.95rem;
-        padding: 0.7rem 1rem;
-    }
-
-    .toc-close {
-        font-size: 1.6rem;
-        padding: 0.2rem 0.6rem;
     }
 
     /* Admin controls are thumb-sized on phones. Measured on main at 375px:

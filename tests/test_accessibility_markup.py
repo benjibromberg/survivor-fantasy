@@ -113,15 +113,14 @@ def test_season_button_declares_what_it_opens(finished_season):
     assert 'type="button"' in tag
 
 
-def test_contents_button_declares_what_it_opens(finished_season):
-    # The leaderboard is the page the contents panel exists for: four sections
-    # deep enough to lose your place in. The League settings hub deliberately
-    # has no panel, because its cards are already the navigation.
+def test_no_floating_contents_panel_remains(finished_season):
+    # The panel was retired: the tab bar owns that corner on phones, and the
+    # League settings hub made the case that a card grid is already navigation.
+    # Asserting its absence rather than deleting the test, so bringing it back
+    # has to be deliberate.
     c, season = finished_season
 
     html = c.get(f"/leaderboard/{season.id}").get_data(as_text=True)
-    tag = _tag(html, "toc-toggle")
 
-    assert 'aria-expanded="false"' in tag
-    assert 'aria-controls="page-toc"' in tag
-    assert 'id="page-toc"' in html
+    assert "toc-toggle" not in html
+    assert "page-toc" not in html
