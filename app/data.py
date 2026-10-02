@@ -219,6 +219,45 @@ def compute_castaway_stats(s_conf, s_vh, s_cr, s_am, idol_ids):
     }
 
 
+def read_episodes():
+    """The survivoR Episodes sheet. The only place it is read.
+
+    Two callers want it: the Episode 2 air time (app/schedule.py) and a
+    season's episode titles (season_episode_info, stored by refresh_season).
+    Reading it twice is how the two drift apart, so they share this.
+    """
+    return pd.read_excel(SURVIVOR_DATA_FILE, "Episodes")
+
+
+def season_episode_info(episodes, season_number):
+    """{episode number: {title, date}} for one US season, from the Episodes sheet.
+
+    Keyed by episode number as a string to match Survivor.episode_stats, so
+    the Episodes tab can line the two up. `date` is the ISO air date.
+
+    An episode keeps whichever of the two the dataset has: survivoR lists a
+    scheduled episode before it airs, so a title can be missing while a date
+    is not. Nothing here reads `episode_summary`, which is empty for some
+    real episodes.
+    """
+    if episodes.empty:
+        return {}
+    season_rows = us_season_filter(episodes, season_number)
+    info = {}
+    for _, row in season_rows.iterrows():
+        if pd.isna(row["episode"]):
+            continue
+        entry = {}
+        title = row["episode_title"]
+        if pd.notna(title) and str(title).strip():
+            entry["title"] = str(title).strip()
+        if pd.notna(row["episode_date"]):
+            entry["date"] = pd.Timestamp(row["episode_date"]).date().isoformat()
+        if entry:
+            info[str(int(row["episode"]))] = entry
+    return info
+
+
 def download_survivor_data():
     """Download the latest survivoR.xlsx from GitHub."""
     resp = requests.get(SURVIVOR_DATA_URL, timeout=60)
@@ -246,6 +285,7 @@ def refresh_season(season):
     castaway_scores = pd.read_excel(SURVIVOR_DATA_FILE, "Castaway Scores")
     jury_votes = pd.read_excel(SURVIVOR_DATA_FILE, "Jury Votes")
     castaway_details = pd.read_excel(SURVIVOR_DATA_FILE, "Castaway Details")
+    episodes = read_episodes()
 
     def us(df):
         return us_season_filter(df, season.number)
@@ -574,6 +614,10 @@ def refresh_season(season):
         if s.castaway_id
     }
 
+    # Episode titles and air dates, for the sheet's Episodes tab
+    episode_info = season_episode_info(episodes, season.number)
+    season.episode_info = json.dumps(episode_info) if episode_info else None
+
     # Season metadata from survivoR (required for new-era seasons 41+)
     season_summary = pd.read_excel(SURVIVOR_DATA_FILE, "Season Summary")
     ss = season_summary[
@@ -883,6 +927,40 @@ def _store_headshot(season_number, raw):
             if os.path.exists(tmp):
                 os.remove(tmp)
     return f"{HEADSHOT_URL_PREFIX}/{season_number}/{filename}"
+
+
+def store_uploaded_headshot(season_number, stream):
+    """Store an admin-uploaded headshot; return its local URL path.
+
+    Same destination and sizing as a mirrored one, so a hand-entered castaway
+    and a survivoR one are served identically. Reads at most HEADSHOT_MAX_BYTES
+    so an oversized upload cannot fill the data volume, and raises ValueError
+    with something the admin can act on when the bytes are unusable.
+    """
+    raw = stream.read(HEADSHOT_MAX_BYTES + 1)
+    if not raw:
+        raise ValueError("That headshot file was empty.")
+    if len(raw) > HEADSHOT_MAX_BYTES:
+        raise ValueError(
+            f"Headshots must be under {HEADSHOT_MAX_BYTES // (1024 * 1024)} MB."
+        )
+    try:
+        return _store_headshot(season_number, raw)
+    except Exception as e:  # Pillow raises many types on bad data
+        logger.warning("Season %d headshot upload unusable: %s", season_number, e)
+        raise ValueError("That file could not be read as an image.") from e
+
+
+def hand_entered_survivor_count(season):
+    """How many of a season's castaways were typed in rather than published.
+
+    A hand-entered row has no castaway_id, which is exactly what
+    refresh_season() keys its existing-castaway lookup on. It therefore cannot
+    see them, and inserts the dataset's cast alongside instead of matching it,
+    leaving the season holding every castaway twice. Callers use this to hold
+    a refresh back until that matching exists.
+    """
+    return Survivor.query.filter_by(season_id=season.id, castaway_id=None).count()
 
 
 def generate_season_images(season, force=False):

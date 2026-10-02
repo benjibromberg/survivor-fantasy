@@ -242,6 +242,25 @@ class TestEpisode2FromPremiere:
 
         assert schedule.survivor_episode2_start(60) is None
 
+    def test_the_sheet_comes_from_the_shared_reader(self, monkeypatch):
+        """One read of the Episodes sheet, shared with refresh_season().
+
+        The air time and the episode titles both come from this sheet. Two
+        independent reads is how the two would drift apart.
+        """
+        from app import data, schedule
+
+        calls = []
+
+        def fake_read_episodes():
+            calls.append(True)
+            return _episodes([("US", 60, 1, pd.Timestamp("2026-09-23"))])
+
+        monkeypatch.setattr(data, "read_episodes", fake_read_episodes)
+
+        assert schedule.survivor_episode2_start(60) == EP2
+        assert calls == [True]
+
 
 class TestEpisode2Start:
     def test_prefers_tvmaze(self, monkeypatch):

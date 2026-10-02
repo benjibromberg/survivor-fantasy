@@ -329,6 +329,10 @@ existing database and touches nothing else.
 #    the homepage keeps showing the current season.
 docker compose exec survivor-fantasy python add_season.py 52
 
+# 1b. Or, to draft before the premiere, create it for a hand-entered cast of
+#     the announced size and type the castaways in on its admin page.
+docker compose exec survivor-fantasy python add_season.py 52 --cast 18
+
 # 2. After the draft, put the pick file in data/picks/ on the host
 #    (format: picks/README.md), then load it and switch the active season.
 docker compose exec survivor-fantasy \
@@ -338,8 +342,24 @@ docker compose exec survivor-fantasy \
 Each run first backs the database up to `data/backups/`. What the steps do:
 
 - **Create:** downloads the latest survivoR dataset, creates the season and its
-  castaways, and fetches headshots. If survivoR has no data for the season yet,
-  nothing is created.
+  castaways, and fetches headshots. survivoR publishes a season's cast at its
+  premiere, so before then nothing is created: use `--cast N` instead.
+- **`--cast N`:** for a season survivoR has not published yet. Creates the
+  season from the announced cast size, with no castaways and without reading
+  survivoR at all. Add the castaways under **Survivors** on the season's admin
+  page, one name at a time with an optional headshot. They carry no
+  `castaway_id`, which is how that page marks them *hand-entered*, and they
+  can be removed until someone picks them.
+
+  **A hand-entered season will not refresh, by design.** Matching those
+  castaways to survivoR once it publishes the season is not built yet: a
+  refresh keys on `castaway_id`, so it would add the dataset's castaways as new
+  rows beside the hand-entered ones, leaving the season holding each castaway
+  twice (the picks keep pointing at the hand-entered rows, so nothing is lost).
+  Rather than relying on the admin remembering, both paths decline: the Refresh
+  button flashes why, and the daily 8am job logs and skips the season. The
+  unattended path is the one that matters, because a pre-premiere season is
+  normally the active one. Both resume automatically once matching lands.
 - **`--picks`:** loads a draft into a season that has no picks yet. The whole
   file is checked first: every castaway name has to match the season's
   castaways exactly, and every pick type has to be a known code. If anything is
