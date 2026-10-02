@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "league_settings/_links.html" import detail_url, hub_url %}
+{% block title %}{{ section.title }} - League settings{% endblock %}
+{% block content %}
+<p class="ls-breadcrumb"><a href="{{ hub_url(season_id) }}">&larr; League settings</a></p>
+<h1>{{ section.title }}</h1>
+{% if season %}
+<p class="ls-subtitle">{{ season.name or 'Season ' ~ season.number }} &middot; {{ season.num_players }} players</p>
+{% endif %}
+
+<div class="ls-detail">
+{# slug is validated against LEAGUE_SETTINGS_SECTIONS in the view before this
+   renders, so the include target cannot be steered from the URL. #}
+{% include "league_settings/sections/" ~ section.slug ~ ".html" %}
+</div>
+
+{# Siblings in the same group, so a reader who opened the wrong card is one tap
+   from the right one instead of going back to the hub. #}
+{% for group, entries in groups %}{% if group == section.group %}
+<nav class="ls-siblings" aria-label="Other {{ group|lower }} settings">
+    <h2 class="ls-group-label">More in {{ group|lower }}</h2>
+    <ul>
+        {% for slug, title, blurb in entries %}{% if slug != section.slug %}
+        <li><a href="{{ detail_url(slug, season_id) }}">{{ title }}</a></li>
+        {% endif %}{% endfor %}
+    </ul>
+</nav>
+{% endif %}{% endfor %}
+{% endblock %}

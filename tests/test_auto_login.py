@@ -11,6 +11,19 @@ PAT_EMAIL = "pat@example.com"
 SAM_EMAIL = "sam@example.com"
 ACCESS_HEADER = "Cf-Access-Authenticated-User-Email"
 
+# Nothing in this file is about the page it fetches; these tests need any URL
+# that is public and returns 200, so the Access header can be exercised on the
+# way in. It used to be /rules, which has since become the League settings hub.
+# /scoring-analysis is a two-line view with no database access, so it is the
+# cheapest public 200 in the app.
+#
+# If this URL ever moves or gains a login requirement, this suite fails for a
+# reason that has nothing to do with authentication. Several tests below assert
+# only on session state, and `before_request` runs even on a 404 or a redirect,
+# so those would keep passing while testing nothing. Repoint this constant
+# rather than following the failures.
+PUBLIC_PAGE = "/scoring-analysis"
+
 
 @pytest.fixture()
 def league(tmp_path, monkeypatch):
@@ -53,7 +66,7 @@ def _session_user_id(c):
 
 class TestAutoLogin:
     def test_linked_player_is_signed_in_on_first_page(self, league):
-        resp = league.c.get("/rules", headers=_as(PAT_EMAIL))
+        resp = league.c.get(PUBLIC_PAGE, headers=_as(PAT_EMAIL))
 
         assert resp.status_code == 200
         assert _session_user_id(league.c) == str(league.pat.id)
@@ -67,7 +80,7 @@ class TestAutoLogin:
         assert _session_user_id(league.c) == str(league.pat.id)
 
     def test_email_is_matched_case_insensitively(self, league):
-        league.c.get("/rules", headers=_as("Pat@Example.COM"))
+        league.c.get(PUBLIC_PAGE, headers=_as("Pat@Example.COM"))
 
         assert _session_user_id(league.c) == str(league.pat.id)
 
@@ -86,35 +99,35 @@ class TestAutoLogin:
         assert league.pat.is_admin is False
 
     def test_unlinked_email_sees_the_public_page(self, league):
-        resp = league.c.get("/rules", headers=_as("stranger@example.com"))
+        resp = league.c.get(PUBLIC_PAGE, headers=_as("stranger@example.com"))
 
         assert resp.status_code == 200
         assert _session_user_id(league.c) is None
         assert b"Login" in resp.data
 
     def test_no_header_means_no_sign_in(self, league):
-        league.c.get("/rules")
+        league.c.get(PUBLIC_PAGE)
 
         assert _session_user_id(league.c) is None
 
     def test_signs_in_only_once_per_session(self, league):
-        league.c.get("/rules", headers=_as(PAT_EMAIL))
-        league.c.get("/rules", headers=_as(PAT_EMAIL))
+        league.c.get(PUBLIC_PAGE, headers=_as(PAT_EMAIL))
+        league.c.get(PUBLIC_PAGE, headers=_as(PAT_EMAIL))
 
         assert _session_user_id(league.c) == str(league.pat.id)
 
     def test_switches_when_access_reports_someone_else(self, league):
         """A shared browser where a different person signs in to Access."""
-        league.c.get("/rules", headers=_as(PAT_EMAIL))
+        league.c.get(PUBLIC_PAGE, headers=_as(PAT_EMAIL))
 
-        league.c.get("/rules", headers=_as(SAM_EMAIL))
+        league.c.get(PUBLIC_PAGE, headers=_as(SAM_EMAIL))
 
         assert _session_user_id(league.c) == str(league.sam.id)
 
     def test_signs_out_when_access_reports_an_unlinked_email(self, league):
-        league.c.get("/rules", headers=_as(PAT_EMAIL))
+        league.c.get(PUBLIC_PAGE, headers=_as(PAT_EMAIL))
 
-        league.c.get("/rules", headers=_as("stranger@example.com"))
+        league.c.get(PUBLIC_PAGE, headers=_as("stranger@example.com"))
 
         assert _session_user_id(league.c) is None
 
@@ -126,20 +139,20 @@ class TestAutoLogin:
 
 class TestLogoutStillWorks:
     def test_logout_is_not_undone_by_the_next_page(self, league):
-        league.c.get("/rules", headers=_as(PAT_EMAIL))
+        league.c.get(PUBLIC_PAGE, headers=_as(PAT_EMAIL))
 
         league.c.get("/logout", headers=_as(PAT_EMAIL))
-        resp = league.c.get("/rules", headers=_as(PAT_EMAIL))
+        resp = league.c.get(PUBLIC_PAGE, headers=_as(PAT_EMAIL))
 
         assert _session_user_id(league.c) is None
         assert b"Login" in resp.data
 
     def test_clicking_login_after_logout_signs_in_and_resumes_auto_login(self, league):
-        league.c.get("/rules", headers=_as(PAT_EMAIL))
+        league.c.get(PUBLIC_PAGE, headers=_as(PAT_EMAIL))
         league.c.get("/logout", headers=_as(PAT_EMAIL))
 
         league.c.get("/login", headers=_as(PAT_EMAIL))
-        league.c.get("/rules", headers=_as(PAT_EMAIL))
+        league.c.get(PUBLIC_PAGE, headers=_as(PAT_EMAIL))
 
         assert _session_user_id(league.c) == str(league.pat.id)
 

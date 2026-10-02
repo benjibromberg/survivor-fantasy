@@ -158,14 +158,14 @@ class TestActiveSeasonLookup:
         assert resp.status_code == 302
         assert resp.headers["Location"].endswith(f"/leaderboard/{newer.id}")
 
-    def test_rules_page_uses_highest_active_season(self, client):
+    def test_league_settings_uses_highest_active_season(self, client):
         c, db = client
         self._two_active(db)
 
-        resp = c.get("/rules")
+        resp = c.get("/league-settings")
 
         assert resp.status_code == 200
-        assert b"Scoring for <strong>Season 61</strong>" in resp.data
+        assert b"Season 61" in resp.data
 
     def test_ignores_inactive_seasons(self, client):
         _c, db = client

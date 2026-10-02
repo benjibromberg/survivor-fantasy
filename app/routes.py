@@ -677,16 +677,85 @@ def scoring_analysis():
     return render_template("scoring_analysis.html")
 
 
-@main_bp.route("/rules", defaults={"season_id": None})
-@main_bp.route("/rules/<int:season_id>")
-def rules(season_id):
-    if season_id:
-        season = Season.query.get_or_404(season_id)
-    else:
-        season = Season.get_active()
-        if not season:
-            season = Season.query.first()
+# The league-settings hub and its detail pages. Order here is the order the
+# hub renders; each slug is also the detail route and the template name, so a
+# section cannot exist in one place and not the other.
+LEAGUE_SETTINGS_GROUPS = (
+    (
+        "Scoring",
+        (
+            ("scoring", "Scoring components", "What each action is worth this season"),
+            (
+                "pick-types",
+                "Pick types",
+                "How much each kind of pick scores, and when you make it",
+            ),
+            (
+                "win-probability",
+                "Win probabilities",
+                "How the leaderboard estimates everyone's chances",
+            ),
+        ),
+    ),
+    (
+        "Picks",
+        (
+            ("draft", "The draft", "Snake draft, four castaways, full points"),
+            (
+                "wildcard",
+                "Wildcard",
+                "One extra pick after the first boot, at reduced points",
+            ),
+            (
+                "replacements",
+                "Replacements",
+                "What happens when a pick goes out before the merge",
+            ),
+            (
+                "sole-survivor",
+                "Sole Survivor",
+                "Your winner prediction, scored by how long you held it",
+            ),
+        ),
+    ),
+    (
+        "About",
+        (
+            (
+                "how-it-works",
+                "How it works",
+                "The season in three phases, with a worked example",
+            ),
+            (
+                "data-sources",
+                "Data sources",
+                "Where the game data comes from and how often it refreshes",
+            ),
+        ),
+    ),
+)
 
+LEAGUE_SETTINGS_SECTIONS = {
+    slug: {"slug": slug, "title": title, "blurb": blurb, "group": group}
+    for group, entries in LEAGUE_SETTINGS_GROUPS
+    for slug, title, blurb in entries
+}
+
+
+def _settings_season(season_id):
+    """The season a settings page is describing."""
+    if season_id:
+        return Season.query.get_or_404(season_id)
+    return Season.get_active() or Season.query.first()
+
+
+def _settings_context(season):
+    """Everything both the hub and every detail page may need.
+
+    One builder rather than one per page: the detail pages are slices of the
+    same configuration readout, and computing a slice per route is how two
+    pages end up disagreeing about the same season.
+    """
     config = {**DEFAULT_CONFIG, **(season.get_scoring_config() if season else {})}
 
     # Build list of active and inactive components
@@ -774,16 +843,45 @@ def rules(season_id):
                 + config.get("merge_val", 0)
             )
 
+    return {
+        "season": season,
+        "config": config,
+        "active_rules": active_rules,
+        "inactive_rules": inactive_rules,
+        "progressive": progressive,
+        "examples": examples,
+        "PICK_TYPE_LABELS": PICK_TYPE_LABELS,
+        "wildcard_self_service": bool(season) and wildcards.is_self_service(season),
+    }
+
+
+@main_bp.route("/league-settings", defaults={"season_id": None})
+@main_bp.route("/league-settings/<int:season_id>")
+def league_settings(season_id):
+    season = _settings_season(season_id)
     return render_template(
-        "rules.html",
-        season=season,
-        config=config,
-        active_rules=active_rules,
-        inactive_rules=inactive_rules,
-        progressive=progressive,
-        examples=examples,
-        PICK_TYPE_LABELS=PICK_TYPE_LABELS,
-        wildcard_self_service=bool(season) and wildcards.is_self_service(season),
+        "league_settings/hub.html",
+        groups=LEAGUE_SETTINGS_GROUPS,
+        season_id=season_id,
+        **_settings_context(season),
+    )
+
+
+@main_bp.route("/league-settings/<slug>", defaults={"season_id": None})
+@main_bp.route("/league-settings/<int:season_id>/<slug>")
+def league_settings_detail(slug, season_id):
+    section = LEAGUE_SETTINGS_SECTIONS.get(slug)
+    # Validated against the table before it reaches the template name below,
+    # so the include cannot be steered by the URL.
+    if section is None:
+        abort(404)
+    season = _settings_season(season_id)
+    return render_template(
+        "league_settings/detail.html",
+        section=section,
+        groups=LEAGUE_SETTINGS_GROUPS,
+        season_id=season_id,
+        **_settings_context(season),
     )
 
 

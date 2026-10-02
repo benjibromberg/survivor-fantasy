@@ -1,0 +1,32 @@
+<p>Each fantasy player builds a roster of Survivor castaways across three phases: the <strong>Draft</strong>, the <strong>Wildcard</strong> pick, and optional <strong>Replacement</strong> picks. Points accumulate as your castaways survive tribal councils, win challenges, find advantages, and advance deeper into the game.</p>
+
+{% if season and examples %}
+{% set c = config %}
+<h2>A worked example</h2>
+<p>In a {{ season.num_players }}-player season under this season's rules:</p>
+
+<dl class="ls-values ls-values-wide">
+    <div class="ls-value">
+        <dt>Sole Survivor, drafted</dt>
+        <dd>~{{ examples.winner_total|round(2) }} pts
+            <small>{% if progressive %}{{ examples.winner_tribal_pts|round(2) }} from progressive tribals{% else %}{{ season.merge_threshold }} pre-merge tribals &times; {{ c.tribal_val }} + {{ season.left_at_jury - 1 }} post-merge &times; {{ c.get('post_merge_tribal_val', c.tribal_val) }}{% endif %}{% if c.merge_val %} + {{ c.merge_val }} merge{% endif %}{% if c.final_tribal_val %} + {{ c.final_tribal_val }} FTC{% endif %} + {{ c.first_val }} winner, before any immunity or idol bonuses</small>
+        </dd>
+    </div>
+    <div class="ls-value">
+        <dt>First juror, drafted</dt>
+        <dd>{{ examples.juror_total|round(2) }} pts
+            <small>{% if progressive %}{{ examples.juror_tribal_pts|round(2) }} from progressive tribals{% else %}{{ season.merge_threshold }} pre-merge tribals &times; {{ c.tribal_val }}{% endif %}{% if c.merge_val %} + {{ c.merge_val }} merge{% endif %}{% if c.jury_val %} + {{ c.jury_val }} jury{% endif %}</small>
+        </dd>
+    </div>
+    <div class="ls-value">
+        <dt>First boot, drafted</dt>
+        <dd>0 pts <small>survived no tribals</small></dd>
+    </div>
+    <div class="ls-value">
+        <dt>Sole Survivor, as a Wildcard</dt>
+        <dd>~{{ (examples.winner_total * c.get('wildcard_multiplier', 0.5))|round(2) }} pts
+            <small>{{ "%.0f"|format(c.get('wildcard_multiplier', 0.5) * 100) }}% of {{ examples.winner_total|round(2) }}</small>
+        </dd>
+    </div>
+</dl>
+{% endif %}

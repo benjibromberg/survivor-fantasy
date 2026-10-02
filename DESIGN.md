@@ -146,7 +146,16 @@ Survivor tribe colors come from the survivoR dataset (`tribe_colour`). These can
 
 ## Breakpoints
 
-All responsive overrides live in one block at the END of `style.css`. Several base rules (progression, finale) are defined late in the file, so a breakpoint placed earlier loses the cascade. Order inside that block is wide to narrow: 768, 640, 576.
+Responsive overrides are spread across several `@media` blocks rather than one. What matters is not how many there are but the order they appear in, because **media queries add no specificity**: when two rules for the same element set the same property at the same specificity, source order alone decides. On a 375px screen every `max-width` block from 768 down is matching at once.
+
+So the rule is **wide to narrow in source order**. A `576px` block placed before a `768px` block loses to it on a phone, which is the reverse of what the breakpoint is for, and the page still renders plausibly. That exact inversion was in this file: the order was 768, 768, 576, 768, 640, 576, and the stray 576 block turned out to be dead, four declarations duplicated verbatim from the later block plus one the later block overrode anyway.
+
+Two placement rules follow from it:
+
+- **New base rules go before the first `max-width` block.** A base rule written after one beats it at equal specificity, which is the same trap from the other direction.
+- **New breakpoint rules go in the last block for their width**, or in a new block after every wider one.
+
+`tests/test_breakpoint_order.py` enforces the ordering, and checks that the table below names exactly the widths the stylesheet uses. An earlier version of this section described one block at the end of the file ordered wide to narrow, which was not true when it was written and had already been corrected once. The test is there because the prose drifts and nothing used to notice.
 
 | Breakpoint | Target | Usage |
 |------------|--------|-------|
@@ -304,9 +313,38 @@ screen over the tab bar when the window was narrowed or a tablet rotated. The
 script only restores the open state above 1200px, so a reload never showed it
 and only a live resize did. `tests/test_selector_cascade.py` guards it.
 
+### League Settings (`.ls-*`)
+A hub at `/league-settings` and nine detail pages. The hub opens with the values
+that get looked up most (`.ls-glance`), then three groups of cards
+(`.ls-cards` / `.ls-card`) that each open one subject.
+
+**Label above value, not a table.** `.ls-values` is a `<dl>` grid; each
+`.ls-value` is a `dt` label in `--text-dim` over a `dd` value in `--sand-light`,
+with an optional `small` for the explanation. `.ls-values-wide` is the
+one-per-row variant with hairline separators, used where the explanation is
+longer than the value. This replaced three-column tables, which were the thing
+that did not survive 375px: every one of them was really a list of pairs.
+
+**No contents panel.** The cards are the navigation, so a second navigation over
+them earns nothing. These pages were the main argument for retiring `.page-toc`.
+
+`.ls-card` carries `list-style: none` on the item, not just the list: Pico
+styles the `li` with a more specific selector, so a `list-style` on the `ul`
+never reaches the marker and a square appears beside every card.
+
+`.ls-value` and `.ls-card` both set `min-width: 0`, because grid items default
+to `min-width: auto` and a `1fr` track cannot shrink below an item's min-content
+width.
+
+Nav and tab bar say **League**, not Settings: the admin's own account page
+already owns the "Settings" label in the More sheet, and "League settings"
+renders on two lines in the nav at 700px.
+
 ## Decisions Log
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-02 | Rules page became League settings | It was already a configuration readout wearing the wrong name: it rendered `num_players`, `tribal_base` and `finale_size` and listed which components were active, inside ten accordions. Accordions suit prose you read; that page was values you look up, which is why the sections never fit them. Hub of cards plus label-above-value detail pages instead, and the wide tables are gone. |
+| 2026-10-02 | Breakpoint order is enforced, not described | The Breakpoints section had described a structure the stylesheet did not have, was corrected once, and drifted again. `tests/test_breakpoint_order.py` now asserts the wide-to-narrow ordering and that this document names exactly the widths the sheet uses. Prose drifts; a test does not. |
 | 2024 | Pico CSS v2 dark theme as base | Lightweight, semantic HTML-first, good dark mode support |
 | 2024 | Survivant font for logo only | Thematic authenticity, but too decorative for body text |
 | 2024 | Cinzel for headings | Classical authority matches Survivor's dramatic tone |

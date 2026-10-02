@@ -42,7 +42,7 @@
                 </div>
             </li>
             {% endif %}
-            <li><a href="{{ url_for('main.rules') }}" class="nav-btn">Rules</a></li>
+            <li><a href="{{ url_for('main.league_settings') }}" class="nav-btn">Settings</a></li>
             <li><a href="{{ url_for('main.scoring_analysis') }}" class="nav-btn">Analysis</a></li>
             {% if current_user.is_authenticated %}
                 <li><a href="{{ url_for('main.my_team') }}" class="nav-btn">My Team</a></li>
@@ -222,9 +222,9 @@
             <span>My Team</span>
         </a>
         {% endif %}
-        <a href="{{ url_for('main.rules') }}" class="tabbar-item{% if ep == 'main.rules' %} is-active{% endif %}">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h9a3 3 0 013 3v13H8a3 3 0 00-3 3V4zm3 14h7V7a1 1 0 00-1-1H8v12z"/></svg>
-            <span>Rules</span>
+        <a href="{{ url_for('main.league_settings') }}" class="tabbar-item{% if ep in ('main.league_settings', 'main.league_settings_detail') %} is-active{% endif %}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h7v2H4V7zm9 0h7v2h-7V7zm-9 8h7v2H4v-2zm9 0h7v2h-7v-2z" opacity="0.55"/><path d="M11 4h2v8h-2V4zm0 8h2v8h-2v-8z" transform="translate(-4 0)"/><path d="M11 4h2v8h-2V4zm0 8h2v8h-2v-8z" transform="translate(5 0)"/></svg>
+            <span>Settings</span>
         </a>
         <a href="{{ url_for('main.scoring_analysis') }}" class="tabbar-item{% if ep == 'main.scoring_analysis' %} is-active{% endif %}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 4 5-7 4 5v4H3z" opacity="0.55"/><path d="M3 19h18v2H3z"/></svg>
@@ -249,7 +249,7 @@
         {% if current_user.is_authenticated %}
             {% if current_user.is_admin %}
             <a href="{{ url_for('main.admin_seasons') }}" class="tabbar-sheet-item">Admin</a>
-            <a href="{{ url_for('main.settings') }}" class="tabbar-sheet-item">Settings</a>
+            <a href="{{ url_for('main.settings') }}" class="tabbar-sheet-item">Display name</a>
             {% endif %}
             <a href="{{ url_for('auth.logout') }}" class="tabbar-sheet-item">Log out</a>
         {% else %}

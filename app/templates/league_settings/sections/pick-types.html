@@ -1,0 +1,28 @@
+{% set draft_repl_mult = config.get('draft_replacement_multiplier', 1.0) %}
+{% set wc_repl_mult = config.get('wc_replacement_multiplier', config.get('replacement_multiplier', 0.5)) %}
+
+<dl class="ls-values ls-values-wide">
+    <div class="ls-value">
+        <dt>Draft</dt>
+        <dd>Full (100%)<small>Before the season, via snake draft</small></dd>
+    </div>
+    <div class="ls-value">
+        <dt>Wildcard</dt>
+        <dd>{{ "%.0f"|format(config.wildcard_multiplier * 100) }}%<small>After the first elimination</small></dd>
+    </div>
+    {% if draft_repl_mult == 0 and wc_repl_mult == 0 %}
+    <div class="ls-value">
+        <dt>Replacement</dt>
+        <dd>0 pts, roster only<small>After the merge, if a pick went out pre-merge</small></dd>
+    </div>
+    {% else %}
+    <div class="ls-value">
+        <dt>Replacement</dt>
+        <dd>{{ "%.0f"|format(draft_repl_mult * 100) }}%<small>After the merge, if a draft pick went out pre-merge. Post-selection stats only.</small></dd>
+    </div>
+    <div class="ls-value">
+        <dt>Replacement &frac12; pts</dt>
+        <dd>{{ "%.0f"|format(wc_repl_mult * 100) }}%<small>After the merge, if only your Wildcard went out pre-merge. Post-selection stats only.</small></dd>
+    </div>
+    {% endif %}
+</dl>
