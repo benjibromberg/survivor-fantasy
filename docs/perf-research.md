@@ -6,6 +6,24 @@ changed. Sources are official docs (Cloudflare, Flask, MDN, web.dev, project
 docs) unless noted. Facts measured in this repo on 2026-10-01 are marked
 **(measured)**.
 
+> **Status, updated 2026-10-01.** The two highest-priority recommendations below
+> have already shipped, within hours of this document being written. Read the
+> table in "New tickets worth filing" as a record of what was proposed, not as a
+> to-do list.
+>
+> - **Item 1, self-host resized headshots** (called the biggest win here):
+>   shipped in #119, with lazy loading in #109. `app/headshots.py` exists and
+>   headshots are served from the data volume.
+> - **Item 2, cache headers and versioned static URLs**: shipped in #137.
+> - **Items 3 to 8** are still open and unfiled: Cloudflare edge caching behind
+>   Access, deferring and lazy-initialising Chart.js, Speculation Rules
+>   prefetch, deferring the hidden journey and breakdown DOM, a Lighthouse
+>   baseline, and evaluating htmx or Turbo. Item 7, the baseline, is the one
+>   this document itself says to do first.
+>
+> The measurements are unchanged and still accurate as of the date above. What
+> has moved is the state of the codebase they describe.
+
 ---
 
 ## Problem recap
