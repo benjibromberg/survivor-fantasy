@@ -1088,6 +1088,19 @@ details.lb-team > summary.lb-row:focus-visible {
     margin-bottom: 0.5rem;
 }
 
+/* One step below .section-title. Needed because the compare page rendered
+   its h2 at 12.8px and its h3 at 24px, so a section heading was smaller than
+   the subsections inside it. */
+.subsection-title {
+    font-family: var(--font-ui);
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--sand-warm);
+    margin-bottom: 0.4rem;
+}
+
 /* The back link above an admin h1. */
 .admin-page-nav {
     font-size: 0.9rem;
@@ -1942,30 +1955,34 @@ small {
     border-radius: 4px;
 }
 
-.compare-row:nth-child(1) { background: rgba(252, 163, 17, 0.15); }
-.compare-row:nth-child(2) { background: rgba(252, 163, 17, 0.08); }
-.compare-row:nth-child(3) { background: rgba(252, 163, 17, 0.04); }
+.compare-podium-1 { background: rgba(252, 163, 17, 0.15); }
+.compare-podium-2 { background: rgba(252, 163, 17, 0.08); }
+.compare-podium-3 { background: rgba(252, 163, 17, 0.04); }
 
 .compare-rank {
     font-family: var(--font-label);
     font-weight: 400;
-    color: var(--fire-bright);
-    opacity: 0.6;
+    color: var(--text-dim);
     min-width: 1.5rem;
 }
 
+/* Accent marks the leader, not every row. */
+.compare-podium-1 .compare-rank {
+    color: var(--fire-bright);
+}
+
 .compare-name {
-    font-family: var(--font-heading);
+    font-family: var(--font-ui);
     flex: 1;
     font-weight: 600;
     color: var(--sand-light);
-    letter-spacing: 0.03em;
+    letter-spacing: 0;
 }
 
 .compare-pts {
     font-family: var(--font-label);
     font-weight: 400;
-    color: var(--torch-gold);
+    color: var(--sand-light);
     font-size: 1.1em;
     letter-spacing: 0.03em;
 }
