@@ -2423,6 +2423,17 @@ details.lb-champion[open] > summary.lb-row {
     font-size: max(var(--fs-floor), 0.85em);
 }
 
+/* The only way back from a detail page on a phone: the hub is in the More
+   sheet, not the tab bar. Needs a tap-sized target, and padding alone will
+   not give it one, because an inline box takes vertical padding visually and
+   gets no layout height from it. Base rather than the phone block, because
+   the tablet layer is touch too. */
+.ls-breadcrumb a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
+}
+
 /* The one sanctioned use of the condensed face: a short label above data. */
 .ls-group-label {
     margin: 1.75rem 0 0.6rem;
