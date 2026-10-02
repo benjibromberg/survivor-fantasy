@@ -58,6 +58,19 @@ def client(tmp_path, monkeypatch):
         importlib.reload(sys.modules["config"])
 
 
+# Season.episode_info as refresh_season() writes it: keyed by episode number
+# as a string, so it lines up with episode_stats, with an ISO air date.
+EPISODE_INFO = json.dumps(
+    {
+        "1": {"title": "One Glorious and Perfect Episode", "date": "2024-09-18"},
+        "2": {"title": "Epic Boss Girl Move", "date": "2024-09-25"},
+        "3": {"title": "Belly of the Beast", "date": "2024-10-02"},
+        "4": {"date": "2024-10-09"},  # scheduled, not yet titled
+        "5": {"title": "The Last Stand", "date": "2024-10-16"},
+    }
+)
+
+
 @pytest.fixture()
 def league(client):
     """One player, two castaways: one voted out in episode 2, one still in.
@@ -68,7 +81,13 @@ def league(client):
     from app.models import Pick, Season, Survivor, User
 
     c, db = client
-    season = Season(number=98, name="Season 98", is_active=True, num_players=4)
+    season = Season(
+        number=98,
+        name="Season 98",
+        is_active=True,
+        num_players=4,
+        episode_info=EPISODE_INFO,
+    )
     db.session.add(season)
     db.session.flush()
 
@@ -260,3 +279,85 @@ class TestSheetMarkup:
 
         assert "Waiter;Photographer" not in html
         assert "Waiter, Photographer" in html
+
+
+class TestEpisodeTitles:
+    """Titles come off the season, not out of the castaway's own stats."""
+
+    def _info(self, league):
+        return league.season.get_episode_info()
+
+    def test_the_season_parses_its_stored_titles(self, league):
+        assert self._info(league)["3"]["title"] == "Belly of the Beast"
+
+    def test_a_season_without_titles_parses_to_an_empty_mapping(self, client):
+        from app.models import Season
+
+        _c, db = client
+        season = Season(number=97, name="Season 97")
+        db.session.add(season)
+        db.session.commit()
+
+        assert season.get_episode_info() == {}
+
+    def test_a_row_carries_its_title_and_a_readable_air_date(self, league):
+        from app.routes import _episode_rows
+
+        rows = _episode_rows(league.runner, episode_info=self._info(league))
+
+        assert rows[2]["title"] == "Belly of the Beast"
+        assert rows[2]["air_date"] == "Oct 2, 2024"
+
+    def test_an_untitled_episode_still_gets_its_date(self, league):
+        from app.routes import _episode_rows
+
+        rows = _episode_rows(league.runner, episode_info=self._info(league))
+
+        assert rows[3]["title"] is None
+        assert rows[3]["air_date"] == "Oct 9, 2024"
+
+    def test_rows_hold_no_title_when_the_season_has_none(self, league):
+        from app.routes import _episode_rows
+
+        rows = _episode_rows(league.runner)
+
+        assert [r["title"] for r in rows] == [None] * 5
+        assert [r["air_date"] for r in rows] == [None] * 5
+
+    def test_the_title_is_on_the_episode_cell_and_readable_by_a_screen_reader(
+        self, league
+    ):
+        """Hover plus a visually-hidden span: available, and zero width."""
+        card = _card(_page(league), "Runner")
+        cells = re.findall(r"<th scope=\"row\"[^>]*>.*?</th>", card, re.S)
+
+        assert 'title="Belly of the Beast (Oct 2, 2024)"' in cells[2]
+        assert 'class="visually-hidden">: Belly of the Beast' in cells[2]
+
+    def test_an_apostrophe_in_a_title_is_escaped(self, league, client):
+        """Real titles carry them: S47 episode 8 is "He's All That"."""
+        _c, db = client
+        league.season.episode_info = json.dumps({"1": {"title": "He's All That"}})
+        db.session.commit()
+
+        card = _card(_page(league), "Runner")
+
+        assert 'title="He&#39;s All That"' in card
+        assert "He's All That" not in card
+
+    def test_the_table_gains_no_visible_column(self, league):
+        """That table is numeric and narrow by design, and already scrolls."""
+        card = _card(_page(league), "Runner")
+        head = re.search(r"<thead>.*?</thead>", card, re.S).group()
+
+        assert re.findall(r'<th scope="col">([^<]*)</th>', head) == [
+            "Ep",
+            "Tribe",
+            "Conf",
+            "Ind",
+            "Tribal",
+            "Idols",
+            "Advs",
+            "Votes",
+        ]
+        assert "Belly of the Beast" not in head

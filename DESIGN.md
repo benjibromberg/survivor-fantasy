@@ -217,6 +217,8 @@ Opening a card shows the sheet. A hero header tinted with the tribe colour (a le
 
 **Episodes table.** One row per episode, stopping at the elimination episode. Two things about `episode_stats` make the obvious reading wrong: its totals are **cumulative**, so an episode's own activity is the difference from the episode before it; and it **keeps repeating the final totals** for every episode after the castaway is voted out, so an untruncated table shows a boot still playing. Cells are heat-tinted on `--heat`, scaled per column to that castaway's own best episode so a quiet player's table still reads. The table sizes to its content rather than stretching, because early in a season most columns are empty.
 
+The episode title and air date ride on the episode number as a `title` attribute plus a `visually-hidden` span: available on hover and to a screen reader, and costing the table no width. **They do not get a column.** The table is numeric and narrow by design and already overflows a phone inside `.table-scroll`; a multi-word text column pushes the numbers, which is what people scan, out of reach.
+
 ### Phone Tab Bar (`.tabbar`)
 Below 640px the top nav's links are hidden and the primary destinations live in a fixed, pill-shaped bar at the bottom: Standings, My Team (when signed in), Rules, Analysis, and More. Icon above a small uppercase label; the active item is `--fire-glow`, the rest `--text-dim`. More opens a sheet above the bar with the season list and the account links.
 
@@ -250,4 +252,5 @@ Fixed-position overlay, bottom-left (full-width bottom sheet on phones, 0.95rem 
 | 2026-10-01 | Phone tab bar; one interface font | Navigation moved to a bottom bar so the phone header stops wrapping to three rows. Cinzel narrowed to h1 and Bebas to micro-labels, with a system sans carrying the interface, because three decorative families at once read as unpolished. Survivant, Palatino on castaway names, the torches and the fire accent stay: they carry the theme without being in the way of the data. |
 | 2026-10-01 | Castaway sheet | Tribe-tinted hero plus Summary / Journey / Episodes tabs, replacing the stacked detail block. Tabs are progressive: the strip is hidden until script reveals it. |
 | 2026-10-01 | Rosters as list rows | Replaced the 2-up pill grid. Denser, and it gives points a consistent right-aligned column. |
+| 2026-10-01 | Episode titles on hover, not in a column | The Episodes table is numeric and already scrolls on a phone; a text column costs the numbers more than the title gains |
 | 2026-10-01 | Responsive + readability pass (v2) | Consolidated all breakpoints at end of `style.css`; nav wraps instead of overflowing; header split via `.lb-sub`; 2-up pick grid; chips for toolbar toggles; scrollable timeline; collapsible `details.fold` sections with TOC integration for rules and analysis; `68ch` reading measure |

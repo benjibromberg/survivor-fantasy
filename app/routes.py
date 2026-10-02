@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import date
 
 from flask import (
     Blueprint,
@@ -168,7 +169,18 @@ EPISODE_COLUMNS = (
 )
 
 
-def _episode_rows(survivor, as_of_episode=None):
+def _air_date_label(iso_date):
+    """An ISO air date as "Oct 2, 2024", or None if it cannot be read."""
+    if not iso_date:
+        return None
+    try:
+        day = date.fromisoformat(iso_date)
+    except (TypeError, ValueError):
+        return None
+    return f"{day:%b} {day.day}, {day.year}"
+
+
+def _episode_rows(survivor, as_of_episode=None, episode_info=None):
     """Per-episode activity for one castaway, for the sheet's Episodes tab.
 
     Two things about episode_stats make the obvious reading wrong. Its totals
@@ -176,7 +188,12 @@ def _episode_rows(survivor, as_of_episode=None):
     episode before it. And it keeps repeating the final totals for every
     episode after the castaway is voted out, so rows have to stop at the
     elimination episode or the table shows a boot still playing.
+
+    episode_info is the season's titles and air dates (Season.episode_info),
+    passed in rather than read per castaway. Either can be missing: survivoR
+    lists a scheduled episode before it has a title.
     """
+    info = episode_info or {}
     raw = survivor.get_episode_stats()
     if not raw:
         return []
@@ -197,9 +214,12 @@ def _episode_rows(survivor, as_of_episode=None):
             (label, (cur.get(key) or 0) - (prev.get(key) or 0))
             for key, label in EPISODE_COLUMNS
         ]
+        episode = info.get(str(ep), {})
         rows.append(
             {
                 "episode": ep,
+                "title": episode.get("title"),
+                "air_date": _air_date_label(episode.get("date")),
                 "tribe": cur.get("tribe"),
                 "tribe_color": cur.get("tribe_color"),
                 # The end of this castaway's game, which is NOT the same as
@@ -869,6 +889,9 @@ def leaderboard(season_id):
     target_episode = (
         elim_to_episode.get(effective_as_of, 0) if as_of is not None else None
     )
+    # One parse for the whole page: the titles are the season's, not each
+    # castaway's, so this does not belong inside the loop.
+    episode_info = season.get_episode_info()
     for entry in leaderboard_data:
         for pick in entry["picks"]:
             surv = pick.get("survivor_obj")
@@ -878,7 +901,7 @@ def leaderboard(season_id):
                 )
                 pick["journey_events"] = events
                 pick["journey_badges"] = badges
-                pick["episode_rows"] = _episode_rows(surv, target_episode)
+                pick["episode_rows"] = _episode_rows(surv, target_episode, episode_info)
             else:
                 pick["journey_events"] = []
                 pick["journey_badges"] = []
