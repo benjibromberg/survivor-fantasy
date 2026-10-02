@@ -2756,6 +2756,146 @@ section > table {
     -webkit-overflow-scrolling: touch;
 }
 
+
+/* ===================================================================
+   Scoring analysis page
+
+   Lifted out of the template's inline <style> block. It lived there because
+   an inline block comes after style.css and so wins ties; none of these
+   selectors exist elsewhere in this file, so there are no ties to lose and
+   the responsive rules can join the one breakpoint block at the end rather
+   than forming a second one after it.
+   =================================================================== */
+
+.tldr-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    text-align: center;
+}
+.tldr-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem 0.5rem;
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    background: var(--card-bg);
+}
+.tldr-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--fire-glow);
+    line-height: 1.1;
+}
+.tldr-label {
+    font-size: 0.9rem;
+    color: var(--sand-light);
+    margin-top: 0.25rem;
+}
+.tldr-detail {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-top: 0.15rem;
+}
+.season-health-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1rem;
+}
+.season-health-card {
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    background: var(--card-bg);
+}
+.season-health-card h3 {
+    margin: 0 0 0.25rem 0;
+    color: var(--sand-warm);
+    font-size: 1rem;
+}
+.health-subtitle {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+}
+.health-facts {
+    margin: 0;
+    padding-left: 1.25rem;
+    list-style: none;
+}
+.health-facts li {
+    padding: 0.3rem 0;
+    font-size: 0.9rem;
+    color: var(--sand-light);
+    line-height: 1.4;
+    list-style: '\25B8\0020';
+}
+.health-facts li::marker {
+    color: var(--fire-glow);
+}
+.health-facts li strong {
+    color: var(--fire-glow);
+}
+.ci-bands {
+    color: var(--text-dim);
+    font-size: max(var(--fs-floor), 0.8em);
+}
+.legacy-cmp {
+    color: var(--text-dim);
+    font-size: max(var(--fs-floor), 0.8em);
+}
+.comparison-section {
+    margin-bottom: 2.5rem;
+}
+.comparison-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+.param-chart-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+/* Grid items default to min-width: auto, so a 1fr track cannot shrink below an
+   item's min-content width. A chart canvas makes that minimum large, and the
+   card then hangs past its own column. Measured at 375px: .param-group was
+   326px in a 313.8px column, 12.2px proud of every other card's right edge. */
+.tldr-grid > *,
+.season-health-grid > *,
+.comparison-grid > *,
+.param-chart-grid > * {
+    min-width: 0;
+}
+.param-group {
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    background: var(--card-bg);
+}
+.param-group h3 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    color: var(--sand-warm);
+    font-size: 0.9rem;
+}
+.param-group canvas {
+    margin-bottom: 0.5rem;
+    max-height: 120px;
+}
+
+
+#recommended-config {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 1rem;
+    color: var(--fire-glow);
+    overflow-x: auto;
+}
+
 /* --- Tablet (<= 768px) --- */
 
 @media (max-width: 768px) {
@@ -2800,6 +2940,9 @@ section > table {
     .chart-card .chart-wrap {
         height: 280px;
     }
+
+    /* Scoring analysis */
+    .comparison-grid { grid-template-columns: 1fr; }
 }
 
 .lb-compare {
@@ -3431,4 +3574,12 @@ section > table {
     .admin-form-row > input[type="email"] {
         flex: 1 1 10rem;
     }
+
+    /* Scoring analysis */
+    .param-chart-grid { grid-template-columns: 1fr; }
+    .season-health-grid { grid-template-columns: 1fr; }
+    .tldr-grid { grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
+    .tldr-value { font-size: 1.6rem; }
+    .season-health-card { padding: 0.85rem 0.9rem; }
+    .param-group canvas { max-height: 150px; }
 }
