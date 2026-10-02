@@ -114,9 +114,12 @@ def test_season_button_declares_what_it_opens(finished_season):
 
 
 def test_contents_button_declares_what_it_opens(finished_season):
-    c, _season = finished_season
+    # The leaderboard is the page the contents panel exists for: four sections
+    # deep enough to lose your place in. The League settings hub deliberately
+    # has no panel, because its cards are already the navigation.
+    c, season = finished_season
 
-    html = c.get("/rules").get_data(as_text=True)
+    html = c.get(f"/leaderboard/{season.id}").get_data(as_text=True)
     tag = _tag(html, "toc-toggle")
 
     assert 'aria-expanded="false"' in tag

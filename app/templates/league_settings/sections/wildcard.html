@@ -1,0 +1,22 @@
+<dl class="ls-values">
+    <div class="ls-value">
+        <dt>Points</dt>
+        <dd>{{ "%.0f"|format(config.wildcard_multiplier * 100) }}% of everything the castaway earns</dd>
+    </div>
+    <div class="ls-value">
+        <dt>Picked</dt>
+        <dd>After the first elimination</dd>
+    </div>
+    <div class="ls-value">
+        <dt>Locks</dt>
+        <dd>{% if wildcard_self_service %}15 min before Episode 2{% else %}Admin entry only{% endif %}</dd>
+    </div>
+</dl>
+
+<p>Once the first episode has aired and the first castaway is out, each fantasy player selects one <strong>Wildcard</strong> from any remaining castaway not already on another player's roster.</p>
+
+{% if wildcard_self_service %}
+<p>Pick your Wildcard yourself on <strong>My Team</strong>. You can change it as often as you like until picks lock 15 minutes before Episode 2; after that only the league admin can enter one. Wildcards stay hidden, and score no points, until every player has picked, so two players can end up with the same Wildcard.</p>
+{% endif %}
+
+<p class="ls-example">A Wildcard who survives 10 tribal councils and earns 12 base points scores <strong>{{ (12 * config.wildcard_multiplier)|round(1) }} pts</strong>.</p>

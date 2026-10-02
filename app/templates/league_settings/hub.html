@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% from "league_settings/_links.html" import detail_url %}
+{% block title %}League settings - Survivor Fantasy{% endblock %}
+{% block content %}
+<h1>League settings</h1>
+{% if season %}
+<p class="ls-subtitle">{{ season.name or 'Season ' ~ season.number }} &middot; {{ season.num_players }} players</p>
+{% endif %}
+
+{% if season %}
+{# The readout the page is named for. These are the values that get looked up
+   often enough that making someone open a card for them is the wrong trade. #}
+<section class="ls-glance" aria-labelledby="ls-glance-label">
+    <h2 class="ls-group-label" id="ls-glance-label">This season</h2>
+    <dl class="ls-values">
+        <div class="ls-value">
+            <dt>Tribal scoring</dt>
+            <dd>{{ 'Progressive' if progressive else 'Flat' }}</dd>
+        </div>
+        <div class="ls-value">
+            <dt>Wildcard</dt>
+            <dd>{{ "%.0f"|format(config.wildcard_multiplier * 100) }}%</dd>
+        </div>
+        <div class="ls-value">
+            <dt>Replacement</dt>
+            <dd>{{ "%.0f"|format(config.get('draft_replacement_multiplier', 1.0) * 100) }}%</dd>
+        </div>
+        <div class="ls-value">
+            <dt>Sole Survivor</dt>
+            <dd>{% if config.sole_survivor_val %}{{ config.sole_survivor_val }} pt{{ 's' if config.sole_survivor_val != 1 }}/ep{% else %}Not scoring{% endif %}</dd>
+        </div>
+        {% if progressive %}
+        <div class="ls-value">
+            <dt>Finale size</dt>
+            <dd>{{ config.finale_size }} left</dd>
+        </div>
+        {% endif %}
+        <div class="ls-value">
+            <dt>Merge</dt>
+            <dd>{% if season.merge_episode_num %}Episode {{ season.merge_episode_num }}{% else %}Not yet{% endif %}</dd>
+        </div>
+    </dl>
+</section>
+{% endif %}
+
+{% for group, entries in groups %}
+<section class="ls-group" aria-labelledby="ls-group-{{ loop.index }}">
+    <h2 class="ls-group-label" id="ls-group-{{ loop.index }}">{{ group }}</h2>
+    <ul class="ls-cards">
+        {% for slug, title, blurb in entries %}
+        <li class="ls-card">
+            <a href="{{ detail_url(slug, season_id) }}">
+                <span class="ls-card-text">
+                    <span class="ls-card-title">{{ title }}</span>
+                    <span class="ls-card-blurb">{{ blurb }}</span>
+                </span>
+                <span class="ls-card-chevron" aria-hidden="true">&rsaquo;</span>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endfor %}
+
+{% if season %}
+<p><a href="{{ url_for('main.leaderboard', season_id=season.id) }}" class="nav-link-back">&larr; Leaderboard</a></p>
+{% endif %}
+{% endblock %}

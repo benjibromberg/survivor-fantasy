@@ -1,0 +1,18 @@
+{# One place builds a settings URL, so the season a reader is on survives
+   every hop. Passing season_id=None to url_for would build the no-season
+   rule anyway, but being explicit keeps the two rules visibly distinct. #}
+{% macro detail_url(slug, season_id) -%}
+{%- if season_id -%}
+{{ url_for('main.league_settings_detail', slug=slug, season_id=season_id) }}
+{%- else -%}
+{{ url_for('main.league_settings_detail', slug=slug) }}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro hub_url(season_id) -%}
+{%- if season_id -%}
+{{ url_for('main.league_settings', season_id=season_id) }}
+{%- else -%}
+{{ url_for('main.league_settings') }}
+{%- endif -%}
+{%- endmacro %}

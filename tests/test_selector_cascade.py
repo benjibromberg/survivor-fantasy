@@ -161,7 +161,8 @@ def rendered(league):
     pages = {}
     for name, url in (
         ("leaderboard", f"/leaderboard/{league.season.id}"),
-        ("rules", "/rules"),
+        ("settings-hub", "/league-settings"),
+        ("settings-detail", "/league-settings/scoring"),
         ("analysis", "/scoring-analysis"),
         ("compare", f"/compare/{league.season.id}"),
     ):

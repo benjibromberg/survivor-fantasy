@@ -1,0 +1,21 @@
+<dl class="ls-values">
+    <div class="ls-value">
+        <dt>Points</dt>
+        <dd>{% if config.sole_survivor_val %}{{ config.sole_survivor_val }} pt{{ 's' if config.sole_survivor_val != 1 }} per episode held{% else %}Not scoring this season{% endif %}</dd>
+    </div>
+    <div class="ls-value">
+        <dt>Picked</dt>
+        <dd>Before the season starts</dd>
+    </div>
+    <div class="ls-value">
+        <dt>Counts as</dt>
+        <dd>Separate from your roster</dd>
+    </div>
+</dl>
+
+<p>Each fantasy player predicts who will be the <strong>Sole Survivor</strong>. You score only if your pick wins, and only for your <strong>longest unbroken run</strong> of episodes ending at the finale with that castaway selected.</p>
+
+{% if config.sole_survivor_val %}
+{% set eps = season.num_players if season else 18 %}
+<p class="ls-example">Hold the eventual winner all season and you score <strong>{{ eps * config.sole_survivor_val }} pts</strong> ({{ eps }} episodes &times; {{ config.sole_survivor_val }}). Switch away at Episode 10 and back at Episode 14, and only Episode 14 to the finale counts: <strong>{{ (eps - 14 + 1) * config.sole_survivor_val }} pts</strong>.</p>
+{% endif %}

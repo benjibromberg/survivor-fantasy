@@ -1,0 +1,50 @@
+<p>Points are calculated per castaway, then modified by pick type.</p>
+
+{% if active_rules %}
+<h2>Active this season</h2>
+<dl class="ls-values ls-values-wide">
+    {% for rule in active_rules %}
+    <div class="ls-value">
+        <dt>{{ rule.label }}</dt>
+        <dd>{{ rule.value }}<small>{{ rule.desc }}{% if rule.key == 'tribal_val' %} Same-day eliminations earn equal tribal points.{% elif rule.key == 'first_val' %} On top of all other points.{% elif rule.key == 'individual_immunity_val' %} Individual immunity only, not tribal.{% endif %}</small></dd>
+    </div>
+    {% endfor %}
+</dl>
+{% endif %}
+
+{% if progressive %}
+<h2>Progressive tribal values</h2>
+<p>Later tribals are worth more than earlier ones. The value climbs through three phases.</p>
+{% if examples %}
+<dl class="ls-values ls-values-wide">
+    <div class="ls-value">
+        <dt>Pre-merge</dt>
+        <dd>Starts at {{ config.tribal_base }} pts<small>{% if config.tribal_step %}Up {{ config.tribal_step }} per tribal. First tribal {{ examples.first_tribal }} pts, last pre-merge tribal {{ examples.merge_tribal|round(2) }} pts.{% else %}Stays flat.{% endif %}</small></dd>
+    </div>
+    <div class="ls-value">
+        <dt>Post-merge</dt>
+        <dd>From {{ examples.merge_tribal|round(2) }} pts<small>{% if config.post_merge_step %}Up {{ config.post_merge_step }} per tribal.{% else %}Stays flat.{% endif %}</small></dd>
+    </div>
+    <div class="ls-value">
+        <dt>Finale</dt>
+        <dd>From {{ examples.last_post_merge|round(2) }} pts<small>Begins at {{ config.finale_size }} players left.{% if config.finale_step %} Up {{ config.finale_step }} per tribal.{% else %} Stays flat.{% endif %}</small></dd>
+    </div>
+</dl>
+{% else %}
+<p>Phase values appear once the merge data is available.</p>
+{% endif %}
+{% endif %}
+
+<h2>Same-day tribals</h2>
+<p>Tribal survival counts per <strong>tribal council survived</strong>. When two or three castaways go home on the same night, they are all credited with the same number of tribals, so a double tribal does not punish whoever happened to be read out second.</p>
+<p class="ls-example">Five tribals have happened and a double tribal sends two castaways home. Both are credited with <strong>5 tribals</strong>. Everyone still in the game has now survived <strong>6</strong>. On the leaderboard those two are labelled "Tied 5th voted out".</p>
+
+{% if inactive_rules %}
+<h2>Available but off</h2>
+<p>Set to zero for this season. The league admin can turn any of them on.</p>
+<ul class="ls-inactive">
+    {% for rule in inactive_rules %}
+    <li><strong>{{ rule.label }}</strong> &mdash; {{ rule.desc }}</li>
+    {% endfor %}
+</ul>
+{% endif %}

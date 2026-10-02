@@ -1,0 +1,39 @@
+{% set draft_repl_mult = config.get('draft_replacement_multiplier', 1.0) %}
+{% set wc_repl_mult = config.get('wc_replacement_multiplier', config.get('replacement_multiplier', 0.5)) %}
+
+<dl class="ls-values">
+    <div class="ls-value">
+        <dt>For a draft pick</dt>
+        <dd>{{ "%.0f"|format(draft_repl_mult * 100) }}%</dd>
+    </div>
+    <div class="ls-value">
+        <dt>For a Wildcard</dt>
+        <dd>{{ "%.0f"|format(wc_repl_mult * 100) }}%</dd>
+    </div>
+    <div class="ls-value">
+        <dt>Stats counted</dt>
+        <dd>After selection only</dd>
+    </div>
+    <div class="ls-value">
+        <dt>Picked</dt>
+        <dd>After the merge</dd>
+    </div>
+</dl>
+
+<p>If one of your picks was eliminated <strong>before the merge</strong>, you may select a <strong>Replacement</strong> from any remaining castaway not already on a roster.</p>
+
+<h2>Eligibility</h2>
+<ul>
+    <li>A <strong>drafted</strong> pick eliminated pre-merge earns you a full-strength replacement.</li>
+    <li>If only your <strong>Wildcard</strong> went out pre-merge, you get a wildcard-strength replacement.</li>
+    <li>If none of your picks went out pre-merge, you are not eligible.</li>
+</ul>
+
+<h2>Scoring</h2>
+{% if draft_repl_mult == 0 and wc_repl_mult == 0 %}
+<p>Replacement picks <strong>do not earn points</strong> this season. Our <a href="{{ url_for('main.scoring_analysis') }}">scoring analysis</a> found that replacements rarely accumulate enough post-merge points to move the standings. They are a <strong>stay-in-the-game</strong> mechanic instead: you still get someone to root for after losing a pick early.</p>
+<p>Replacements still appear on your roster and their stats are tracked; their point contribution is zero.</p>
+{% else %}
+<p>Replacements earn points only for what their castaway does <strong>from the moment you pick them</strong>. There are no retroactive points.</p>
+<p class="ls-example">The merge is Episode 8 and your drafted castaway goes out in Episode 9. You pick a replacement who has already survived 9 tribals and won an immunity. None of that counts. If they survive 4 more tribals and win, you score those 4 tribals plus any bonuses earned after you selected them.</p>
+{% endif %}

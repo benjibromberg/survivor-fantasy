@@ -2406,6 +2406,194 @@ details.lb-champion[open] > summary.lb-row {
     opacity: 1;
 }
 
+/* ── League settings ───────────────────────────────────────────────
+   A configuration readout, not an article. Values get label-above-value
+   treatment; the cards are the navigation, which is why these pages carry
+   no contents panel. Placed before the first max-width block so the phone
+   overrides at the end of the file can beat them at equal specificity. */
+
+.ls-subtitle {
+    margin: -0.35rem 0 1.5rem;
+    color: var(--text-dim);
+    font-size: max(var(--fs-floor), 0.9em);
+}
+
+.ls-breadcrumb {
+    margin: 0 0 0.35rem;
+    font-size: max(var(--fs-floor), 0.85em);
+}
+
+/* The one sanctioned use of the condensed face: a short label above data. */
+.ls-group-label {
+    margin: 1.75rem 0 0.6rem;
+    font-family: var(--font-label);
+    font-size: max(var(--fs-floor), 0.85rem);
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+
+.ls-glance .ls-group-label:first-of-type,
+.ls-group:first-of-type .ls-group-label {
+    margin-top: 0;
+}
+
+/* Label above value. Survives a phone, and reads as a readout rather than
+   a table nobody can scan on 375px. */
+.ls-values {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 0.9rem 1.25rem;
+    margin: 0 0 0.5rem;
+}
+
+.ls-values-wide {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+}
+
+/* Grid items default to min-width: auto, so a 1fr track cannot shrink below
+   an item's min-content width. Anything with an intrinsic width then hangs
+   past its column. */
+.ls-value {
+    min-width: 0;
+}
+
+.ls-value dt {
+    font-size: max(var(--fs-floor), 0.78em);
+    color: var(--text-dim);
+    margin-bottom: 0.15rem;
+}
+
+.ls-value dd {
+    margin: 0;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: var(--sand-light);
+    overflow-wrap: anywhere;
+}
+
+.ls-value dd small {
+    display: block;
+    margin-top: 0.2rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    font-size: max(var(--fs-floor), 0.8em);
+    color: var(--text-dim);
+}
+
+.ls-values-wide .ls-value {
+    border-bottom: 1px solid var(--card-border);
+    padding-bottom: 0.85rem;
+}
+
+.ls-values-wide .ls-value:last-of-type {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+/* Hub cards */
+.ls-cards {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 0.6rem;
+}
+
+.ls-card {
+    min-width: 0;
+    /* list-style on the ul does not reach here: Pico styles the item with a
+       more specific selector, so the square marker survives. Measured. */
+    list-style: none;
+}
+
+.ls-card > a {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 3.25rem;
+    padding: 0.85rem 1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.ls-card > a:hover,
+.ls-card > a:focus-visible {
+    background: var(--ocean-surface);
+    border-color: var(--fire-bright);
+}
+
+.ls-card-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.ls-card-title {
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: var(--sand-warm);
+}
+
+.ls-card-blurb {
+    margin-top: 0.1rem;
+    font-size: max(var(--fs-floor), 0.82em);
+    color: var(--text-dim);
+}
+
+.ls-card-chevron {
+    flex-shrink: 0;
+    font-size: 1.4em;
+    line-height: 1;
+    color: var(--text-dim);
+}
+
+.ls-card > a:hover .ls-card-chevron {
+    color: var(--fire-glow);
+}
+
+/* Detail pages: prose capped for line length, same as the old fold bodies. */
+.ls-detail p,
+.ls-detail ul,
+.ls-detail ol {
+    max-width: 68ch;
+    line-height: 1.6;
+}
+
+.ls-detail h2 {
+    margin-top: 1.75rem;
+}
+
+.ls-example {
+    padding: 0.75rem 0.9rem;
+    background: var(--card-bg);
+    border-left: 2px solid var(--card-border);
+    border-radius: 0 4px 4px 0;
+    font-size: max(var(--fs-floor), 0.92em);
+}
+
+.ls-inactive {
+    max-width: 68ch;
+    color: var(--text-dim);
+}
+
+.ls-siblings ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+}
+
 /* Team charts — stacked bar + donut side by side */
 .charts-row {
     display: flex;
@@ -3605,4 +3793,11 @@ section > table {
     .tldr-value { font-size: 1.6rem; }
     .season-health-card { padding: 0.85rem 0.9rem; }
     .param-group canvas { max-height: 150px; }
+
+    /* League settings */
+    .ls-values { grid-template-columns: repeat(2, 1fr); gap: 0.8rem 1rem; }
+    .ls-values-wide { grid-template-columns: 1fr; }
+    .ls-cards { grid-template-columns: 1fr; gap: 0.5rem; }
+    .ls-card > a { padding: 0.75rem 0.85rem; }
+    .ls-group-label { margin: 1.4rem 0 0.5rem; }
 }

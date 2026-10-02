@@ -38,7 +38,7 @@ class TestStaticVersion:
     def test_pages_link_the_stylesheet_with_its_content_version(self, app):
         expected = _version_of(f"{app.static_folder}/style.css")
 
-        page = app.test_client().get("/rules").data.decode()
+        page = app.test_client().get("/league-settings").data.decode()
 
         assert f"/static/style.css?v={expected}" in page
 
