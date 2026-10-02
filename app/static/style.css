@@ -2724,28 +2724,6 @@ details.lb-champion[open] > summary.lb-row {
     }
 }
 
-@media (max-width: 576px) {
-    .finale-banner {
-        padding: 1.5rem 1rem;
-    }
-
-    .finale-winner-name {
-        font-size: 1.8em;
-    }
-
-    .finale-stats {
-        gap: 1rem;
-    }
-
-    .finale-stat-value {
-        font-size: 1.2em;
-    }
-
-    .finale-label {
-        font-size: 0.9em;
-    }
-}
-
 /* --- Keyboard focus ---
    A ring for the controls whose own styling removes the browser's and
    Pico's indicator. Same ring as the collapsible-section summaries. */
