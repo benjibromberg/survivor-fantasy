@@ -27,4 +27,27 @@ services:
     # http://survivor-fantasy:5050 (gunicorn binds 0.0.0.0:5050).
     expose:
       - "5050"
+    # `restart: unless-stopped` only sees a process that exited. A gunicorn that
+    # is wedged, deadlocked or answering 500 keeps the container "running", so
+    # anything watching container state alone reports it healthy. This is what
+    # closes that gap, and Docker reports the result as the container's health.
+    #
+    # Hits `/`, which calls Season.get_active() and so exercises Flask,
+    # SQLAlchemy and SQLite rather than a static file. `/` then redirects to the
+    # active leaderboard, and http.client is used instead of urllib precisely
+    # because it does NOT follow that redirect: urlopen() would render a full
+    # standings page every interval. Anything < 400 is healthy, so the 302 is a
+    # pass and a 500 is not.
+    #
+    # python is the only option in the image: it is python:3.11-slim with no
+    # curl and no wget. It runs as appuser and needs no privileges.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client,sys; c=http.client.HTTPConnection('127.0.0.1',5050,timeout=4); c.request('GET','/'); sys.exit(0 if c.getresponse().status < 400 else 1)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      # create_app() runs create_all() plus a column and index sync behind a
+      # cross-process file lock before the first worker serves, so the first
+      # probe must not arrive during that.
+      start_period: 40s
     restart: unless-stopped
