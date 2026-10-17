@@ -277,7 +277,10 @@ nav {
 
 .nav-dropdown-badge {
     font-family: var(--font-label);
-    font-size: 0.7em;
+    /* The only small item in this file that was a bare em. It rendered at
+       11.3px, under the 12px floor, which also made DESIGN.md's claim that
+       the decorative caret is the only sub-floor text untrue. */
+    font-size: max(var(--fs-floor), 0.7em);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--fire-bright);
@@ -492,6 +495,11 @@ nav:not(.tabbar) a:hover {
 .nav-link-back {
     display: inline-flex;
     align-items: center;
+    /* Its height came from padding in rem while the target floor is 2.5rem,
+       so it cleared the floor at a 16px root and fell under it at 19px: 42px
+       against 47.5px on a 1024pt tablet. A minimum states the intent rather
+       than leaving it to arithmetic that only holds at one root size. */
+    min-height: 2.5rem;
     gap: 0.4rem;
     font-family: var(--font-label);
     font-size: 1em;
@@ -2560,6 +2568,239 @@ details.lb-champion[open] > summary.lb-row {
 .chart-card { flex: 1; min-width: 0; }
 .chart-card h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
 .chart-card .chart-wrap { position: relative; height: 300px; }
+/* ---- Touch navigation bar ------------------------------------------
+   Hidden by default; the block below turns it on at 1024 and under, and
+   hides the top nav's links in the same breath.
+
+   This default must sit BEFORE that block. A base rule written after a
+   media block beats it at equal specificity, which is how this rule, 700
+   lines further down the file, silently kept the bar hidden on a tablet
+   while the top nav links were already gone: no navigation at all. Block
+   ordering does not catch that; only the base-before-breakpoint rule does. */
+
+.tabbar,
+.tabbar-sheet {
+    display: none;
+}
+
+/* ── Touch navigation: phones and tablets (<= 1024px) ──────────────
+   The bottom bar is the navigation for anything held in the hands, so it
+   runs to 1024px rather than stopping at 640: an iPad Pro 13in is 1024pt
+   in portrait, which is inside this band by one pixel and would otherwise
+   get a nav built for a mouse.
+
+   Placed before every narrower block so the phone sizes further down win.
+   Media queries add no specificity; source order is the whole mechanism.
+   Sizes here are the tablet ones; the 640 block shrinks them for phones. */
+
+@media (max-width: 1024px) {
+    /* The links live in the tab bar at the bottom instead */
+    .nav-links {
+        display: none;
+    }
+
+    nav {
+        flex-wrap: nowrap;
+    }
+
+    .tabbar {
+        display: flex;
+        position: fixed;
+        left: 0.5rem;
+        right: 0.5rem;
+        bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+        z-index: 60;
+        justify-content: space-around;
+        gap: 0.15rem;
+        padding: 0.3rem 0.2rem;
+        border: 1px solid var(--card-border);
+        border-radius: 999px;
+        background: rgba(22, 37, 53, 0.97);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    .tabbar-item {
+        all: unset;
+        cursor: pointer;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.15rem;
+        min-height: 3rem;
+        padding: 0.35rem 0.2rem;
+        border-radius: 999px;
+        color: var(--text-dim);
+        text-align: center;
+        transition: color 0.15s;
+    }
+
+    .tabbar-item svg {
+        width: 22px;
+        height: 22px;
+        fill: currentColor;
+    }
+
+    .tabbar-item span {
+        font-family: var(--font-label);
+        font-size: max(var(--fs-floor), 0.68rem);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        line-height: 1;
+    }
+
+    .tabbar-item.is-active {
+        color: var(--fire-glow);
+    }
+
+    .tabbar-item:focus-visible {
+        outline: 2px solid var(--fire-glow);
+        outline-offset: -2px;
+    }
+
+    /* The sheet sits above the bar, not over it */
+    .tabbar-sheet {
+        display: block;
+        position: fixed;
+        left: 0.5rem;
+        right: 0.5rem;
+        bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+        z-index: 61;
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 0.4rem;
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        background: var(--deep-ocean);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    }
+
+    .tabbar-sheet[hidden] {
+        display: none;
+    }
+
+    .tabbar-sheet-label {
+        margin: 0.35rem 0.6rem 0.2rem;
+        font-family: var(--font-label);
+        font-size: max(var(--fs-floor), 0.72rem);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+    }
+
+    .tabbar-sheet-item {
+        display: block;
+        min-height: 2.75rem;
+        padding: 0.7rem 0.6rem;
+        border-radius: 6px;
+        color: var(--text-light);
+        text-decoration: none;
+    }
+
+    .tabbar-sheet-item:hover,
+    .tabbar-sheet-item:focus-visible {
+        background: var(--ocean-surface);
+        color: var(--sand-warm);
+    }
+
+    /* Content must clear the bar, and the bar occupies more than its own
+       height: it is inset from the bottom and its items overshoot their
+       min-height. Measured rather than derived. At 1024 with a 19px root its
+       footprint is 135px from the viewport bottom; 8rem is 152px. */
+    body {
+        padding-bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Held further from the face than a phone, so the targets grow. */
+    .tabbar-item {
+        min-height: 3.5rem;
+        gap: 0.25rem;
+        padding: 0.45rem 0.3rem;
+    }
+
+    .tabbar-item svg {
+        width: 26px;
+        height: 26px;
+    }
+
+    .tabbar-item span {
+        font-size: max(var(--fs-floor), 0.78rem);
+    }
+
+    .tabbar-sheet {
+        bottom: calc(4.9rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .tabbar-sheet-item {
+        min-height: 3rem;
+    }
+
+    /* ---- Touch targets ------------------------------------------------
+       Everything below was written for phones and lived in the 576 block,
+       which meant none of it reached a tablet. A 1024pt iPad is a touch
+       device with no cursor, so the 2.5rem floor applies there for exactly
+       the reason it applies on a phone. Admin is included deliberately:
+       draft night may happen at a desk, but the same pages get opened on
+       the iPad the rest of the season. */
+
+    .toolbar-toggle {
+        min-height: 2.5rem;
+        padding: 0 0.7rem 0 0.55rem;
+        border: 1px solid var(--card-border);
+        border-radius: 999px;
+        background: var(--deep-ocean);
+        font-size: 1em;
+    }
+    .fold-controls .fold-all {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.5rem;
+    }
+    .admin-btn-sm,
+    .admin-form-row button,
+    .admin-form-row input:not([type="checkbox"]),
+    .admin-inline-form input,
+    .admin-inline-form button {
+        min-height: 2.5rem;
+    }
+    .admin-page-nav a {
+        display: inline-block;
+        padding: 0.5rem 0;
+        min-height: 2.5rem;
+    }
+    /* Season chips were 30.8px and the meta-line link 17px. */
+    .my-team-season {
+        min-height: 2.5rem;
+        padding: 0.15rem 0.75rem;
+    }
+    .my-team-sub a {
+        display: inline-block;
+        padding: 0.4rem 0;
+        min-height: 2.5rem;
+    }
+    /* Checkboxes were 17-20px. The label takes the target, not the glyph. */
+    .admin-check {
+        min-height: 2.5rem;
+        min-width: 2.5rem;
+    }
+    .admin-form-row label:not(.admin-field) {
+        min-height: 2.5rem;
+    }
+    /* The external link at the foot of an open castaway sheet. 18px before,
+       and the only tappable thing on that panel. */
+    .lb-pick-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.5rem;
+    }
+    .admin-table td a:not([role="button"]) {
+        display: inline-block;
+        padding: 0.5rem 0;
+        min-height: 2.5rem;
+    }
+}
+
 .chart-card .chart-wrap canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: 100% !important; }
 @media (max-width: 768px) {
     .charts-row { flex-direction: column; }
@@ -3072,6 +3313,13 @@ section > table {
 }
 
 .lb-compare a {
+    /* An inline link is only as tall as its line box, which put this at 20px
+       in the touch band. It is the only route from the leaderboard to the
+       scoring comparison, so it gets a target rather than staying a line of
+       text that happens to be clickable. */
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
     color: var(--text-dim);
     text-decoration: none;
     border-bottom: 1px solid transparent;
@@ -3080,16 +3328,6 @@ section > table {
 .lb-compare a:hover {
     color: var(--fire-glow);
     border-bottom-color: var(--fire-glow);
-}
-
-/* ---- Phone tab bar -------------------------------------------------
-   Hidden above 640px; the desktop nav is unchanged. Below it, the top
-   nav's links are hidden and these are the primary destinations, so the
-   header stays one row instead of wrapping to three. */
-
-.tabbar,
-.tabbar-sheet {
-    display: none;
 }
 
 /* --- Phones, nav (<= 640px) --- */
@@ -3125,119 +3363,36 @@ section > table {
         letter-spacing: 0.05em;
     }
 
-    /* The links live in the tab bar at the bottom instead */
-    .nav-links {
-        display: none;
-    }
 
-    nav {
-        flex-wrap: nowrap;
-    }
-
-    .tabbar {
-        display: flex;
-        position: fixed;
-        left: 0.5rem;
-        right: 0.5rem;
-        bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
-        z-index: 60;
-        justify-content: space-around;
-        gap: 0.15rem;
-        padding: 0.3rem 0.2rem;
-        border: 1px solid var(--card-border);
-        border-radius: 999px;
-        background: rgba(22, 37, 53, 0.97);
-        backdrop-filter: blur(8px);
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
-    }
-
+    /* Phone sizes, overriding the tablet ones set in the 1024 block. */
     .tabbar-item {
-        all: unset;
-        cursor: pointer;
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.15rem;
         min-height: 3rem;
+        gap: 0.15rem;
         padding: 0.35rem 0.2rem;
-        border-radius: 999px;
-        color: var(--text-dim);
-        text-align: center;
-        transition: color 0.15s;
     }
 
     .tabbar-item svg {
         width: 22px;
         height: 22px;
-        fill: currentColor;
     }
 
     .tabbar-item span {
-        font-family: var(--font-label);
         font-size: max(var(--fs-floor), 0.68rem);
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        line-height: 1;
     }
 
-    .tabbar-item.is-active {
-        color: var(--fire-glow);
-    }
-
-    .tabbar-item:focus-visible {
-        outline: 2px solid var(--fire-glow);
-        outline-offset: -2px;
-    }
-
-    /* The sheet sits above the bar, not over it */
     .tabbar-sheet {
-        display: block;
-        position: fixed;
-        left: 0.5rem;
-        right: 0.5rem;
         bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
-        z-index: 61;
-        max-height: 60vh;
-        overflow-y: auto;
-        padding: 0.4rem;
-        border: 1px solid var(--card-border);
-        border-radius: 12px;
-        background: var(--deep-ocean);
-        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
-    }
-
-    .tabbar-sheet[hidden] {
-        display: none;
-    }
-
-    .tabbar-sheet-label {
-        margin: 0.35rem 0.6rem 0.2rem;
-        font-family: var(--font-label);
-        font-size: max(var(--fs-floor), 0.72rem);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--text-dim);
     }
 
     .tabbar-sheet-item {
-        display: block;
         min-height: 2.75rem;
-        padding: 0.7rem 0.6rem;
-        border-radius: 6px;
-        color: var(--text-light);
-        text-decoration: none;
     }
 
-    .tabbar-sheet-item:hover,
-    .tabbar-sheet-item:focus-visible {
-        background: var(--ocean-surface);
-        color: var(--sand-warm);
-    }
-
-    /* Content must clear the bar */
+    /* 4.5rem was 72px against a 95px footprint, so this has been 23px short
+       since the bar shipped. Nothing was covered because no page's content
+       reached that far; the taller tablet bar is what surfaced it. */
     body {
-        padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+        padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
     }
 
     .nav-btn {
@@ -3394,14 +3549,6 @@ section > table {
         gap: 0.4rem;
     }
 
-    .toolbar-toggle {
-        min-height: 2.5rem;
-        padding: 0 0.7rem 0 0.55rem;
-        border: 1px solid var(--card-border);
-        border-radius: 999px;
-        background: var(--deep-ocean);
-        font-size: 1em;
-    }
 
     .toolbar-toggle:has(input:checked) {
         border-color: var(--fire-bright);
@@ -3592,11 +3739,6 @@ section > table {
        stretching them across the row. `all: unset` leaves these display:
        inline, where vertical padding paints but does not give the box layout
        height, so the padding alone measured 37px against the 2.5rem floor. */
-    .fold-controls .fold-all {
-        display: inline-flex;
-        align-items: center;
-        min-height: 2.5rem;
-    }
 
     /* Tables: keep columns readable and scroll instead of crushing them */
     .table-scroll > table {
@@ -3617,67 +3759,25 @@ section > table {
        36 interactive targets on /admin/players and 31 on /admin/seasons were
        under the 2.5rem floor, the smallest at 19px. Desktop keeps the denser
        sizing, which is what draft night actually wants. */
-    .admin-btn-sm,
-    .admin-form-row button,
-    .admin-form-row input:not([type="checkbox"]),
-    .admin-inline-form input,
-    .admin-inline-form button {
-        min-height: 2.5rem;
-    }
 
     .section-title {
         font-size: 1.15rem;
     }
 
-    .admin-page-nav a {
-        display: inline-block;
-        padding: 0.5rem 0;
-        min-height: 2.5rem;
-    }
 
-    /* Season chips were 30.8px and the meta-line link 17px. */
-    .my-team-season {
-        min-height: 2.5rem;
-        padding: 0.15rem 0.75rem;
-    }
 
-    .my-team-sub a {
-        display: inline-block;
-        padding: 0.4rem 0;
-        min-height: 2.5rem;
-    }
 
     .admin-table form {
         margin: 0;
     }
 
-    /* Checkboxes were 17-20px. The label takes the target, not the glyph. */
-    .admin-check {
-        min-height: 2.5rem;
-        min-width: 2.5rem;
-    }
 
-    .admin-form-row label:not(.admin-field) {
-        min-height: 2.5rem;
-    }
 
-    /* The external link at the foot of an open castaway sheet. 18px before,
-       and the only tappable thing on that panel. */
-    .lb-pick-link {
-        display: inline-flex;
-        align-items: center;
-        min-height: 2.5rem;
-    }
 
     /* Opening a row is the main thing you do on these pages from a phone, and
        the name is the control that does it. Measured at 17px before this.
        role="button" links already carry .admin-btn-sm and are excluded so they
        keep their own padding. */
-    .admin-table td a:not([role="button"]) {
-        display: inline-block;
-        padding: 0.5rem 0;
-        min-height: 2.5rem;
-    }
 
     /* Let a field take the row and push the button onto the next line
        rather than both shrinking. This targets the field WRAPPER and only

@@ -148,7 +148,7 @@ Survivor tribe colors come from the survivoR dataset (`tribe_colour`). These can
 
 Responsive overrides are spread across several `@media` blocks rather than one. What matters is not how many there are but the order they appear in, because **media queries add no specificity**: when two rules for the same element set the same property at the same specificity, source order alone decides. On a 375px screen every `max-width` block from 768 down is matching at once.
 
-So the rule is **wide to narrow in source order**. A `576px` block placed before a `768px` block loses to it on a phone, which is the reverse of what the breakpoint is for, and the page still renders plausibly. That exact inversion was in this file: the order was 768, 768, 576, 768, 640, 576, and the stray 576 block turned out to be dead, four declarations duplicated verbatim from the later block plus one the later block overrode anyway.
+So the rule is **wide to narrow in source order**, which is why the 1024 touch-navigation block sits before every 768 block rather than next to them. A `576px` block placed before a `768px` block loses to it on a phone, which is the reverse of what the breakpoint is for, and the page still renders plausibly. That exact inversion was in this file: the order was 768, 768, 576, 768, 640, 576, and the stray 576 block turned out to be dead, four declarations duplicated verbatim from the later block plus one the later block overrode anyway.
 
 Two placement rules follow from it:
 
@@ -159,7 +159,8 @@ Two placement rules follow from it:
 
 | Breakpoint | Target | Usage |
 |------------|--------|-------|
-| `768px` | Tablet | Stats grid 2-col, progression and team charts stack (`flex: none` + explicit height; `flex: 1` would collapse the absolutely positioned canvas), mini standings 2-up |
+| `1024px` | Tablet | Bottom tab bar replaces the top nav, because anything held in the hands navigates by thumb. An iPad Pro 13in is 1024pt in portrait, so the band is inclusive of 1024 by one pixel on purpose. Tab bar targets grow over the phone sizes; the 640 block shrinks them back |
+| `768px` | Small tablet, phone landscape | Stats grid 2-col, progression and team charts stack (`flex: none` + explicit height; `flex: 1` would collapse the absolutely positioned canvas), mini standings 2-up |
 | `640px` | Large phone | Nav wraps: logo row, then links row (tap-sized, wraps); seasons dropdown spans the nav width, anchored to `<nav>` |
 | `576px` | Phone | Stats grid 1-col, header split (rank/name/points, then extras line), pick pills become a 2-up grid (1-col when a detail toggle is on), toolbar toggles are tap-sized chips, timeline scrolls sideways, fold sections tighten, tables get `min-width` and scroll |
 
