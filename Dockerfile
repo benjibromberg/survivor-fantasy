@@ -1,6 +1,6 @@
 # Pinned by digest for reproducible, supply-chain-hardened builds.
 # Dependabot (docker) keeps this digest current. Re-pin: docker buildx imagetools inspect python:3.11-slim
-FROM python:3.11-slim@sha256:e41613d42d4891e4930f79523f93f81bbc7632584ec65e36ab055f41a800b41e
+FROM python:3.15-slim@sha256:2da676046630d7bf14c6764ae1143dc7fa0377a53f94bf5a642f0b214aca5bce
 
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
 
