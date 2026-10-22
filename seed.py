@@ -18,7 +18,6 @@ import sys
 from datetime import UTC, datetime
 
 import pandas as pd
-import requests as http_requests
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -29,6 +28,7 @@ from app.data import (
     SURVIVOR_DATA_FILE,
     _build_nickname_map,
     compute_castaway_stats,
+    download_survivor_data,
     generate_all_season_images,
     get_idol_ids,
     refresh_season,
@@ -44,10 +44,6 @@ from app.models import (
     User,
     db,
     normalize_email,
-)
-
-SURVIVOR_DATA_URL = (
-    "https://github.com/doehm/survivoR/raw/refs/heads/master/dev/xlsx/survivoR.xlsx"
 )
 
 # Seasons built when --seasons is not given (see resolve_season_nums)
@@ -71,15 +67,12 @@ NICKNAME_MAP = {
 
 
 def ensure_survivor_data():
-    """Download survivoR.xlsx from GitHub if it doesn't exist locally."""
+    """Build survivoR.xlsx from the survivoR GitHub repo if it doesn't exist locally."""
     if os.path.exists(SURVIVOR_DATA_FILE):
         return
-    print(f"Downloading {SURVIVOR_DATA_FILE} from survivoR GitHub repo...")
-    resp = http_requests.get(SURVIVOR_DATA_URL, timeout=120)
-    resp.raise_for_status()
-    with open(SURVIVOR_DATA_FILE, "wb") as f:
-        f.write(resp.content)
-    print(f"Downloaded {SURVIVOR_DATA_FILE} ({len(resp.content) / 1024 / 1024:.1f} MB)")
+    print(f"Building {SURVIVOR_DATA_FILE} from the survivoR GitHub repo...")
+    download_survivor_data()
+    print(f"Built {SURVIVOR_DATA_FILE}")
 
 
 def load_survivor_ref():
@@ -715,11 +708,8 @@ def main():
         db.create_all()
 
         if not no_scrape:
-            print("Downloading latest survivoR.xlsx...")
-            resp = http_requests.get(SURVIVOR_DATA_URL, timeout=30)
-            resp.raise_for_status()
-            with open(SURVIVOR_DATA_FILE, "wb") as f:
-                f.write(resp.content)
+            print("Building the latest survivoR.xlsx...")
+            download_survivor_data()
 
         print("Loading survivoR reference data...")
         ref_data = load_survivor_ref()
