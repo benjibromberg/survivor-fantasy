@@ -304,3 +304,32 @@ class TestDownloadSurvivorData:
         data.download_survivor_data()
 
         assert swaps == [str(target)]
+
+
+class TestOneWayIn:
+    """Every copy of survivoR.xlsx comes from download_survivor_data()."""
+
+    def _python_sources(self):
+        repo = pathlib.Path(__file__).resolve().parent.parent
+        return sorted((repo / "app").rglob("*.py")) + sorted(repo.glob("*.py"))
+
+    def test_the_scan_reads_the_scripts_too(self):
+        names = {path.name for path in self._python_sources()}
+
+        assert {"data.py", "seed.py", "add_season.py", "analyze_scoring.py"} <= names
+
+    def test_nothing_fetches_survivors_xlsx_export(self):
+        """Upstream regenerates the xlsx only now and then; it went stale."""
+        stale = [
+            path.name
+            for path in self._python_sources()
+            if "dev/xlsx" in path.read_text()
+        ]
+
+        assert stale == []
+
+    def test_the_json_source_is_still_named(self):
+        """The guard above must not pass because the download vanished."""
+        sources = {path.name: path.read_text() for path in self._python_sources()}
+
+        assert "/dev/json/" in sources["data.py"]

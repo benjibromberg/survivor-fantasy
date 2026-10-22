@@ -250,3 +250,41 @@ class TestResolveActiveSeason:
         from seed import resolve_active_season
 
         assert resolve_active_season() is None
+
+
+# ── survivoR data ─────────────────────────────────────────────────────────
+
+
+class TestEnsureSurvivorData:
+    """seed.py gets survivoR.xlsx the way the app does, not by its own download.
+
+    It used to fetch survivoR's xlsx export itself, which upstream regenerates
+    only now and then, and write it in place.
+    """
+
+    def test_builds_it_through_the_app_when_missing(self, tmp_path, monkeypatch):
+        import seed
+
+        calls = []
+        monkeypatch.setattr(seed, "SURVIVOR_DATA_FILE", str(tmp_path / "missing.xlsx"))
+        monkeypatch.setattr(seed, "download_survivor_data", lambda: calls.append(1))
+
+        seed.ensure_survivor_data()
+
+        assert calls == [1]
+
+    def test_leaves_an_existing_file_alone(self, tmp_path, monkeypatch):
+        import seed
+
+        existing = tmp_path / "survivoR.xlsx"
+        existing.write_bytes(b"already here")
+        monkeypatch.setattr(seed, "SURVIVOR_DATA_FILE", str(existing))
+
+        def boom():
+            raise AssertionError("an existing survivoR.xlsx must not be refetched")
+
+        monkeypatch.setattr(seed, "download_survivor_data", boom)
+
+        seed.ensure_survivor_data()
+
+        assert existing.read_bytes() == b"already here"
