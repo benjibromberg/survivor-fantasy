@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import time
+import uuid
 from urllib.parse import quote
 
 import pandas as pd
@@ -258,12 +259,34 @@ def season_episode_info(episodes, season_number):
     return info
 
 
+def _write_atomically(path, write):
+    """Call write(tmp) on a temporary file beside path, then rename it over path.
+
+    Readers, and the second gunicorn worker downloading at the same moment,
+    only ever see the old file or the new one, never a half-written one. The
+    rename is atomic because the temporary file is in the same directory. If
+    write() raises, path is untouched and the temporary file is removed. The
+    name carries the pid and a random part, so two writers never share one.
+    """
+    tmp = f"{path}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp"
+    try:
+        write(tmp)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
 def download_survivor_data():
     """Download the latest survivoR.xlsx from GitHub."""
     resp = requests.get(SURVIVOR_DATA_URL, timeout=60)
     resp.raise_for_status()
-    with open(SURVIVOR_DATA_FILE, "wb") as f:
-        f.write(resp.content)
+
+    def write(tmp):
+        with open(tmp, "wb") as f:
+            f.write(resp.content)
+
+    _write_atomically(SURVIVOR_DATA_FILE, write)
     logger.info("Downloaded latest survivoR.xlsx")
 
 

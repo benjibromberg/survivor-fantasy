@@ -1,5 +1,7 @@
-# Downloaded data (auto-fetched by seed.py)
+# Downloaded data (auto-fetched by seed.py), and the temporary file a
+# download writes before swapping it in (left behind only if killed mid-write)
 survivoR.xlsx
+survivoR.xlsx.*.tmp
 
 # Personal league picks (see picks/README.md)
 picks/*.json
