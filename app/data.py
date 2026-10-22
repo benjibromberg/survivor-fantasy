@@ -5,20 +5,49 @@ import io
 import json
 import logging
 import os
+import re
 import time
 import uuid
+from datetime import datetime
 from urllib.parse import quote
 
 import pandas as pd
 import requests
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 
 from .models import Pick, Season, SoleSurvivorPick, Survivor, TeamName, User, db
 
 logger = logging.getLogger(__name__)
 
-SURVIVOR_DATA_URL = (
-    "https://github.com/doehm/survivoR/raw/refs/heads/master/dev/xlsx/survivoR.xlsx"
+# survivoR publishes each of its tables as dev/json/<table>.json and also as one
+# xlsx, but it regenerates the JSON with every episode and the xlsx only now and
+# then: in October 2026 the xlsx stayed at US51 episode 2 while the JSON reached
+# episode 4. So download_survivor_data() fetches the JSON and writes
+# survivoR.xlsx itself, with the sheet names the rest of the app reads.
+SURVIVOR_JSON_URL = (
+    "https://raw.githubusercontent.com/doehm/survivoR/master/dev/json/{table}.json"
 )
+
+# The survivoR.xlsx sheets the app reads, and the dev/json table each is built
+# from. A sheet read anywhere with pd.read_excel must be listed here, and
+# tests/test_survivor_json.py fails when one is not.
+SURVIVOR_TABLES = {
+    "Advantage Details": "advantage_details",
+    "Advantage Movement": "advantage_movement",
+    "Boot Mapping": "boot_mapping",
+    "Castaway Details": "castaway_details",
+    "Castaway Scores": "castaway_scores",
+    "Castaways": "castaways",
+    "Challenge Results": "challenge_results",
+    "Confessionals": "confessionals",
+    "Episodes": "episodes",
+    "Jury Votes": "jury_votes",
+    "Season Summary": "season_summary",
+    "Tribe Colours": "tribe_colours",
+    "Tribe Mapping": "tribe_mapping",
+    "Vote History": "vote_history",
+}
 
 
 # Store survivoR.xlsx alongside the database so Docker's appuser can write it.
@@ -277,17 +306,112 @@ def _write_atomically(path, write):
             os.remove(tmp)
 
 
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _is_date_column(records, column):
+    """True when every value the column has is YYYY-MM-DD text.
+
+    That is how survivoR's JSON writes an R Date, which its xlsx stores as an
+    Excel date and pd.read_excel returns as datetime64. A column with any other
+    value in it stays text.
+    """
+    values = [r[column] for r in records if r.get(column) is not None]
+    return bool(values) and all(
+        isinstance(v, str) and _ISO_DATE.fullmatch(v) for v in values
+    )
+
+
+def survivor_sheet_rows(records):
+    """Yield the header, then one row per record, for one survivoR JSON table.
+
+    The JSON leaves a null field out of its row instead of writing null, so the
+    columns are every key any row has, in the order they first appear, and a
+    missing key is an empty cell. Dates become datetimes (see
+    _is_date_column); every other value keeps its JSON type, so a bool is
+    written as an Excel boolean, as survivoR's own xlsx has it. Read back with
+    pd.read_excel, each sheet then has the columns, dtypes and values of the
+    same sheet in survivoR's xlsx (tests/test_survivor_json.py), with two
+    limits the JSON sets: floats carry at most 4 decimal places, and a column
+    with no value in any row is absent rather than empty.
+    """
+    columns = list(dict.fromkeys(key for record in records for key in record))
+    dates = {c for c in columns if _is_date_column(records, c)}
+    yield columns
+    for record in records:
+        row = []
+        for column in columns:
+            value = record.get(column)
+            if value is not None and column in dates:
+                value = datetime.strptime(value, "%Y-%m-%d")
+            row.append(value)
+        yield row
+
+
+def write_survivor_workbook(path, tables):
+    """Write (sheet name, JSON records) pairs to an xlsx workbook at path.
+
+    Write-only mode streams rows to disk instead of holding every cell in
+    memory, which DataFrame.to_excel does: over 500 MB for the full dataset.
+
+    It does not know a sheet's size when it writes the sheet's top, so it
+    leaves out the <dimension> element there, and openpyxl then parses every
+    sheet in full each time the workbook is opened: over 2 seconds per
+    pd.read_excel call. The size is known before the first row, so it is
+    given to the writer, which asks the worksheet for calculate_dimension().
+    """
+    workbook = Workbook(write_only=True)
+    for sheet, records in tables:
+        rows = survivor_sheet_rows(records)
+        header = next(rows)
+        worksheet = workbook.create_sheet(sheet)
+        last_cell = f"{get_column_letter(max(len(header), 1))}{len(records) + 1}"
+        worksheet.calculate_dimension = lambda last_cell=last_cell: f"A1:{last_cell}"
+        worksheet.append(header)
+        for row in rows:
+            worksheet.append(row)
+    workbook.save(path)
+
+
+def _survivor_table_records(table, body):
+    """Parse one dev/json table, refusing anything that is not a list of rows."""
+    records = json.loads(body)
+    if (
+        not isinstance(records, list)
+        or not records
+        or not all(isinstance(r, dict) for r in records)
+    ):
+        raise ValueError(f"survivoR {table}.json is not a list of rows")
+    return records
+
+
 def download_survivor_data():
-    """Download the latest survivoR.xlsx from GitHub."""
-    resp = requests.get(SURVIVOR_DATA_URL, timeout=60)
-    resp.raise_for_status()
+    """Rebuild survivoR.xlsx from survivoR's dev/json tables on GitHub.
+
+    Every table is fetched and checked before anything is written, so a failed
+    fetch or a table that is not rows leaves the previous file as it was. The
+    workbook is then written beside it and swapped in (_write_atomically), so
+    a reader never sees half of one. Each table is parsed twice, once to check
+    it and once to write it, so only one is ever held parsed in memory.
+    """
+    bodies = {}
+    for sheet, table in SURVIVOR_TABLES.items():
+        resp = requests.get(SURVIVOR_JSON_URL.format(table=table), timeout=60)
+        resp.raise_for_status()
+        _survivor_table_records(table, resp.content)
+        bodies[sheet] = (table, resp.content)
 
     def write(tmp):
-        with open(tmp, "wb") as f:
-            f.write(resp.content)
+        write_survivor_workbook(
+            tmp,
+            (
+                (sheet, _survivor_table_records(table, body))
+                for sheet, (table, body) in bodies.items()
+            ),
+        )
 
     _write_atomically(SURVIVOR_DATA_FILE, write)
-    logger.info("Downloaded latest survivoR.xlsx")
+    logger.info("Built survivoR.xlsx from %d survivoR tables", len(bodies))
 
 
 def refresh_season(season):

@@ -1,0 +1,22 @@
+[
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Genevieve", "castaway_id": "US0703", "advantage_id": 1, "sequence_id": 1, "day": 2, "episode": 1, "event": "Found", "sog_id": 1},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Ozzy", "castaway_id": "US0201", "advantage_id": 1, "sequence_id": 2, "day": 2, "episode": 1, "event": "Received", "sog_id": 1},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Ozzy", "castaway_id": "US0201", "advantage_id": 1, "sequence_id": 3, "day": 21, "episode": 11, "event": "Voted out with advantage", "sog_id": 17},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Ozzy", "castaway_id": "US0201", "advantage_id": 2, "sequence_id": 1, "day": 2, "episode": 1, "event": "Found", "sog_id": 1},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Cirie", "castaway_id": "US0179", "advantage_id": 2, "sequence_id": 2, "day": 9, "episode": 2, "event": "Received", "sog_id": 3},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Cirie", "castaway_id": "US0179", "advantage_id": 2, "sequence_id": 3, "day": 21, "episode": 11, "event": "Played", "played_for": "Emily", "played_for_id": "US0668", "success": "Yes", "sog_id": 16},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Savannah", "castaway_id": "US0747", "advantage_id": 3, "sequence_id": 1, "day": 2, "episode": 1, "event": "Found", "sog_id": 1},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Savannah", "castaway_id": "US0747", "advantage_id": 3, "sequence_id": 2, "day": 6, "episode": 2, "event": "Voted out with advantage", "sog_id": 3},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Christian", "castaway_id": "US0550", "advantage_id": 4, "sequence_id": 1, "day": 5, "episode": 2, "event": "Found", "sog_id": 3},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Aubry", "castaway_id": "US0477", "advantage_id": 4, "sequence_id": 2, "day": 5, "episode": 2, "event": "Received", "sog_id": 3},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Aubry", "castaway_id": "US0477", "advantage_id": 4, "sequence_id": 3, "day": 15, "episode": 7, "event": "Played", "played_for": "Aubry", "played_for_id": "US0477", "success": "Not needed", "votes_nullified": 0, "sog_id": 11},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Genevieve", "castaway_id": "US0703", "advantage_id": 5, "sequence_id": 1, "day": 9, "episode": 4, "event": "Found", "sog_id": 5},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Rizo", "castaway_id": "US0745", "advantage_id": 5, "sequence_id": 2, "day": 9, "episode": 4, "event": "Received", "sog_id": 5},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Rizo", "castaway_id": "US0745", "advantage_id": 5, "sequence_id": 3, "day": 23, "episode": 12, "event": "Played", "played_for": "Rizo", "played_for_id": "US0745", "success": "Not needed", "votes_nullified": 0, "sog_id": 20},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Stephenie", "castaway_id": "US0144", "advantage_id": 6, "sequence_id": 1, "day": 14, "episode": 7, "event": "Found", "sog_id": 11},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Stephenie", "castaway_id": "US0144", "advantage_id": 6, "sequence_id": 2, "day": 19, "episode": 10, "event": "Played", "played_for": "Rick", "played_for_id": "US0560", "success": "No", "sog_id": 15},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Rick", "castaway_id": "US0560", "advantage_id": 7, "sequence_id": 1, "day": 20, "episode": 11, "event": "Found", "sog_id": 16},
+{"version": "US", "version_season": "US50", "season": 50, "castaway": "Rick", "castaway_id": "US0560", "advantage_id": 7, "sequence_id": 2, "day": 21, "episode": 11, "event": "Played", "played_for": "Rick", "played_for_id": "US0560", "success": "Yes", "votes_nullified": 2, "sog_id": 16},
+{"version": "US", "version_season": "US51", "season": 51, "castaway": "Rob", "castaway_id": "US0771", "advantage_id": 1, "sequence_id": 1, "day": 2, "episode": 1, "event": "Found"},
+{"version": "US", "version_season": "US51", "season": 51, "castaway": "Jelly", "castaway_id": "US0756", "advantage_id": 2, "sequence_id": 1, "day": 4, "episode": 2, "event": "Found"}
+]
