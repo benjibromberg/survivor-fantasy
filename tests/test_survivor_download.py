@@ -5,10 +5,18 @@ moment into the same file, and request handlers read it at any time. Writing
 the file in place let one of them read a half-written workbook ("Truncated
 file header"). It is now written to a temporary file in the same directory and
 swapped in with os.replace, so the path only ever holds a complete file.
+
+The file is built from survivoR's dev/json tables (tests/test_survivor_json.py
+covers how), and nothing is written until every table has arrived, so a
+failed fetch leaves yesterday's file in place.
 """
 
+import json
 import os
+import pathlib
+from types import SimpleNamespace
 
+import pandas as pd
 import pytest
 import requests
 
@@ -23,6 +31,9 @@ class _FakeResponse:
     def raise_for_status(self):
         if self.status_code >= 400:
             raise requests.HTTPError(f"{self.status_code} from upstream")
+
+    def json(self):
+        return json.loads(self.content)
 
 
 @pytest.fixture()
@@ -131,46 +142,164 @@ class TestWriteAtomically:
         assert _leftovers(target) == []
 
 
-class TestDownloadSurvivorData:
-    def test_a_download_replaces_the_previous_file(self, target, monkeypatch):
-        from app import data
+# The fixture tables are survivoR's own dev/json files, trimmed (see
+# tests/test_survivor_json.py for what they hold).
+FIXTURE_JSON = (
+    pathlib.Path(__file__).resolve().parent / "fixtures" / "survivoR" / "json-c720d36"
+)
+JSON_BASE = "https://raw.githubusercontent.com/doehm/survivoR/master/dev/json/"
 
-        target.write_bytes(OLD_BYTES)
-        monkeypatch.setattr(
-            data.requests, "get", lambda *a, **k: _FakeResponse(200, b"fresh")
-        )
+
+@pytest.fixture()
+def upstream(monkeypatch):
+    """Serve survivoR's dev/json tables from the fixtures, by URL.
+
+    `served[url]` can be replaced with an int (an HTTP status), an exception
+    to raise, or other bytes. `calls` lists the URLs requested, in order.
+    """
+    from app.data import SURVIVOR_TABLES
+
+    served = {
+        f"{JSON_BASE}{table}.json": (FIXTURE_JSON / f"{table}.json").read_bytes()
+        for table in SURVIVOR_TABLES.values()
+    }
+    calls = []
+
+    def fake_get(url, timeout=None, **_kwargs):
+        calls.append(url)
+        body = served.get(url, 404)
+        if isinstance(body, Exception):
+            raise body
+        if isinstance(body, int):
+            return _FakeResponse(body)
+        return _FakeResponse(200, body)
+
+    monkeypatch.setattr("app.data.requests.get", fake_get)
+    return SimpleNamespace(served=served, calls=calls)
+
+
+def _url(table):
+    return f"{JSON_BASE}{table}.json"
+
+
+def _sheet_names(path):
+    with pd.ExcelFile(path) as book:
+        return sorted(book.sheet_names)
+
+
+class TestDownloadSurvivorData:
+    def test_fetches_each_table_the_app_reads_once(self, target, upstream):
+        from app import data
 
         data.download_survivor_data()
 
-        assert target.read_bytes() == b"fresh"
-        assert _leftovers(target) == []
+        assert upstream.calls == [
+            _url(table) for table in data.SURVIVOR_TABLES.values()
+        ]
 
-    def test_a_failed_download_keeps_the_previous_file(self, target, monkeypatch):
+    def test_writes_every_sheet_into_survivor_xlsx(self, target, upstream):
+        from app import data
+
+        data.download_survivor_data()
+
+        assert _sheet_names(target) == sorted(data.SURVIVOR_TABLES)
+        castaways = pd.read_excel(target, "Castaways")
+        assert set(castaways["season"]) == {50, 51}
+
+    def test_a_download_replaces_the_previous_file(self, target, upstream):
         from app import data
 
         target.write_bytes(OLD_BYTES)
-        monkeypatch.setattr(data.requests, "get", lambda *a, **k: _FakeResponse(503))
 
-        with pytest.raises(requests.HTTPError):
+        data.download_survivor_data()
+
+        assert target.read_bytes() != OLD_BYTES
+        assert "Castaways" in _sheet_names(target)
+        assert _leftovers(target) == []
+
+    @pytest.mark.parametrize(
+        "failure",
+        [404, 503, requests.ConnectionError("reset"), requests.Timeout("slow")],
+        ids=["404", "503", "connection-error", "timeout"],
+    )
+    def test_a_failed_fetch_keeps_the_previous_file(self, target, upstream, failure):
+        from app import data
+
+        target.write_bytes(OLD_BYTES)
+        upstream.served[_url("tribe_mapping")] = failure
+
+        with pytest.raises(requests.RequestException):
             data.download_survivor_data()
 
         assert target.read_bytes() == OLD_BYTES
         assert _leftovers(target) == []
 
-    def test_the_download_goes_through_the_atomic_swap(self, target, monkeypatch):
+    @pytest.mark.parametrize(
+        "body",
+        [b"[]", b"{}", b'["not a row"]', b"<html>rate limited</html>"],
+        ids=["empty-list", "object", "list-of-strings", "not-json"],
+    )
+    def test_a_table_that_is_not_rows_keeps_the_previous_file(
+        self, target, upstream, body
+    ):
+        from app import data
+
+        target.write_bytes(OLD_BYTES)
+        upstream.served[_url("castaways")] = body
+
+        with pytest.raises(ValueError):
+            data.download_survivor_data()
+
+        assert target.read_bytes() == OLD_BYTES
+        assert _leftovers(target) == []
+
+    @pytest.mark.parametrize(
+        ("failure", "error"),
+        [(503, requests.HTTPError), (b"{}", ValueError)],
+        ids=["fetch-fails", "not-rows"],
+    )
+    def test_nothing_is_written_until_every_table_has_arrived(
+        self, target, upstream, monkeypatch, failure, error
+    ):
+        """A failure on the last table must not have started a write."""
+        from app import data
+
+        writes = []
+        monkeypatch.setattr(data, "_write_atomically", lambda *a: writes.append(a))
+        last = list(data.SURVIVOR_TABLES.values())[-1]
+        upstream.served[_url(last)] = failure
+
+        with pytest.raises(error):
+            data.download_survivor_data()
+
+        assert writes == []
+
+    def test_a_failed_first_download_creates_no_file(self, target, upstream):
+        from app import data
+
+        upstream.served[_url("episodes")] = 503
+
+        with pytest.raises(requests.HTTPError):
+            data.download_survivor_data()
+
+        assert not target.exists()
+        assert _leftovers(target) == []
+
+    def test_the_download_goes_through_the_atomic_swap(
+        self, target, upstream, monkeypatch
+    ):
         from app import data
 
         swaps = []
         real_replace = os.replace
 
         def spy(src, dst):
+            assert os.path.dirname(src) == os.path.dirname(dst)
+            assert _sheet_names(src) == sorted(data.SURVIVOR_TABLES)
             swaps.append(dst)
             real_replace(src, dst)
 
         monkeypatch.setattr(data.os, "replace", spy)
-        monkeypatch.setattr(
-            data.requests, "get", lambda *a, **k: _FakeResponse(200, b"fresh")
-        )
 
         data.download_survivor_data()
 
