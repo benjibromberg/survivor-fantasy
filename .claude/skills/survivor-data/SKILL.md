@@ -12,7 +12,13 @@ The *gotchas* about what these fields mean (Vote History columns, `elimination_e
 
 ## survivoR dataset (`survivoR.xlsx`)
 
-Downloaded from [doehm/survivoR](https://github.com/doehm/survivoR) GitHub repo. Multi-sheet Excel file with comprehensive Survivor data. Key sheets used by this app:
+Built by `download_survivor_data()` (`app/data.py`) from the [doehm/survivoR](https://github.com/doehm/survivoR) GitHub repo, not downloaded as an xlsx. survivoR regenerates `dev/json/<table>.json` with every episode but its `dev/xlsx/survivoR.xlsx` export only now and then (in October 2026 the xlsx stayed at US51 episode 2 while the JSON had episode 4), so the app fetches the JSON table behind each sheet it reads and writes them into `survivoR.xlsx` under the same sheet names. Every reader still uses `pd.read_excel`.
+
+- **Reading a new sheet** means adding it to `SURVIVOR_TABLES` in `app/data.py` (sheet name to `dev/json` table name). `tests/test_survivor_json.py` scans every `read_excel` call and fails until you do.
+- **What the JSON cannot carry:** floats have at most 4 decimal places (`score_overall` 0.803225 in the xlsx is 0.8032), and a column that is empty in every row is absent from the sheet instead of empty. No column the app reads is empty across a whole table. Otherwise the sheets read back with the same columns, dtypes and values as survivoR's xlsx; row order differs, and nothing here depends on it.
+- **The file is swapped in whole** (`_write_atomically`): every table is fetched and checked first, so a failed refresh keeps yesterday's file.
+
+Key sheets used by this app:
 
 **Upstream validation:** R is available on this Mac (v4.4.3). Install the package (`install.packages("survivoR")`) to verify data against the R data frames directly — the xlsx is a derived export. When filing issues on doehm/survivoR, reference R data frame names (`boot_order`, `castaways`, etc.) as primary, xlsx as secondary. The repo uses testthat Edition 3 with emoji-prefixed test names and dplyr pipeline style.
 
