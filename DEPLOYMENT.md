@@ -223,7 +223,8 @@ season's picks, so a re-seed with `--picks-dir` restores them.
 The `data/` volume (mounted at `/app/data`) holds everything the app writes:
 
 - `survivor_fantasy.db`: the database.
-- `survivoR.xlsx`: the downloaded survivoR dataset.
+- `survivoR.xlsx`: the survivoR dataset, rebuilt from survivoR's `dev/json`
+  tables at each refresh.
 - `picks/season{N}.json`: pick exports, one file per season that has picks
   (picks, Sole Survivor picks, the season's scoring config, the players' team
   names for that season, and its Episode 2 start time).
