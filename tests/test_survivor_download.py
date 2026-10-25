@@ -12,6 +12,7 @@ and nothing is written until every table has arrived, so a failed fetch leaves
 yesterday's file in place.
 """
 
+import datetime
 import json
 import os
 import pathlib
@@ -29,9 +30,10 @@ OLD_BYTES = b"the previous survivoR.xlsx"
 
 
 class _FakeResponse:
-    def __init__(self, status, body=b""):
+    def __init__(self, status, body=b"", headers=None):
         self.status_code = status
         self.content = body
+        self.headers = headers or {}
 
     def raise_for_status(self):
         if self.status_code >= 400:
@@ -166,9 +168,9 @@ def upstream(monkeypatch):
     """Serve survivoR from the fixtures, by URL: GitHub's answer for the head
     commit of survivoR's master, and the dev/json tables at that commit.
 
-    `served[url]` can be replaced with an int (an HTTP status), an exception
-    to raise, other bytes, or a list of those answered one per request, the
-    last again once the rest are used. `calls` lists the URLs requested, in
+    `served[url]` can be replaced with an int (an HTTP status), a (status,
+    headers) pair, an exception to raise, other bytes, or a list of those
+    answered one per request, the last again once the rest are used. `calls` lists the URLs requested, in
     order, `headers` the headers sent with each, and `waits` the seconds the
     download asked to sleep before a retry (it never actually sleeps).
     """
@@ -191,6 +193,8 @@ def upstream(monkeypatch):
             raise body
         if isinstance(body, int):
             return _FakeResponse(body)
+        if isinstance(body, tuple):
+            return _FakeResponse(body[0], headers=body[1])
         return _FakeResponse(200, body)
 
     monkeypatch.setattr("app.data.requests.get", fake_get)
@@ -372,39 +376,108 @@ class TestOneCommitPerRefresh:
         assert [url for url in upstream.calls[1:] if FIXTURE_COMMIT not in url] == []
         assert set(pd.read_excel(target, "Castaways")["season"]) == {50, 51}
 
-    @pytest.mark.parametrize("status", [403, 404], ids=["rate-limited", "not-found"])
-    def test_a_failed_commit_lookup_keeps_the_previous_file(
-        self, target, upstream, status
+
+class TestACommitLookupThatFails:
+    """The commit lookup is GitHub's API, which allows an address 60 requests
+    an hour without a token, shared by everything behind that address; past
+    that it answers 403. The fetch from master never needed it, so a failed
+    lookup must not cost the refresh: the tables come from master as before,
+    and the log says this refresh is not pinned to one commit."""
+
+    @pytest.fixture()
+    def master(self, upstream):
+        """Serve the fixture tables at master too."""
+        from app.data import SURVIVOR_TABLES
+
+        for table in SURVIVOR_TABLES.values():
+            upstream.served[_url(table, "master")] = upstream.served[_url(table)]
+        return upstream
+
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            403,
+            404,
+            429,
+            500,
+            503,
+            requests.ConnectionError("reset"),
+            requests.Timeout("slow"),
+        ],
+        ids=[
+            "403-allowance-used",
+            "404",
+            "429",
+            "500",
+            "503",
+            "connection-error",
+            "timeout",
+        ],
+    )
+    def test_the_tables_come_from_master_instead(self, target, master, caplog, failure):
+        from app import data
+
+        target.write_bytes(OLD_BYTES)
+        master.served[COMMIT_URL] = failure
+
+        with caplog.at_level("WARNING", logger="app.data"):
+            assert data.download_survivor_data() == data.SURVIVOR_BRANCH
+
+        tables = [url for url in master.calls if url != COMMIT_URL]
+        assert tables == [_url(t, "master") for t in data.SURVIVOR_TABLES.values()]
+        assert "Castaways" in _sheet_names(target)
+        assert any("not pinned to one commit" in r.getMessage() for r in caplog.records)
+
+    @pytest.mark.parametrize(
+        "body",
+        [b"<html>try later</html>", b"", b"c720d36", b"master", b"{}"],
+        ids=["html", "empty", "short-sha", "branch-name", "json"],
+    )
+    def test_a_reply_that_is_not_a_commit_is_never_put_in_a_url(
+        self, target, master, body
+    ):
+        from app import data
+
+        master.served[COMMIT_URL] = body
+
+        assert data.download_survivor_data() == data.SURVIVOR_BRANCH
+
+        tables = [url for url in master.calls if url != COMMIT_URL]
+        assert tables == [_url(t, "master") for t in data.SURVIVOR_TABLES.values()]
+
+    def test_an_allowance_used_up_is_not_retried(self, target, master):
+        """GitHub's 403 lasts until the hour resets; asking again only spends
+        another request."""
+        from app import data
+
+        master.served[COMMIT_URL] = 403
+
+        data.download_survivor_data()
+
+        assert master.calls.count(COMMIT_URL) == 1
+        assert master.waits == []
+
+    def test_a_failure_after_the_fallback_still_keeps_the_previous_file(
+        self, target, master
     ):
         from app import data
 
         target.write_bytes(OLD_BYTES)
-        upstream.served[COMMIT_URL] = status
+        master.served[COMMIT_URL] = 403
+        master.served[_url("episodes", "master")] = 404
 
         with pytest.raises(requests.HTTPError):
             data.download_survivor_data()
 
-        assert upstream.calls == [COMMIT_URL]
         assert target.read_bytes() == OLD_BYTES
         assert _leftovers(target) == []
 
-    @pytest.mark.parametrize(
-        "body",
-        [b"<html>rate limited</html>", b"", b"c720d36", b"master", b"{}"],
-        ids=["html", "empty", "short-sha", "branch-name", "json"],
-    )
-    def test_a_reply_that_is_not_a_commit_is_refused(self, target, upstream, body):
-        """Whatever came back goes into every table's URL, so it must be one."""
+    def test_a_working_lookup_still_pins_every_table(self, target, master):
+        """The fallback must not become the normal path."""
         from app import data
 
-        target.write_bytes(OLD_BYTES)
-        upstream.served[COMMIT_URL] = body
-
-        with pytest.raises(ValueError, match="commit"):
-            data.download_survivor_data()
-
-        assert upstream.calls == [COMMIT_URL]
-        assert target.read_bytes() == OLD_BYTES
+        assert data.download_survivor_data() == FIXTURE_COMMIT
+        assert [url for url in master.calls if "/master/" in url] == []
 
 
 TRANSIENT = [
@@ -500,6 +573,61 @@ class TestATransientFailureIsRetried:
 
         assert upstream.calls.count(url) == 1
         assert upstream.waits == []
+
+    def test_a_retry_after_header_is_waited_out(self, target, upstream):
+        from app import data
+
+        url = _url("castaways")
+        upstream.served[url] = [(429, {"Retry-After": "7"}), upstream.served[url]]
+
+        data.download_survivor_data()
+
+        assert upstream.waits == [7]
+        assert upstream.calls.count(url) == 2
+
+    def test_a_retry_after_shorter_than_the_backoff_keeps_the_backoff(
+        self, target, upstream
+    ):
+        from app import data
+
+        url = _url("castaways")
+        upstream.served[url] = [(503, {"Retry-After": "0"}), upstream.served[url]]
+
+        data.download_survivor_data()
+
+        assert upstream.waits == [data.FETCH_RETRY_WAIT]
+
+    def test_a_retry_after_given_as_a_date_is_waited_out(self, target, upstream):
+        from email.utils import format_datetime
+
+        from app import data
+
+        url = _url("castaways")
+        when = format_datetime(
+            datetime.datetime.now(datetime.UTC) + datetime.timedelta(seconds=12),
+            usegmt=True,
+        )
+        upstream.served[url] = [(429, {"Retry-After": when}), upstream.served[url]]
+
+        data.download_survivor_data()
+
+        assert len(upstream.waits) == 1
+        assert 10 <= upstream.waits[0] <= 13
+
+    def test_a_retry_after_too_long_to_wait_fails_at_once(self, target, upstream):
+        """An hour's wait would hold the refresh for an hour; give up instead."""
+        from app import data
+
+        target.write_bytes(OLD_BYTES)
+        url = _url("castaways")
+        upstream.served[url] = (429, {"Retry-After": "3600"})
+
+        with pytest.raises(requests.HTTPError):
+            data.download_survivor_data()
+
+        assert upstream.calls.count(url) == 1
+        assert upstream.waits == []
+        assert target.read_bytes() == OLD_BYTES
 
     def test_a_table_that_is_not_rows_is_not_retried(self, target, upstream):
         """A bad body is upstream's data, not a failed request."""

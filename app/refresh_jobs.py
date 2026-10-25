@@ -32,6 +32,7 @@ from sqlalchemy import update
 
 from . import schedule
 from .data import (
+    SURVIVOR_BRANCH,
     download_survivor_data,
     export_all_picks,
     generate_season_images,
@@ -230,7 +231,15 @@ def _download_and_refresh(season, record):
         db.session.rollback()
         record.messages.append(("error", f"Refresh failed: {e}"))
         return None
-    if commit:
+    if commit == SURVIVOR_BRANCH:
+        record.messages.append(
+            (
+                "warning",
+                f"Data from survivoR {SURVIVOR_BRANCH}, not pinned to one commit: "
+                "GitHub's commit lookup failed (see the log).",
+            )
+        )
+    elif commit:
         record.messages.append(("success", f"Data from survivoR commit {commit[:7]}."))
     return count, day_warnings
 

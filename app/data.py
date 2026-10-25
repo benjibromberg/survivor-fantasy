@@ -5,11 +5,13 @@ import hashlib
 import io
 import json
 import logging
+import math
 import os
 import re
 import time
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from urllib.parse import quote
 
 import pandas as pd
@@ -33,7 +35,10 @@ logger = logging.getLogger(__name__)
 # from the branch just after an upstream push can come from two commits. The
 # branch's head commit is resolved once, through GitHub's "Get a commit"
 # endpoint (the application/vnd.github.sha media type answers with the bare
-# 40-character SHA), and every table is fetched at that commit.
+# 40-character SHA), and every table is fetched at that commit. That endpoint
+# allows an address 60 requests an hour without a token, shared by everything
+# behind the address, so when the lookup fails the tables are fetched from the
+# branch as they were before it existed, and the log says so.
 SURVIVOR_BRANCH = "master"  # survivoR's default branch
 SURVIVOR_COMMIT_URL = (
     f"https://api.github.com/repos/doehm/survivoR/commits/{SURVIVOR_BRANCH}"
@@ -46,9 +51,11 @@ _COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
 # Each of those requests is retried when it fails in a way likely to pass: a
 # 5xx or 429 reply, a refused or dropped connection, a timeout, a body cut off
 # partway. One failure used to skip the whole refresh. A 4xx other than 429
-# will not pass on its own and is not retried.
+# will not pass on its own and is not retried. A reply that says how long to
+# wait (Retry-After) is waited out, unless that is longer than FETCH_MAX_WAIT.
 FETCH_ATTEMPTS = 3
 FETCH_RETRY_WAIT = 2  # seconds before the first retry, doubled for each after
+FETCH_MAX_WAIT = 30  # seconds: a longer Retry-After fails at once instead
 FETCH_TIMEOUT = (10, 60)  # connect, read (seconds)
 _TRANSIENT_ERRORS = (
     requests.ConnectionError,
@@ -557,6 +564,25 @@ def _survivor_table_records(table, body):
     return records
 
 
+def _retry_after(resp):
+    """The seconds a reply's Retry-After header asks for, or None.
+
+    The header is either a number of seconds or an HTTP date.
+    """
+    value = (resp.headers.get("Retry-After") or "").strip()
+    if not value:
+        return None
+    if value.isdigit():
+        return int(value)
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return max(0, math.ceil((when - datetime.now(UTC)).total_seconds()))
+
+
 def _fetch(url, **kwargs):
     """GET url, retrying a transient failure (see FETCH_ATTEMPTS).
 
@@ -565,6 +591,7 @@ def _fetch(url, **kwargs):
     """
     for attempt in range(1, FETCH_ATTEMPTS + 1):
         last = attempt == FETCH_ATTEMPTS
+        wait = FETCH_RETRY_WAIT * 2 ** (attempt - 1)
         try:
             resp = requests.get(url, timeout=FETCH_TIMEOUT, **kwargs)
         except _TRANSIENT_ERRORS as e:
@@ -573,11 +600,14 @@ def _fetch(url, **kwargs):
             problem = repr(e)
         else:
             transient = resp.status_code >= 500 or resp.status_code == 429
+            asked = _retry_after(resp) if transient else None
+            if asked is not None:
+                last = last or asked > FETCH_MAX_WAIT
+                wait = max(wait, asked)
             if last or not transient:
                 resp.raise_for_status()
                 return resp
             problem = f"HTTP {resp.status_code}"
-        wait = FETCH_RETRY_WAIT * 2 ** (attempt - 1)
         logger.warning(
             "Fetching %s failed (%s), attempt %d of %d; retrying in %d s",
             url,
@@ -593,8 +623,9 @@ def survivor_head_commit():
     """The commit at the head of survivoR's default branch, as a full SHA.
 
     Unauthenticated, this is one of the 60 requests an hour GitHub allows an
-    address. Whatever comes back goes into every table's URL, so anything but
-    a 40-character hex SHA is refused.
+    address; past that GitHub answers 403, which is not retried. Whatever
+    comes back goes into every table's URL, so anything but a 40-character
+    hex SHA is refused.
     """
     resp = _fetch(SURVIVOR_COMMIT_URL, headers={"Accept": "application/vnd.github.sha"})
     commit = resp.content.decode("ascii", "replace").strip()
@@ -611,7 +642,10 @@ def download_survivor_data():
 
     Returns the survivoR commit it was built from. Every table is fetched at
     that one commit (survivor_head_commit), so a refresh never mixes tables
-    from before and after an upstream push.
+    from before and after an upstream push. If the commit cannot be looked
+    up, every table is fetched from SURVIVOR_BRANCH instead, as before the
+    lookup existed, the log says this refresh is not pinned to one commit,
+    and SURVIVOR_BRANCH is returned in place of a commit.
 
     Every table is fetched and checked before anything is written, so a failed
     fetch, a table that is not rows, or a value the workbook cannot hold
@@ -622,7 +656,16 @@ def download_survivor_data():
     it and once to write it, so only one is ever held parsed in memory.
     """
     _remove_abandoned_temp_files(SURVIVOR_DATA_FILE)
-    commit = survivor_head_commit()
+    try:
+        commit = survivor_head_commit()
+    except (requests.RequestException, ValueError) as e:
+        logger.warning(
+            "Could not look up survivoR's head commit (%s); fetching every table "
+            "from %s, so this refresh is not pinned to one commit",
+            e,
+            SURVIVOR_BRANCH,
+        )
+        commit = SURVIVOR_BRANCH
     bodies = {}
     for sheet, table in SURVIVOR_TABLES.items():
         resp = _fetch(SURVIVOR_JSON_URL.format(commit=commit, table=table))

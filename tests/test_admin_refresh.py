@@ -61,13 +61,14 @@ def survivor(monkeypatch):
     """Stand-ins for the network and the heavy work a refresh does.
 
     `refreshed` and `images` list season numbers and `exports` counts pick
-    exports. Set `download_error` or `refresh_error` to make that step raise,
+    exports. `commit` is what the download returns. Set `download_error` or `refresh_error` to make that step raise,
     or `hold` to an Event the refresh waits for; `entered` is set once the
     refresh has started.
     """
     from app import refresh_jobs
 
     state = SimpleNamespace(
+        commit=COMMIT,
         refreshed=[],
         images=[],
         exports=0,
@@ -80,7 +81,7 @@ def survivor(monkeypatch):
     def download():
         if state.download_error:
             raise state.download_error
-        return COMMIT
+        return state.commit
 
     def refresh(season):
         state.entered.set()
@@ -234,6 +235,24 @@ class TestWhatTheAdminSees:
         assert "Data warning: Day 3 is missing" in page
         assert "Last refresh from survivoR finished" in page
         assert survivor.exports == 2
+
+    def test_a_refresh_not_pinned_to_one_commit_says_so(self, client, survivor):
+        """GitHub's commit lookup failed, so the tables came from master."""
+        from app.data import SURVIVOR_BRANCH
+
+        c, db = client
+        season = _season(db)
+        _login(c)
+        survivor.commit = SURVIVOR_BRANCH
+
+        c.post(f"/admin/season/{season.id}/refresh")
+
+        status = _status(db, season)
+        assert any(
+            category == "warning" and "not pinned to one commit" in message
+            for category, message in status["messages"]
+        )
+        assert "not pinned to one commit" in _page(c, season)
 
     def test_a_failed_download_is_reported(self, client, survivor):
         c, db = client

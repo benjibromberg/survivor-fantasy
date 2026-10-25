@@ -225,7 +225,10 @@ The `data/` volume (mounted at `/app/data`) holds everything the app writes:
 - `survivor_fantasy.db`: the database.
 - `survivoR.xlsx`: the survivoR dataset, rebuilt from survivoR's `dev/json`
   tables at each refresh, all fetched at the one upstream commit GitHub's API
-  reports as survivoR's head (one unauthenticated API request per refresh).
+  reports as survivoR's head (one API request per refresh, without a token, so
+  out of the 60 an hour GitHub allows the host's address). If that lookup fails
+  the tables come from `master` as before, and the log and the season page say
+  the refresh is not pinned to one commit.
 - `picks/season{N}.json`: pick exports, one file per season that has picks
   (picks, Sole Survivor picks, the season's scoring config, the players' team
   names for that season, and its Episode 2 start time).
