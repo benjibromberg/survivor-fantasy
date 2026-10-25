@@ -150,7 +150,7 @@ app/
 analyze_scoring.py     # Scoring config optimizer
 seed.py                # DB seeding from survivoR + JSON pick files
 config.py              # Flask config (env vars)
-Dockerfile             # Python 3.11-slim + gunicorn
+Dockerfile             # slim Python base + gunicorn
 docker-compose.yml     # App + cloudflared sidecar
 DEPLOYMENT.md          # Full deployment guide (Docker + Cloudflare Tunnel + Access)
 ```
