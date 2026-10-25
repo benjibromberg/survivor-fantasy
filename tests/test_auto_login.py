@@ -133,7 +133,7 @@ class TestAutoLogin:
         assert _session_user_id(league.c) is None
 
     def test_static_files_do_not_sign_anyone_in(self, league):
-        league.c.get("/static/style.css", headers=_as(PAT_EMAIL))
+        league.c.get("/static/style.css", headers=_as(PAT_EMAIL)).close()
 
         assert _session_user_id(league.c) is None
 

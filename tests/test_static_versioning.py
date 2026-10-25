@@ -106,7 +106,6 @@ class TestStaticVersion:
     def test_versioned_url_still_serves_the_file(self, app):
         expected = _version_of(f"{app.static_folder}/style.css")
 
-        resp = app.test_client().get(f"/static/style.css?v={expected}")
-
-        assert resp.status_code == 200
-        assert resp.data
+        with app.test_client().get(f"/static/style.css?v={expected}") as resp:
+            assert resp.status_code == 200
+            assert resp.data

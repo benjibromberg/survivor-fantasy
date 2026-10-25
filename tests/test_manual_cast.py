@@ -335,10 +335,9 @@ class TestAddCastawayHeadshot:
         _login(league.c)
         _add(league, "Bo", headshot=(io.BytesIO(_jpeg_bytes()), "bo.jpg"))
 
-        resp = league.c.get(_survivor(league, "Bo").image_url)
-
-        assert resp.status_code == 200
-        assert resp.mimetype == "image/webp"
+        with league.c.get(_survivor(league, "Bo").image_url) as resp:
+            assert resp.status_code == 200
+            assert resp.mimetype == "image/webp"
 
     def test_a_file_that_is_not_an_image_adds_nobody(self, league):
         _login(league.c)
