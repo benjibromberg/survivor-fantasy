@@ -1,5 +1,6 @@
 """Refresh season data from the survivoR dataset (open-source, hosted on GitHub)."""
 
+import contextlib
 import hashlib
 import io
 import json
@@ -14,6 +15,7 @@ from urllib.parse import quote
 import pandas as pd
 import requests
 from openpyxl import Workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.utils import get_column_letter
 
 from .models import Pick, Season, SoleSurvivorPick, Survivor, TeamName, User, db
@@ -322,6 +324,16 @@ def _is_date_column(records, column):
     )
 
 
+def _sheet_columns(records):
+    """(columns, the columns that hold dates) for one survivoR JSON table.
+
+    The JSON leaves a null field out of its row instead of writing null, so the
+    columns are every key any row has, in the order they first appear.
+    """
+    columns = list(dict.fromkeys(key for record in records for key in record))
+    return columns, {c for c in columns if _is_date_column(records, c)}
+
+
 def survivor_sheet_rows(records):
     """Yield the header, then one row per record, for one survivoR JSON table.
 
@@ -335,8 +347,7 @@ def survivor_sheet_rows(records):
     limits the JSON sets: floats carry at most 4 decimal places, and a column
     with no value in any row is absent rather than empty.
     """
-    columns = list(dict.fromkeys(key for record in records for key in record))
-    dates = {c for c in columns if _is_date_column(records, c)}
+    columns, dates = _sheet_columns(records)
     yield columns
     for record in records:
         row = []
@@ -361,16 +372,86 @@ def write_survivor_workbook(path, tables):
     given to the writer, which asks the worksheet for calculate_dimension().
     """
     workbook = Workbook(write_only=True)
-    for sheet, records in tables:
-        rows = survivor_sheet_rows(records)
-        header = next(rows)
-        worksheet = workbook.create_sheet(sheet)
-        last_cell = f"{get_column_letter(max(len(header), 1))}{len(records) + 1}"
-        worksheet.calculate_dimension = lambda last_cell=last_cell: f"A1:{last_cell}"
-        worksheet.append(header)
-        for row in rows:
-            worksheet.append(row)
-    workbook.save(path)
+    try:
+        for sheet, records in tables:
+            rows = survivor_sheet_rows(records)
+            header = next(rows)
+            worksheet = workbook.create_sheet(sheet)
+            last_cell = f"{get_column_letter(max(len(header), 1))}{len(records) + 1}"
+            worksheet.calculate_dimension = lambda last_cell=last_cell: (
+                f"A1:{last_cell}"
+            )
+            worksheet.append(header)
+            for row in rows:
+                worksheet.append(row)
+        workbook.save(path)
+    except BaseException:
+        _remove_sheet_temp_files(workbook)
+        raise
+
+
+def _remove_sheet_temp_files(workbook):
+    """Delete the files a write-only workbook streams its sheets into.
+
+    openpyxl writes each sheet's rows to a file of its own in the system temp
+    directory and deletes it once it is zipped into the workbook. A write that
+    fails before then would leave them until the process exits (openpyxl
+    registers an atexit hook), which for a gunicorn worker is weeks: up to
+    about 63 MB per failed attempt at full size. Each sheet's row stream and
+    file writer are openpyxl 3.1's private WriteOnlyWorksheet._rows and
+    _writer; tests/test_survivor_download.py fails if they stop being found.
+    The row stream is closed first, while its file is still open, or closing
+    it later (when it is garbage-collected) writes to a closed file.
+    """
+    for worksheet in workbook.worksheets:
+        writer = getattr(worksheet, "_writer", None)
+        if writer is None:
+            continue
+        rows = getattr(worksheet, "_rows", None)
+        if rows is not None:
+            with contextlib.suppress(Exception):
+                rows.close()
+        with contextlib.suppress(Exception):
+            writer.close()
+        with contextlib.suppress(OSError, ValueError):
+            writer.cleanup()
+
+
+def _check_survivor_values(table, records):
+    """Refuse a value the workbook cannot hold, before any writing starts.
+
+    The shape check passes a table whose rows are dicts; a single bad value
+    inside one would then abort the write halfway. Three kinds would: a value
+    that is not a single number, string or bool (openpyxl cannot convert a
+    list or an object), a string holding a control character openpyxl refuses
+    (ILLEGAL_CHARACTERS_RE, which XML cannot carry), and, in a column that
+    becomes dates (_is_date_column), YYYY-MM-DD text that is no real date,
+    such as 2026-02-30.
+    """
+    columns, dates = _sheet_columns(records)
+    for column in columns:
+        if ILLEGAL_CHARACTERS_RE.search(column):
+            raise ValueError(
+                f"survivoR {table}.json column name {column!r} holds a control character"
+            )
+    for number, record in enumerate(records, 1):
+        for column, value in record.items():
+            if value is None:
+                continue
+            problem = None
+            if not isinstance(value, (str, int, float)):
+                problem = "is not a single value"
+            elif isinstance(value, str) and ILLEGAL_CHARACTERS_RE.search(value):
+                problem = "holds a control character"
+            elif column in dates:
+                try:
+                    datetime.strptime(value, "%Y-%m-%d")
+                except ValueError:
+                    problem = "is not a real date"
+            if problem:
+                raise ValueError(
+                    f"survivoR {table}.json row {number}, {column}: {value!r} {problem}"
+                )
 
 
 def _survivor_table_records(table, body):
@@ -389,7 +470,8 @@ def download_survivor_data():
     """Rebuild survivoR.xlsx from survivoR's dev/json tables on GitHub.
 
     Every table is fetched and checked before anything is written, so a failed
-    fetch or a table that is not rows leaves the previous file as it was. The
+    fetch, a table that is not rows, or a value the workbook cannot hold
+    (_check_survivor_values) leaves the previous file as it was. The
     workbook is then written beside it and swapped in (_write_atomically), so
     a reader never sees half of one. Each table is parsed twice, once to check
     it and once to write it, so only one is ever held parsed in memory.
@@ -398,7 +480,7 @@ def download_survivor_data():
     for sheet, table in SURVIVOR_TABLES.items():
         resp = requests.get(SURVIVOR_JSON_URL.format(table=table), timeout=60)
         resp.raise_for_status()
-        _survivor_table_records(table, resp.content)
+        _check_survivor_values(table, _survivor_table_records(table, resp.content))
         bodies[sheet] = (table, resp.content)
 
     def write(tmp):

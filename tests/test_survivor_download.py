@@ -14,6 +14,7 @@ failed fetch leaves yesterday's file in place.
 import json
 import os
 import pathlib
+import tempfile
 from types import SimpleNamespace
 
 import pandas as pd
@@ -304,6 +305,138 @@ class TestDownloadSurvivorData:
         data.download_survivor_data()
 
         assert swaps == [str(target)]
+
+
+@pytest.fixture()
+def system_temp(tmp_path_factory, monkeypatch):
+    """An empty directory standing in for the system temp directory.
+
+    openpyxl's write-only mode streams each sheet into a file of its own there
+    (openpyxl.*) and zips them into the workbook on save. It deletes them on
+    save, or at process exit, and a gunicorn worker runs for weeks.
+    """
+    path = tmp_path_factory.mktemp("system-temp")
+    monkeypatch.setattr(tempfile, "tempdir", str(path))
+    return path
+
+
+def _with_value(upstream, table, column, value):
+    """Serve `table` with `column` of its first row set to `value`."""
+    records = json.loads(upstream.served[_url(table)])
+    records[0][column] = value
+    upstream.served[_url(table)] = json.dumps(records).encode()
+
+
+# Values that pass the shape check but that the workbook cannot hold. The
+# first is a date column (every other episode_date is YYYY-MM-DD), so the
+# build turns it into a date, and there is no 30 February.
+UNWRITABLE = [
+    ("episodes", "episode_date", "2026-02-30"),
+    ("castaways", "castaway", "Q\x07"),
+    ("castaways", "castaway", ["Q"]),
+    ("castaways", "castaway", {"name": "Q"}),
+]
+UNWRITABLE_IDS = ["impossible-date", "control-character", "list", "object"]
+
+
+class TestAValueTheWorkbookCannotHold:
+    """One bad value used to pass the check, then abort the write halfway and
+    leave openpyxl's per-sheet temp files behind, every day until upstream
+    fixed it. It is now refused with the tables, before any writing starts."""
+
+    @pytest.mark.parametrize(
+        ("table", "column", "value"), UNWRITABLE, ids=UNWRITABLE_IDS
+    )
+    def test_is_refused_before_the_workbook_is_started(
+        self, target, upstream, monkeypatch, table, column, value
+    ):
+        from app import data
+
+        writes = []
+        monkeypatch.setattr(
+            data, "write_survivor_workbook", lambda *a: writes.append(a)
+        )
+        _with_value(upstream, table, column, value)
+
+        with pytest.raises(ValueError, match=f"{table}.*{column}"):
+            data.download_survivor_data()
+
+        assert writes == []
+
+    @pytest.mark.parametrize(
+        ("table", "column", "value"), UNWRITABLE, ids=UNWRITABLE_IDS
+    )
+    def test_keeps_the_previous_file_and_leaves_no_temp_files(
+        self, target, upstream, system_temp, table, column, value
+    ):
+        from app import data
+
+        target.write_bytes(OLD_BYTES)
+        _with_value(upstream, table, column, value)
+
+        with pytest.raises(ValueError):
+            data.download_survivor_data()
+
+        assert target.read_bytes() == OLD_BYTES
+        assert _leftovers(target) == []
+        assert sorted(p.name for p in system_temp.iterdir()) == []
+
+    def test_the_tables_as_published_pass(self, target, upstream, system_temp):
+        """The check must not refuse the real data."""
+        from app import data
+
+        data.download_survivor_data()
+
+        assert _sheet_names(target) == sorted(data.SURVIVOR_TABLES)
+        assert sorted(p.name for p in system_temp.iterdir()) == []
+
+
+class TestAWriteThatFailsPartway:
+    """Whatever the check above does not foresee, a failed write still
+    removes openpyxl's temp files instead of leaving them to process exit."""
+
+    def test_a_failure_between_sheets_leaves_no_temp_files(self, tmp_path, system_temp):
+        from app.data import write_survivor_workbook
+
+        def tables():
+            yield "First", [{"season": 51, "castaway": "Q"}] * 50
+            yield "Second", [{"season": 51}]
+            raise OSError("disk full")
+
+        with pytest.raises(OSError, match="disk full"):
+            write_survivor_workbook(str(tmp_path / "book.xlsx"), tables())
+
+        assert sorted(p.name for p in system_temp.iterdir()) == []
+
+    def test_a_cell_openpyxl_refuses_leaves_no_temp_files(self, tmp_path, system_temp):
+        """Straight to the writer, past the check: openpyxl refuses the cell."""
+        from openpyxl.utils.exceptions import IllegalCharacterError
+
+        from app.data import write_survivor_workbook
+
+        tables = [("First", [{"castaway": "Q"}]), ("Second", [{"castaway": "Q\x07"}])]
+
+        with pytest.raises(IllegalCharacterError):
+            write_survivor_workbook(str(tmp_path / "book.xlsx"), tables)
+
+        assert sorted(p.name for p in system_temp.iterdir()) == []
+
+    def test_the_guard_sees_openpyxl_temp_files(self, tmp_path, system_temp):
+        """The temp directory above is the one openpyxl writes to, so an empty
+        one means the files were removed, not written somewhere else."""
+        from openpyxl import Workbook
+
+        workbook = Workbook(write_only=True)
+        workbook.create_sheet("Only").append(["season"])
+
+        try:
+            assert [p.name.startswith("openpyxl.") for p in system_temp.iterdir()] == [
+                True
+            ]
+        finally:
+            workbook.save(str(tmp_path / "book.xlsx"))
+
+        assert sorted(p.name for p in system_temp.iterdir()) == []
 
 
 class TestOneWayIn:
