@@ -294,11 +294,10 @@ def main(argv=None):
 
     load_dotenv()
 
-    from app import create_app
+    from app import script_app
     from app.models import Season
 
-    app = create_app()
-    with app.app_context():
+    with script_app():
         backup = backup_database(f"pre-s{args.season}")
         print(f"Backup: {backup or 'skipped (not a SQLite database)'}")
 

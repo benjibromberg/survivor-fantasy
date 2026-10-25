@@ -52,6 +52,7 @@ def app(tmp_path, monkeypatch):
     with application.app_context():
         yield application, db
         db.session.remove()
+        db.engine.dispose()
 
     if "config" in sys.modules:
         monkeypatch.delenv("DATABASE_URL", raising=False)
@@ -307,12 +308,13 @@ class TestHeadshotRoute:
         remote[_url(50, "rizo")] = _jpeg_bytes()
         generate_season_images(season)
 
-        resp = application.test_client().get(rizo.image_url)
-
-        assert resp.status_code == 200
-        assert resp.mimetype == "image/webp"
-        assert resp.headers["Cache-Control"] == "public, max-age=31536000, immutable"
-        assert resp.data[:4] == b"RIFF"
+        with application.test_client().get(rizo.image_url) as resp:
+            assert resp.status_code == 200
+            assert resp.mimetype == "image/webp"
+            assert (
+                resp.headers["Cache-Control"] == "public, max-age=31536000, immutable"
+            )
+            assert resp.data[:4] == b"RIFF"
 
     def test_missing_file_is_404(self, app):
         application, _ = app

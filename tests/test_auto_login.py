@@ -48,6 +48,7 @@ def league(tmp_path, monkeypatch):
         db.session.commit()
         yield SimpleNamespace(c=application.test_client(), db=db, pat=pat, sam=sam)
         db.session.remove()
+        db.engine.dispose()
 
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("ADMIN_EMAIL", raising=False)
@@ -132,7 +133,7 @@ class TestAutoLogin:
         assert _session_user_id(league.c) is None
 
     def test_static_files_do_not_sign_anyone_in(self, league):
-        league.c.get("/static/style.css", headers=_as(PAT_EMAIL))
+        league.c.get("/static/style.css", headers=_as(PAT_EMAIL)).close()
 
         assert _session_user_id(league.c) is None
 

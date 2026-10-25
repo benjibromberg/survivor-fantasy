@@ -11,6 +11,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Runs the suite on 3.11 and on the Python the Dockerfile builds on, so a
+  # base-image bump is tested, not only built. Keep this one job named
+  # "pytest": branch protection requires a check of exactly that name, and
+  # Dependabot auto-merge waits for the required checks. A matrix would
+  # rename the check to "pytest (3.11)" and so on, which nothing requires.
   pytest:
     runs-on: ubuntu-latest
     permissions:
@@ -18,19 +23,51 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
 
+      - name: Read the image's Python version from the Dockerfile
+        id: image-python
+        run: |
+          version=$(sed -nE 's/^FROM[[:space:]]+python:([0-9]+\.[0-9]+).*/\1/p' Dockerfile)
+          # Exactly one X.Y: empty or two FROM lines (a newline) both fail,
+          # and only digits and dots reach the later steps that use it.
+          case "$version" in
+            "" | *[!0-9.]*)
+              echo "::error file=Dockerfile::expected one 'FROM python:X.Y' line, found '${version}'"
+              exit 1
+              ;;
+          esac
+          echo "Image Python: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.11"
+          # Both interpreters; the steps below call each one by name.
+          python-version: |
+            3.11
+            ${{ steps.image-python.outputs.version }}
           cache: pip
           cache-dependency-path: |
             requirements.txt
             requirements-dev.txt
 
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+      - name: Install dependencies (Python 3.11)
+        run: python3.11 -m pip install -r requirements-dev.txt
 
-      - name: Run tests
-        run: python -m pytest
+      - name: Install dependencies (Python ${{ steps.image-python.outputs.version }}, the image's)
+        run: python${{ steps.image-python.outputs.version }} -m pip install -r requirements-dev.txt
+
+      # Under a 1024 open-file limit a suite that leaks SQLite connections
+      # runs out of descriptors; pyproject.toml also fails any leak outright.
+      - name: Run tests (Python 3.11)
+        run: |
+          ulimit -n 1024
+          python3.11 -m pytest
+
+      - name: Run tests (Python ${{ steps.image-python.outputs.version }}, the image's)
+        # Run even when the 3.11 tests failed, so both results show.
+        if: ${{ !cancelled() }}
+        run: |
+          ulimit -n 1024
+          python${{ steps.image-python.outputs.version }} -m pytest
 
   ruff:
     runs-on: ubuntu-latest

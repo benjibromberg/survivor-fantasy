@@ -211,3 +211,23 @@ def create_app():
         init_scheduler(app)
 
     return app
+
+
+@contextmanager
+def script_app():
+    """create_app() inside an app context for a one-shot script; closes the DB after.
+
+    seed.py and add_season.py build an app, use it once and return. Closing
+    the session and disposing the engine on the way out closes their SQLite
+    connections then, not whenever the garbage collector reaches them: Python
+    3.13+ warns about every connection left open, and the tests call these
+    scripts in-process. The session goes first, because dispose() only closes
+    connections that are back in the pool.
+    """
+    app = create_app()
+    with app.app_context():
+        try:
+            yield app
+        finally:
+            db.session.remove()
+            db.engine.dispose()

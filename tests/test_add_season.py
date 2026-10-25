@@ -29,6 +29,7 @@ def app(tmp_path, monkeypatch):
     with application.app_context():
         yield application, db
         db.session.remove()
+        db.engine.dispose()
 
     if "config" in sys.modules:
         monkeypatch.delenv("DATABASE_URL", raising=False)

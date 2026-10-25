@@ -32,6 +32,7 @@ def app(tmp_path, monkeypatch):
     with application.app_context():
         yield application, db
         db.session.remove()
+        db.engine.dispose()
 
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("ADMIN_EMAIL", raising=False)

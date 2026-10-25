@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app import create_app
+from app import script_app
 from app.data import (
     PLAYERS_FILE,
     SURVIVOR_DATA_FILE,
@@ -682,8 +682,7 @@ def main():
         if arg.startswith("--active="):
             active_season = int(arg.split("=")[1])
 
-    app = create_app()
-    with app.app_context():
+    with script_app():
         # Safety net: export all picks before dropping tables. Exits here,
         # before the drop, if picks exist and cannot be backed up.
         exported = export_picks_before_drop()

@@ -37,8 +37,9 @@ docker compose up -d
 - **Verifying production:** the public URL is behind Access, so check pages from inside the container (`http://localhost:5050`), and say which layer was verified.
 ## CI/CD
 
-- **CI** (`.github/workflows/ci.yml`): `pytest` + `ruff` on PR/push.
-- **Dependabot** (`.github/dependabot.yml`): Weekly updates for pip, GitHub Actions, Docker. Conventional commit prefixes.
+- **CI** (`.github/workflows/ci.yml`): `pytest` + `ruff` on PR/push. The `pytest` job runs the suite twice, on 3.11 and on the Python version it reads from the Dockerfile's `FROM python:X.Y` line, each under a 1024 open-file limit. Keep it one job named `pytest`: a matrix renames the check to `pytest (3.11)` and so on, which branch protection does not require, so Dependabot auto-merge would stop waiting for the tests.
+- **Leak guard** (`pyproject.toml`): `ResourceWarning` and `PytestUnraisableExceptionWarning` are errors, so a fixture that leaves a SQLite connection open fails on Python 3.13+ (3.11 never warns about connections, which is why CI also runs the image's version). A fixture that calls `create_app()` ends with `db.session.remove()` then `db.engine.dispose()`; a script uses `app.script_app()`.
+- **Dependabot** (`.github/dependabot.yml`): Weekly updates for pip, GitHub Actions, Docker. Conventional commit prefixes. `dependabot-auto-merge.yml` enables `--auto` for non-major updates (a Python minor bump in the base image counts), which merges once the required checks pass.
 - **Branch protection**: `pytest`, `ruff` and `docker-build` required checks on `main`. Admin bypass enabled.
 - **Preview deployments** (#35): Coolify on Proxmox (under evaluation — security constraints documented in issue).
 ## Security practices

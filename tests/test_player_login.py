@@ -39,6 +39,7 @@ def client(tmp_path, monkeypatch):
     with application.app_context():
         yield application.test_client(), db
         db.session.remove()
+        db.engine.dispose()
 
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("ADMIN_EMAIL", raising=False)
