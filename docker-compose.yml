@@ -39,7 +39,7 @@ services:
     # standings page every interval. Anything < 400 is healthy, so the 302 is a
     # pass and a 500 is not.
     #
-    # python is the only option in the image: it is python:3.11-slim with no
+    # python is the only option in the image: the slim Python base ships no
     # curl and no wget. It runs as appuser and needs no privileges.
     healthcheck:
       test: ["CMD", "python", "-c", "import http.client,sys; c=http.client.HTTPConnection('127.0.0.1',5050,timeout=4); c.request('GET','/'); sys.exit(0 if c.getresponse().status < 400 else 1)"]
