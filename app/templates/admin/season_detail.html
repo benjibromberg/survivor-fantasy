@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Admin - {{ season.name or 'Season ' ~ season.number }}{% endblock %}
+{% block head %}{% if refresh and refresh.state == 'running' %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
 {% block content %}
 <p class="admin-page-nav"><a href="{{ url_for('main.admin_seasons') }}">&larr; All Seasons</a></p>
 <h1>{{ season.name or 'Season ' ~ season.number }} &mdash; Admin</h1>
@@ -16,6 +17,22 @@
         <button type="submit" class="outline admin-btn-sm">Export Picks</button>
     </form>
 </div>
+
+<!-- Refresh from survivoR: runs beside the request (app/refresh_jobs.py) -->
+{% if refresh %}
+<section aria-live="polite">
+    {% if refresh.state == 'running' %}
+    <p class="flash-success" role="status"><small>Refreshing from survivoR: {{ refresh.step or 'starting' }}. Started {{ refresh.elapsed_text }} ago; this page reloads every 5 seconds until it finishes.</small></p>
+    {% elif refresh.state == 'lost' %}
+    <p class="flash-error"><small>The refresh from survivoR started {{ refresh.elapsed_text }} ago never finished: the worker running it probably restarted. Press Refresh from survivoR to run it again.</small></p>
+    {% else %}
+    <p class="admin-page-meta">Last refresh from survivoR finished {{ refresh.ago_text }} ago, after {{ refresh.took_text }}.</p>
+    {% for category, message in refresh.messages %}
+    <p class="flash-{{ category }}"><small>{{ message }}</small></p>
+    {% endfor %}
+    {% endif %}
+</section>
+{% endif %}
 
 <!-- Season Info -->
 <p class="admin-page-meta">

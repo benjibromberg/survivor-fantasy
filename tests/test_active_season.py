@@ -44,11 +44,12 @@ def client(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def refreshed(monkeypatch):
-    """Stub the survivoR calls made by the season-creation route.
+    """Stub the survivoR calls made by the refresh season creation starts.
 
     The real functions hit the network and parse a large xlsx. They are
-    patched where app.routes looks them up. Returns the list of season numbers
-    passed to refresh_season, so a test can confirm the stub actually ran.
+    patched where app.refresh_jobs looks them up. Returns the list of season
+    numbers passed to refresh_season, so a test can confirm the stub actually
+    ran (tests/conftest.py waits for the refresh before the request returns).
     """
     calls = []
 
@@ -56,9 +57,9 @@ def refreshed(monkeypatch):
         calls.append(season.number)
         return 18, []
 
-    monkeypatch.setattr("app.routes.download_survivor_data", lambda: None)
-    monkeypatch.setattr("app.routes.refresh_season", fake_refresh)
-    monkeypatch.setattr("app.routes.generate_season_images", lambda _season: 0)
+    monkeypatch.setattr("app.refresh_jobs.download_survivor_data", lambda: None)
+    monkeypatch.setattr("app.refresh_jobs.refresh_season", fake_refresh)
+    monkeypatch.setattr("app.refresh_jobs.generate_season_images", lambda _s: 0)
     return calls
 
 
