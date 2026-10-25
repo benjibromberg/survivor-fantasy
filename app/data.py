@@ -98,15 +98,17 @@ def _data_dir():
 SURVIVOR_DATA_FILE = os.path.join(_data_dir(), "survivoR.xlsx")
 
 
-def _build_nickname_map():
+def _build_nickname_map(castaways=None):
     """Build castaway_id → most common name across all US seasons.
 
     For returning players who appear with different names (e.g. Oscar vs Ozzy),
-    uses the name that appears most often across their seasons.
+    uses the name that appears most often across their seasons. castaways is
+    the Castaways sheet, read from survivoR.xlsx when not given.
     """
     from collections import Counter
 
-    castaways = pd.read_excel(SURVIVOR_DATA_FILE, "Castaways")
+    if castaways is None:
+        castaways = pd.read_excel(SURVIVOR_DATA_FILE, "Castaways")
     us = castaways[castaways["version"] == "US"]
     result = {}
     for cid, group in us.groupby("castaway_id"):
@@ -283,14 +285,15 @@ def compute_castaway_stats(s_conf, s_vh, s_cr, s_am, idol_ids):
     }
 
 
-def read_episodes():
+def read_episodes(book=None):
     """The survivoR Episodes sheet. The only place it is read.
 
     Two callers want it: the Episode 2 air time (app/schedule.py) and a
     season's episode titles (season_episode_info, stored by refresh_season).
-    Reading it twice is how the two drift apart, so they share this.
+    Reading it twice is how the two drift apart, so they share this. book is
+    an open pd.ExcelFile to read it from, survivoR.xlsx when not given.
     """
-    return pd.read_excel(SURVIVOR_DATA_FILE, "Episodes")
+    return pd.read_excel(book if book is not None else SURVIVOR_DATA_FILE, "Episodes")
 
 
 def season_episode_info(episodes, season_number):
@@ -708,19 +711,25 @@ def refresh_season(season):
     Updates boot order, jury status, placement, results, challenge stats,
     confessionals, votes, advantages, and per-episode cumulative stats.
     """
-    castaways = pd.read_excel(SURVIVOR_DATA_FILE, "Castaways")
-    confessionals = pd.read_excel(SURVIVOR_DATA_FILE, "Confessionals")
-    vote_history = pd.read_excel(SURVIVOR_DATA_FILE, "Vote History")
-    challenge_results = pd.read_excel(SURVIVOR_DATA_FILE, "Challenge Results")
-    advantage_movement = pd.read_excel(SURVIVOR_DATA_FILE, "Advantage Movement")
-    advantage_details = pd.read_excel(SURVIVOR_DATA_FILE, "Advantage Details")
-    tribe_mapping = pd.read_excel(SURVIVOR_DATA_FILE, "Tribe Mapping")
-    boot_mapping = pd.read_excel(SURVIVOR_DATA_FILE, "Boot Mapping")
-    tribe_colours = pd.read_excel(SURVIVOR_DATA_FILE, "Tribe Colours")
-    castaway_scores = pd.read_excel(SURVIVOR_DATA_FILE, "Castaway Scores")
-    jury_votes = pd.read_excel(SURVIVOR_DATA_FILE, "Jury Votes")
-    castaway_details = pd.read_excel(SURVIVOR_DATA_FILE, "Castaway Details")
-    episodes = read_episodes()
+    # Every sheet from one open file: download_survivor_data() can swap a new
+    # build in at any moment, and an open file keeps reading the build it
+    # opened, so no refresh reads some sheets from one build and some from
+    # the next.
+    with pd.ExcelFile(SURVIVOR_DATA_FILE) as book:
+        castaways = pd.read_excel(book, "Castaways")
+        confessionals = pd.read_excel(book, "Confessionals")
+        vote_history = pd.read_excel(book, "Vote History")
+        challenge_results = pd.read_excel(book, "Challenge Results")
+        advantage_movement = pd.read_excel(book, "Advantage Movement")
+        advantage_details = pd.read_excel(book, "Advantage Details")
+        tribe_mapping = pd.read_excel(book, "Tribe Mapping")
+        boot_mapping = pd.read_excel(book, "Boot Mapping")
+        tribe_colours = pd.read_excel(book, "Tribe Colours")
+        castaway_scores = pd.read_excel(book, "Castaway Scores")
+        jury_votes = pd.read_excel(book, "Jury Votes")
+        castaway_details = pd.read_excel(book, "Castaway Details")
+        season_summary = pd.read_excel(book, "Season Summary")
+        episodes = read_episodes(book)
 
     def us(df):
         return us_season_filter(df, season.number)
@@ -1040,7 +1049,7 @@ def refresh_season(season):
         return cumulative
 
     # Apply nicknames for returning players (e.g. Oscar → Ozzy)
-    nickname_map = _build_nickname_map()
+    nickname_map = _build_nickname_map(castaways)
 
     # Build lookup of existing survivors by castaway_id
     existing = {
@@ -1054,7 +1063,6 @@ def refresh_season(season):
     season.episode_info = json.dumps(episode_info) if episode_info else None
 
     # Season metadata from survivoR (required for new-era seasons 41+)
-    season_summary = pd.read_excel(SURVIVOR_DATA_FILE, "Season Summary")
     ss = season_summary[
         (season_summary["version"] == "US")
         & (season_summary["season"] == season.number)
