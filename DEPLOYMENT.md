@@ -322,7 +322,10 @@ Things to know before running it:
 
 An APScheduler job refreshes survivoR data daily at 8am EST, inside the Flask
 process. No cron setup needed. It refreshes the **active** season only, so a new
-season gets no data updates until it is activated.
+season gets no data updates until it is activated. Both gunicorn workers run
+it, but each season's refresh is claimed first (as the admin **Refresh** below
+claims it), so only one of them refreshes the season and the other downloads
+nothing; the season's admin page shows the run.
 
 The admin **Refresh** button, and creating a season on the admin page, run the
 same download and refresh in a background thread of the worker that took the

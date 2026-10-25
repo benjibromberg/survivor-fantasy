@@ -547,3 +547,100 @@ class TestAClaimIsHeldOnlyByItsOwner:
 
         assert "downloading survivoR: 1 of 14 tables" in seen
         assert "updating the castaways" in seen
+
+
+class TestTheDailyRefreshTakesTheClaimToo:
+    """The 08:00 job runs in both gunicorn workers and took no claim, so it
+    could run refresh_season beside an admin refresh, or beside the other
+    worker's job, and a cast first published during the overlap could be
+    inserted twice (nothing makes (season, castaway_id) unique). It now
+    claims each season the way an admin refresh does, and skips a season
+    whose refresh is held elsewhere; with every season skipped, it does not
+    download at all."""
+
+    @pytest.fixture()
+    def daily(self, client, monkeypatch):
+        """An active season, and stand-ins for what the daily job calls."""
+        c, db = client
+        season = _season(db)
+        season.is_active = True
+        db.session.commit()
+        state = SimpleNamespace(
+            season=season, downloads=0, refreshed=[], during_refresh=None
+        )
+
+        def download(progress=None):
+            state.downloads += 1
+            if progress:
+                progress("downloading survivoR: 1 of 14 tables")
+            return COMMIT
+
+        def refresh(season):
+            if state.during_refresh:
+                state.during_refresh(season)
+            state.refreshed.append(season.number)
+            return 18, []
+
+        monkeypatch.setattr("app.data.download_survivor_data", download)
+        monkeypatch.setattr("app.data.refresh_season", refresh)
+        monkeypatch.setattr("app.data.export_all_picks", lambda: [])
+        monkeypatch.setattr("app.schedule.episode2_start", lambda _n: (None, None))
+        return state
+
+    def _run_daily(self):
+        from flask import current_app
+
+        from app.scheduler import refresh_active_seasons
+
+        refresh_active_seasons(current_app._get_current_object())
+
+    def test_it_records_its_own_run(self, client, daily):
+        _c, db = client
+
+        self._run_daily()
+
+        status = _status(db, daily.season)
+        assert daily.refreshed == [51]
+        assert status["state"] == "finished"
+        assert status["kind"] == "daily"
+        assert ("success", "Refreshed 18 survivors from survivoR dataset!") in status[
+            "messages"
+        ]
+
+    @pytest.mark.parametrize("holder", ["refresh", "create", "daily"])
+    def test_it_skips_a_season_whose_refresh_is_held_elsewhere(
+        self, client, daily, holder
+    ):
+        """An admin refresh, or the other worker's daily job."""
+        from app import refresh_jobs
+
+        _c, db = client
+        held = refresh_jobs.claim(daily.season, holder)
+
+        self._run_daily()
+
+        assert daily.refreshed == []
+        assert daily.downloads == 0
+        db.session.refresh(daily.season)
+        assert daily.season.refresh_status == held.written
+
+    def test_an_admin_refresh_cannot_claim_while_it_runs(self, client, daily):
+        from app import refresh_jobs
+
+        claimed = []
+        daily.during_refresh = lambda season: claimed.append(
+            refresh_jobs.claim(season, "refresh")
+        )
+
+        self._run_daily()
+
+        assert claimed == [None]
+        assert daily.refreshed == [51]
+
+    def test_the_page_says_which_refresh_it_was(self, client, daily):
+        c, _db = client
+        _login(c)
+
+        self._run_daily()
+
+        assert "daily 8am refresh" in _page(c, daily.season)

@@ -12,8 +12,17 @@ def refresh_active_seasons(app):
 
     Also looks up when Episode 2 starts (the wildcard lock), first and
     independently, so a survivoR download failure does not hold it up.
+
+    Each season is refreshed under the same claim as an admin refresh
+    (app/refresh_jobs.py), so this job, which runs in both gunicorn workers,
+    never runs refresh_season beside an admin refresh or beside the other
+    worker's job; a cast first published during such an overlap could be
+    inserted twice. A season whose refresh is held elsewhere is skipped, and
+    when every season is, nothing is downloaded. The season's admin page
+    shows the run like any other refresh.
     """
     with app.app_context():
+        from . import refresh_jobs
         from .data import (
             download_survivor_data,
             export_all_picks,
@@ -26,20 +35,8 @@ def refresh_active_seasons(app):
         for season in Season.query.filter_by(is_active=True).all():
             sync_episode2_time(season)
 
-        try:
-            download_survivor_data()
-        except Exception as e:
-            logger.error(f"Failed to download survivoR data: {e}")
-            return
-
-        # Export picks before refresh (preserve current state)
-        try:
-            export_all_picks()
-        except Exception as e:
-            logger.warning(f"Pick export before refresh failed: {e}")
-
-        active = Season.query.filter_by(is_active=True).all()
-        for season in active:
+        claimed = []
+        for season in Season.query.filter_by(is_active=True).all():
             held = hand_entered_survivor_count(season)
             if held:
                 logger.warning(
@@ -49,15 +46,58 @@ def refresh_active_seasons(app):
                     "corrupting the cast."
                 )
                 continue
+            claim = refresh_jobs.claim(season, "daily")
+            if claim is None:
+                logger.warning(
+                    f"Auto-refresh skipped season {season.number}: another "
+                    "refresh of it is running"
+                )
+                continue
+            claimed.append((season, claim))
+        if not claimed:
+            return
+
+        def report(step):
+            for _season, claim in claimed:
+                claim.beat(step)
+
+        try:
+            commit = download_survivor_data(progress=report)
+        except Exception as e:
+            logger.error(f"Failed to download survivoR data: {e}")
+            for _season, claim in claimed:
+                claim.messages.append(("error", f"Refresh failed: {e}"))
+                claim.finish()
+            return
+
+        # Export picks before refresh (preserve current state)
+        try:
+            export_all_picks()
+        except Exception as e:
+            logger.warning(f"Pick export before refresh failed: {e}")
+
+        for season, claim in claimed:
             try:
+                if not claim.beat("updating the castaways"):
+                    continue  # claimed by another refresh while this one was quiet
                 count, day_warnings = refresh_season(season)
                 logger.info(
                     f"Auto-refresh: updated {count} survivors for season {season.number}"
                 )
+                claim.messages.append(
+                    ("success", f"Refreshed {count} survivors from survivoR dataset!")
+                )
+                note = refresh_jobs.commit_message(commit)
+                if note:
+                    claim.messages.append(note)
                 for w in day_warnings:
                     logger.warning(f"Season {season.number} day data: {w}")
+                    claim.messages.append(("error", f"Data warning: {w}"))
             except Exception as e:
                 logger.error(f"Auto-refresh failed for season {season.number}: {e}")
+                claim.messages.append(("error", f"Refresh failed: {e}"))
+            finally:
+                claim.finish()
 
         # Export picks after refresh (capture updated names/stats)
         try:

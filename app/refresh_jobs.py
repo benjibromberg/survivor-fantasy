@@ -22,8 +22,8 @@ has not for LOST_AFTER (its worker died in a deploy or a crash) is shown as
 lost, and the next refresh may claim the season. If the first was only slow,
 its next report finds the claim gone and it stops.
 
-The 08:00 refresh (app/scheduler.py) already runs in the scheduler's thread
-and does not come through here.
+The 08:00 refresh (app/scheduler.py) already runs in the scheduler's thread,
+so it does not start one here, but it takes the same claim on each season.
 """
 
 import json
@@ -300,17 +300,24 @@ def _download_and_refresh(season, held):
         db.session.rollback()
         held.messages.append(("error", f"Refresh failed: {e}"))
         return None
-    if commit == SURVIVOR_BRANCH:
-        held.messages.append(
-            (
-                "warning",
-                f"Data from survivoR {SURVIVOR_BRANCH}, not pinned to one commit: "
-                "GitHub's commit lookup failed (see the log).",
-            )
-        )
-    elif commit:
-        held.messages.append(("success", f"Data from survivoR commit {commit[:7]}."))
+    note = commit_message(commit)
+    if note:
+        held.messages.append(note)
     return count, day_warnings
+
+
+def commit_message(commit):
+    """What a refresh reports about the survivoR commit its data came from:
+    a (category, text) pair, or None when the download named none."""
+    if commit == SURVIVOR_BRANCH:
+        return (
+            "warning",
+            f"Data from survivoR {SURVIVOR_BRANCH}, not pinned to one commit: "
+            "GitHub's commit lookup failed (see the log).",
+        )
+    if commit:
+        return ("success", f"Data from survivoR commit {commit[:7]}.")
+    return None
 
 
 def _refresh(season, held):
