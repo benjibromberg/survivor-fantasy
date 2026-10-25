@@ -28,9 +28,20 @@ logger = logging.getLogger(__name__)
 # then: in October 2026 the xlsx stayed at US51 episode 2 while the JSON reached
 # episode 4. So download_survivor_data() fetches the JSON and writes
 # survivoR.xlsx itself, with the sheet names the rest of the app reads.
-SURVIVOR_JSON_URL = (
-    "https://raw.githubusercontent.com/doehm/survivoR/master/dev/json/{table}.json"
+#
+# raw.githubusercontent.com caches each file for five minutes, so tables fetched
+# from the branch just after an upstream push can come from two commits. The
+# branch's head commit is resolved once, through GitHub's "Get a commit"
+# endpoint (the application/vnd.github.sha media type answers with the bare
+# 40-character SHA), and every table is fetched at that commit.
+SURVIVOR_BRANCH = "master"  # survivoR's default branch
+SURVIVOR_COMMIT_URL = (
+    f"https://api.github.com/repos/doehm/survivoR/commits/{SURVIVOR_BRANCH}"
 )
+SURVIVOR_JSON_URL = (
+    "https://raw.githubusercontent.com/doehm/survivoR/{commit}/dev/json/{table}.json"
+)
+_COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
 
 # The survivoR.xlsx sheets the app reads, and the dev/json table each is built
 # from. A sheet read anywhere with pd.read_excel must be listed here, and
@@ -487,8 +498,34 @@ def _survivor_table_records(table, body):
     return records
 
 
+def survivor_head_commit():
+    """The commit at the head of survivoR's default branch, as a full SHA.
+
+    Unauthenticated, this is one of the 60 requests an hour GitHub allows an
+    address. Whatever comes back goes into every table's URL, so anything but
+    a 40-character hex SHA is refused.
+    """
+    resp = requests.get(
+        SURVIVOR_COMMIT_URL,
+        headers={"Accept": "application/vnd.github.sha"},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    commit = resp.content.decode("ascii", "replace").strip()
+    if not _COMMIT_SHA.fullmatch(commit):
+        raise ValueError(
+            f"GitHub did not return a commit for survivoR {SURVIVOR_BRANCH}: "
+            f"{commit[:60]!r}"
+        )
+    return commit
+
+
 def download_survivor_data():
     """Rebuild survivoR.xlsx from survivoR's dev/json tables on GitHub.
+
+    Returns the survivoR commit it was built from. Every table is fetched at
+    that one commit (survivor_head_commit), so a refresh never mixes tables
+    from before and after an upstream push.
 
     Every table is fetched and checked before anything is written, so a failed
     fetch, a table that is not rows, or a value the workbook cannot hold
@@ -497,9 +534,12 @@ def download_survivor_data():
     a reader never sees half of one. Each table is parsed twice, once to check
     it and once to write it, so only one is ever held parsed in memory.
     """
+    commit = survivor_head_commit()
     bodies = {}
     for sheet, table in SURVIVOR_TABLES.items():
-        resp = requests.get(SURVIVOR_JSON_URL.format(table=table), timeout=60)
+        resp = requests.get(
+            SURVIVOR_JSON_URL.format(commit=commit, table=table), timeout=60
+        )
         resp.raise_for_status()
         _check_survivor_values(table, _survivor_table_records(table, resp.content))
         bodies[sheet] = (table, resp.content)
@@ -514,7 +554,12 @@ def download_survivor_data():
         )
 
     _write_atomically(SURVIVOR_DATA_FILE, write)
-    logger.info("Built survivoR.xlsx from %d survivoR tables", len(bodies))
+    logger.info(
+        "Built survivoR.xlsx from %d survivoR tables at commit %s",
+        len(bodies),
+        commit,
+    )
+    return commit
 
 
 def refresh_season(season):

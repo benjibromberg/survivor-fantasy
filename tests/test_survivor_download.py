@@ -7,8 +7,9 @@ file header"). It is now written to a temporary file in the same directory and
 swapped in with os.replace, so the path only ever holds a complete file.
 
 The file is built from survivoR's dev/json tables (tests/test_survivor_json.py
-covers how), and nothing is written until every table has arrived, so a
-failed fetch leaves yesterday's file in place.
+covers how), all fetched at the one commit GitHub reports as survivoR's head,
+and nothing is written until every table has arrived, so a failed fetch leaves
+yesterday's file in place.
 """
 
 import json
@@ -148,27 +149,39 @@ class TestWriteAtomically:
 FIXTURE_JSON = (
     pathlib.Path(__file__).resolve().parent / "fixtures" / "survivoR" / "json-c720d36"
 )
-JSON_BASE = "https://raw.githubusercontent.com/doehm/survivoR/master/dev/json/"
+FIXTURE_COMMIT = "c720d36c6c8706c052a822bcda850ee273d08c49"
+COMMIT_URL = "https://api.github.com/repos/doehm/survivoR/commits/master"
+RAW_BASE = "https://raw.githubusercontent.com/doehm/survivoR/"
+
+
+def _url(table, commit=FIXTURE_COMMIT):
+    return f"{RAW_BASE}{commit}/dev/json/{table}.json"
 
 
 @pytest.fixture()
 def upstream(monkeypatch):
-    """Serve survivoR's dev/json tables from the fixtures, by URL.
+    """Serve survivoR from the fixtures, by URL: GitHub's answer for the head
+    commit of survivoR's master, and the dev/json tables at that commit.
 
     `served[url]` can be replaced with an int (an HTTP status), an exception
-    to raise, or other bytes. `calls` lists the URLs requested, in order.
+    to raise, other bytes, or a list of those answered one per request, the
+    last again once the rest are used. `calls` lists the URLs requested, in
+    order, and `headers` the headers sent with each.
     """
     from app.data import SURVIVOR_TABLES
 
-    served = {
-        f"{JSON_BASE}{table}.json": (FIXTURE_JSON / f"{table}.json").read_bytes()
-        for table in SURVIVOR_TABLES.values()
-    }
+    served = {COMMIT_URL: FIXTURE_COMMIT.encode()}
+    for table in SURVIVOR_TABLES.values():
+        served[_url(table)] = (FIXTURE_JSON / f"{table}.json").read_bytes()
     calls = []
+    sent = []
 
-    def fake_get(url, timeout=None, **_kwargs):
+    def fake_get(url, timeout=None, headers=None, **_kwargs):
         calls.append(url)
+        sent.append(headers or {})
         body = served.get(url, 404)
+        if isinstance(body, list):
+            body = body.pop(0) if len(body) > 1 else body[0]
         if isinstance(body, Exception):
             raise body
         if isinstance(body, int):
@@ -176,11 +189,7 @@ def upstream(monkeypatch):
         return _FakeResponse(200, body)
 
     monkeypatch.setattr("app.data.requests.get", fake_get)
-    return SimpleNamespace(served=served, calls=calls)
-
-
-def _url(table):
-    return f"{JSON_BASE}{table}.json"
+    return SimpleNamespace(served=served, calls=calls, headers=sent)
 
 
 def _sheet_names(path):
@@ -194,7 +203,7 @@ class TestDownloadSurvivorData:
 
         data.download_survivor_data()
 
-        assert upstream.calls == [
+        assert upstream.calls == [COMMIT_URL] + [
             _url(table) for table in data.SURVIVOR_TABLES.values()
         ]
 
@@ -305,6 +314,91 @@ class TestDownloadSurvivorData:
         data.download_survivor_data()
 
         assert swaps == [str(target)]
+
+
+class TestOneCommitPerRefresh:
+    """raw.githubusercontent.com caches each file for five minutes, so for a
+    while after an upstream push the tables fetched from master could come
+    from two commits. The head commit is now resolved once, through GitHub's
+    API, and every table is fetched at that commit."""
+
+    def test_every_table_is_fetched_at_the_commit_resolved_first(
+        self, target, upstream
+    ):
+        from app import data
+
+        data.download_survivor_data()
+
+        assert upstream.calls[0] == COMMIT_URL
+        assert upstream.calls[1:] == [
+            _url(table) for table in data.SURVIVOR_TABLES.values()
+        ]
+
+    def test_the_commit_is_asked_for_as_a_bare_sha(self, target, upstream):
+        """GitHub answers with just the 40 characters for this media type."""
+        from app import data
+
+        data.download_survivor_data()
+
+        assert upstream.headers[0].get("Accept") == "application/vnd.github.sha"
+
+    def test_returns_the_commit_it_built_from(self, target, upstream):
+        from app import data
+
+        upstream.served[COMMIT_URL] = f"{FIXTURE_COMMIT}\n".encode()
+
+        assert data.download_survivor_data() == FIXTURE_COMMIT
+
+    def test_a_push_during_the_refresh_does_not_mix_commits(self, target, upstream):
+        """Upstream pushes while the tables arrive: master serves the new
+        commit from then on, and GitHub would report it as the head."""
+        from app import data
+
+        newer = "0123456789abcdef0123456789abcdef01234567"
+        upstream.served[COMMIT_URL] = [FIXTURE_COMMIT.encode(), newer.encode()]
+        for table in data.SURVIVOR_TABLES.values():
+            upstream.served[_url(table, "master")] = b'[{"season": 99}]'
+            upstream.served[_url(table, newer)] = b'[{"season": 99}]'
+
+        data.download_survivor_data()
+
+        assert upstream.calls.count(COMMIT_URL) == 1
+        assert [url for url in upstream.calls[1:] if FIXTURE_COMMIT not in url] == []
+        assert set(pd.read_excel(target, "Castaways")["season"]) == {50, 51}
+
+    @pytest.mark.parametrize("status", [403, 404], ids=["rate-limited", "not-found"])
+    def test_a_failed_commit_lookup_keeps_the_previous_file(
+        self, target, upstream, status
+    ):
+        from app import data
+
+        target.write_bytes(OLD_BYTES)
+        upstream.served[COMMIT_URL] = status
+
+        with pytest.raises(requests.HTTPError):
+            data.download_survivor_data()
+
+        assert upstream.calls == [COMMIT_URL]
+        assert target.read_bytes() == OLD_BYTES
+        assert _leftovers(target) == []
+
+    @pytest.mark.parametrize(
+        "body",
+        [b"<html>rate limited</html>", b"", b"c720d36", b"master", b"{}"],
+        ids=["html", "empty", "short-sha", "branch-name", "json"],
+    )
+    def test_a_reply_that_is_not_a_commit_is_refused(self, target, upstream, body):
+        """Whatever came back goes into every table's URL, so it must be one."""
+        from app import data
+
+        target.write_bytes(OLD_BYTES)
+        upstream.served[COMMIT_URL] = body
+
+        with pytest.raises(ValueError, match="commit"):
+            data.download_survivor_data()
+
+        assert upstream.calls == [COMMIT_URL]
+        assert target.read_bytes() == OLD_BYTES
 
 
 @pytest.fixture()
