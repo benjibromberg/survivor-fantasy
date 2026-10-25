@@ -48,6 +48,7 @@ def league(tmp_path, monkeypatch):
         db.session.commit()
         yield SimpleNamespace(c=application.test_client(), db=db, pat=pat, sam=sam)
         db.session.remove()
+        db.engine.dispose()
 
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("ADMIN_EMAIL", raising=False)

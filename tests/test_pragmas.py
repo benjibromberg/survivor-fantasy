@@ -35,6 +35,7 @@ def app(tmp_path, monkeypatch):
     with application.app_context():
         yield application, db
         db.session.remove()
+        db.engine.dispose()
 
     # Restore original config for other test modules
     if "config" in sys.modules:

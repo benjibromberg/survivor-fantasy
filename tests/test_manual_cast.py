@@ -51,6 +51,7 @@ def client(tmp_path, monkeypatch):
     with application.app_context():
         yield application.test_client(), db
         db.session.remove()
+        db.engine.dispose()
 
     predictions.clear_cache()
     monkeypatch.delenv("DATABASE_URL", raising=False)

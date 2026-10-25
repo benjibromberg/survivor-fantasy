@@ -303,6 +303,7 @@ def app(tmp_path, monkeypatch):
     with application.app_context():
         yield db
         db.session.remove()
+        db.engine.dispose()
 
     monkeypatch.delenv("DATABASE_URL", raising=False)
     if "config" in sys.modules:
