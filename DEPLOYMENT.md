@@ -224,7 +224,8 @@ The `data/` volume (mounted at `/app/data`) holds everything the app writes:
 
 - `survivor_fantasy.db`: the database.
 - `survivoR.xlsx`: the survivoR dataset, rebuilt from survivoR's `dev/json`
-  tables at each refresh.
+  tables at each refresh, all fetched at the one upstream commit GitHub's API
+  reports as survivoR's head (one unauthenticated API request per refresh).
 - `picks/season{N}.json`: pick exports, one file per season that has picks
   (picks, Sole Survivor picks, the season's scoring config, the players' team
   names for that season, and its Episode 2 start time).
@@ -319,6 +320,15 @@ Things to know before running it:
 An APScheduler job refreshes survivoR data daily at 8am EST, inside the Flask
 process. No cron setup needed. It refreshes the **active** season only, so a new
 season gets no data updates until it is activated.
+
+The admin **Refresh** button, and creating a season on the admin page, run the
+same download and refresh in a background thread of the worker that took the
+click (`app/refresh_jobs.py`), so gunicorn's worker timeout does not apply to
+them. The season's admin page shows the refresh while it runs, reloading every
+5 seconds, then what it reported and how long it took. A refresh whose worker
+restarted partway shows as never finished after 15 minutes, and **Refresh**
+then starts a new one. A temp file a killed build left in `data/`
+(`survivoR.xlsx.<pid>.<random>.tmp`) is removed by the next build.
 
 ## Adding a season
 
