@@ -61,7 +61,8 @@ def survivor(monkeypatch):
     """Stand-ins for the network and the heavy work a refresh does.
 
     `refreshed` and `images` list season numbers and `exports` counts pick
-    exports. `commit` is what the download returns. Set `download_error` or `refresh_error` to make that step raise,
+    exports. `commit` is what the download returns, and `during_download`,
+    if set, runs inside it before it reports progress. Set `download_error` or `refresh_error` to make that step raise,
     or `hold` to an Event the refresh waits for; `entered` is set once the
     refresh has started.
     """
@@ -76,11 +77,16 @@ def survivor(monkeypatch):
         refresh_error=None,
         hold=None,
         entered=threading.Event(),
+        during_download=None,
     )
 
-    def download():
+    def download(progress=None):
         if state.download_error:
             raise state.download_error
+        if state.during_download:
+            state.during_download()
+        if progress:
+            progress("downloading survivoR: 1 of 14 tables")
         return state.commit
 
     def refresh(season):
@@ -92,8 +98,10 @@ def survivor(monkeypatch):
         state.refreshed.append(season.number)
         return 18, ["Day 3 is missing"]
 
-    def images(season):
+    def images(season, progress=None):
         state.images.append(season.number)
+        if progress:
+            progress("fetching headshots: 1 of 1")
         return 12
 
     def export():
@@ -427,3 +435,115 @@ class TestOneRefreshAtATime:
 
         assert refresh_jobs.start(season, kind="refresh") is False
         assert survivor.refreshed == []
+
+
+class TestAClaimIsHeldOnlyByItsOwner:
+    """A refresh that goes quiet for LOST_AFTER can be claimed by the next
+    one. Every status write is conditional on the writer still holding its
+    own claim, so the first, if it was only slow, cannot overwrite the
+    second's status, and stops at its next step instead of refreshing beside
+    it. A refresh that is working reports in at every step, so it is never
+    taken for lost however long it runs."""
+
+    @pytest.fixture()
+    def clock(self, monkeypatch):
+        from app import refresh_jobs
+
+        clock = SimpleNamespace(now=refresh_jobs._now())
+        monkeypatch.setattr(refresh_jobs, "_now", lambda: clock.now)
+        return clock
+
+    def test_a_refresh_that_reports_in_is_never_taken_for_lost(self, client, clock):
+        from app import refresh_jobs
+
+        _c, db = client
+        season = _season(db)
+        first = refresh_jobs.claim(season, "refresh")
+        for _ in range(3):
+            clock.now += refresh_jobs.LOST_AFTER - timedelta(minutes=1)
+            assert first.beat("downloading survivoR")
+
+        assert _status(db, season)["state"] == "running"
+        assert refresh_jobs.claim(season, "refresh") is None
+
+    def test_a_quiet_refresh_is_lost_after_lost_after(self, client, clock):
+        from app import refresh_jobs
+
+        _c, db = client
+        season = _season(db)
+        refresh_jobs.claim(season, "refresh")
+        clock.now += refresh_jobs.LOST_AFTER + timedelta(minutes=1)
+
+        assert _status(db, season)["state"] == "lost"
+
+    def test_two_overlapping_claims_write_only_their_own_status(self, client, clock):
+        from app import refresh_jobs
+
+        _c, db = client
+        season = _season(db)
+        first = refresh_jobs.claim(season, "refresh")
+        clock.now += refresh_jobs.LOST_AFTER + timedelta(minutes=1)
+        db.session.refresh(season)
+        second = refresh_jobs.claim(season, "refresh")
+        assert second is not None
+
+        first.messages.append(("success", "from the first"))
+        first.finish()
+        assert first.beat("still here?") is False
+        status = _status(db, season)
+        assert status["state"] == "running"
+        assert status["messages"] == []
+
+        second.messages.append(("success", "from the second"))
+        second.finish()
+        status = _status(db, season)
+        assert status["state"] == "finished"
+        assert status["messages"] == [("success", "from the second")]
+
+    def test_a_refresh_whose_claim_was_taken_stops_before_refreshing(
+        self, client, survivor
+    ):
+        import sqlalchemy
+
+        c, db = client
+        season = _season(db)
+        _login(c)
+        taken = '{"state": "running", "claim": "the other refresh"}'
+
+        def taken_over():
+            with db.engine.begin() as conn:
+                conn.execute(
+                    sqlalchemy.text(
+                        "UPDATE season SET refresh_status = :s WHERE id = :i"
+                    ),
+                    {"s": taken, "i": season.id},
+                )
+
+        survivor.during_download = taken_over
+
+        c.post(f"/admin/season/{season.id}/refresh")
+
+        assert survivor.refreshed == []
+        db.session.refresh(season)
+        assert season.refresh_status == taken
+
+    def test_each_step_reports_in(self, client, survivor, monkeypatch):
+        """The steps that report in are the progress the admin sees."""
+        from app import refresh_jobs
+
+        c, db = client
+        season = _season(db)
+        _login(c)
+        seen = []
+        real_beat = refresh_jobs.Claim.beat
+
+        def spy(claim, step=None):
+            seen.append(step)
+            return real_beat(claim, step)
+
+        monkeypatch.setattr(refresh_jobs.Claim, "beat", spy)
+
+        c.post(f"/admin/season/{season.id}/refresh")
+
+        assert "downloading survivoR: 1 of 14 tables" in seen
+        assert "updating the castaways" in seen

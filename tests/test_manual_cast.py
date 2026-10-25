@@ -652,8 +652,8 @@ class TestRefreshIsHeldBack:
 
         monkeypatch.setattr(refresh_jobs, "refresh_season", fake_refresh)
         monkeypatch.setattr(data, "refresh_season", fake_refresh)
-        monkeypatch.setattr(refresh_jobs, "download_survivor_data", lambda: None)
-        monkeypatch.setattr(data, "download_survivor_data", lambda: None)
+        monkeypatch.setattr(refresh_jobs, "download_survivor_data", lambda **_: None)
+        monkeypatch.setattr(data, "download_survivor_data", lambda **_: None)
         return called
 
     def _refresh(self, league, season):

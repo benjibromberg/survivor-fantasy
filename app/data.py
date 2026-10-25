@@ -637,7 +637,7 @@ def survivor_head_commit():
     return commit
 
 
-def download_survivor_data():
+def download_survivor_data(progress=None):
     """Rebuild survivoR.xlsx from survivoR's dev/json tables on GitHub.
 
     Returns the survivoR commit it was built from. Every table is fetched at
@@ -652,8 +652,14 @@ def download_survivor_data():
     (_check_survivor_values) leaves the previous file as it was. The
     workbook is then written beside it and swapped in (_write_atomically), so
     a reader never sees half of one; first, any temp file a killed build left
-    is removed (_remove_abandoned_temp_files). Each table is parsed twice, once to check
-    it and once to write it, so only one is ever held parsed in memory.
+    is removed (_remove_abandoned_temp_files). Each table is parsed twice,
+    once to check it and once to write it, so only one is ever held parsed in
+    memory.
+
+    progress, if given, is called with a short description after each table
+    arrives and before the build, which is how a refresh shows it is alive
+    (app/refresh_jobs.py). If it raises, the download stops there, before
+    anything is written.
     """
     _remove_abandoned_temp_files(SURVIVOR_DATA_FILE)
     try:
@@ -671,6 +677,12 @@ def download_survivor_data():
         resp = _fetch(SURVIVOR_JSON_URL.format(commit=commit, table=table))
         _check_survivor_values(table, _survivor_table_records(table, resp.content))
         bodies[sheet] = (table, resp.content)
+        if progress:
+            progress(
+                f"downloading survivoR: {len(bodies)} of {len(SURVIVOR_TABLES)} tables"
+            )
+    if progress:
+        progress("building survivoR.xlsx")
 
     def write(tmp):
         write_survivor_workbook(
@@ -1386,7 +1398,7 @@ def hand_entered_survivor_count(season):
     return Survivor.query.filter_by(season_id=season.id, castaway_id=None).count()
 
 
-def generate_season_images(season, force=False):
+def generate_season_images(season, force=False, progress=None):
     """Mirror a season's headshots from fantasysurvivorgame.com onto our disk.
 
     For each survivor, tries headshot_url_candidates() in order and keeps the
@@ -1397,12 +1409,15 @@ def generate_season_images(season, force=False):
     file is skipped without any network call (pass force=True to re-fetch).
     Failures are logged and never raise; a survivor with no usable image keeps
     its previous image_url (None renders the letter placeholder).
-    Returns number of survivors with a usable image.
+    Returns number of survivors with a usable image. progress, if given, is
+    called before each survivor, as download_survivor_data calls it.
     """
     survivors = Survivor.query.filter_by(season_id=season.id).all()
     matched = 0
     fetched_any = False
-    for surv in survivors:
+    for number, surv in enumerate(survivors, 1):
+        if progress:
+            progress(f"fetching headshots: {number} of {len(survivors)}")
         existing = _local_headshot_path(surv.image_url)
         if not force and existing and os.path.exists(existing):
             matched += 1

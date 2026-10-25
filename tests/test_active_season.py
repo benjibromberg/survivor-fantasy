@@ -57,9 +57,9 @@ def refreshed(monkeypatch):
         calls.append(season.number)
         return 18, []
 
-    monkeypatch.setattr("app.refresh_jobs.download_survivor_data", lambda: None)
+    monkeypatch.setattr("app.refresh_jobs.download_survivor_data", lambda **_: None)
     monkeypatch.setattr("app.refresh_jobs.refresh_season", fake_refresh)
-    monkeypatch.setattr("app.refresh_jobs.generate_season_images", lambda _s: 0)
+    monkeypatch.setattr("app.refresh_jobs.generate_season_images", lambda _s, **_: 0)
     return calls
 
 

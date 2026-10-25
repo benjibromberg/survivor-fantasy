@@ -14,9 +14,13 @@ the thread works.
 
 The refresh's state is JSON on the season row (Season.refresh_status), so
 either gunicorn worker can show it on the season's admin page, and a second
-click landing on the other worker finds the refresh already running. A
-refresh whose worker died mid-way (a deploy, a crash) stays "running" in the
-row; after LOST_AFTER it is shown as lost and a new one may start.
+click landing on the other worker finds the refresh already running. Only
+the refresh holding the claim writes it (Claim): each write is conditional
+on the row still holding exactly what that refresh last wrote. A refresh
+reports in at every step, each table and each headshot included; one that
+has not for LOST_AFTER (its worker died in a deploy or a crash) is shown as
+lost, and the next refresh may claim the season. If the first was only slow,
+its next report finds the claim gone and it stops.
 
 The 08:00 refresh (app/scheduler.py) already runs in the scheduler's thread
 and does not come through here.
@@ -25,6 +29,7 @@ and does not come through here.
 import json
 import logging
 import threading
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from flask import current_app
@@ -42,11 +47,12 @@ from .models import Season, db
 
 logger = logging.getLogger(__name__)
 
-# A refresh takes about 30 s on the production host, and retries add seconds.
-# Only an upstream that hangs on request after request could keep one running
-# this long, and then a second may start beside it; a refresh lost with its
-# worker holds the button no longer than this.
-LOST_AFTER = timedelta(minutes=15)
+# How long a running refresh may go without reporting in before it counts as
+# lost. It reports after every table and every headshot; the longest gap is
+# one request through all its retries (app/data.py: three attempts, each up
+# to 10 s to connect and 60 s between bytes, with waits of at most 30 s), a
+# few minutes at worst.
+LOST_AFTER = timedelta(minutes=10)
 
 
 def _now():
@@ -86,20 +92,22 @@ def _span(seconds):
 def status(season):
     """What the season's admin page shows about its last refresh, or None.
 
-    state is "running", "lost" (running for longer than LOST_AFTER, so its
-    worker is gone) or "finished". Also: step (what a running refresh is
-    doing), elapsed (seconds since it started), took (seconds a finished
-    one ran), ago (seconds since it finished), each also worded by _span as
-    elapsed_text, took_text and ago_text, and messages ((category, text)
-    pairs, as a flash would carry them).
+    state is "running", "lost" (nothing heard from it for LOST_AFTER, so its
+    worker is gone) or "finished". Also: kind ("refresh", "create" or
+    "daily"), step (what a running refresh is doing), elapsed (seconds since
+    it started), took (seconds a finished one ran), ago (seconds since it
+    finished), each also worded by _span as elapsed_text, took_text and
+    ago_text, and messages ((category, text) pairs, as a flash would carry
+    them).
     """
     raw = _read(season)
     if raw is None:
         return None
     now = _now()
     elapsed = _seconds_since(raw.get("started"), now)
+    quiet = _seconds_since(raw.get("beat") or raw.get("started"), now)
     state = raw.get("state")
-    if state == "running" and (elapsed is None or elapsed > LOST_AFTER.total_seconds()):
+    if state == "running" and (quiet is None or quiet > LOST_AFTER.total_seconds()):
         state = "lost"
     finished_ago = _seconds_since(raw.get("finished"), now)
     took = None
@@ -107,6 +115,7 @@ def status(season):
         took = elapsed - finished_ago
     return {
         "state": state,
+        "kind": raw.get("kind"),
         "step": raw.get("step"),
         "elapsed": elapsed,
         "took": took,
@@ -118,29 +127,103 @@ def status(season):
     }
 
 
-def start(season, kind, fetch_images=False):
-    """Claim a refresh of season and start it in a thread. True if started.
+class ClaimLost(Exception):
+    """Another refresh claimed the season after this one went quiet."""
 
-    kind is "refresh" (the admin's button) or "create" (a season just
-    created; fetch_images also mirrors its headshots). Refuses while a
-    refresh of the season is running and not yet lost. The claim is a
-    conditional UPDATE against the status this request read, so of two
-    clicks landing on both workers at once only one starts a refresh.
+
+class Claim:
+    """One refresh's hold on its season's refresh_status.
+
+    Plain data, no database objects, so the request can claim and the thread
+    can write. Every write is an UPDATE conditional on the row still holding
+    the exact text this claim last wrote, which also carries a random claim
+    id; a refresh that has been superseded therefore changes nothing.
+    """
+
+    def __init__(self, season_id, season_number, raw, written):
+        self.season_id = season_id
+        self.season_number = season_number
+        self.raw = raw
+        self.written = written
+        self.messages = []
+        self.held = True
+
+    def beat(self, step=None):
+        """Report in, with what the refresh is doing now. False if the claim
+        is no longer this refresh's."""
+        if step is not None:
+            self.raw["step"] = step
+        self.raw["beat"] = _now().isoformat()
+        return self._save()
+
+    def checkpoint(self, step):
+        """beat(step), raising ClaimLost if the claim is gone."""
+        if not self.beat(step):
+            raise ClaimLost(f"season {self.season_number}")
+
+    def finish(self):
+        """Record the refresh as finished, with its messages."""
+        now = _now().isoformat()
+        self.raw.update(
+            state="finished", step=None, beat=now, finished=now, messages=self.messages
+        )
+        self._save()
+
+    def _save(self):
+        if not self.held:
+            return False
+        text = json.dumps(self.raw)
+        try:
+            result = db.session.execute(
+                update(Season)
+                .where(
+                    Season.id == self.season_id, Season.refresh_status == self.written
+                )
+                .values(refresh_status=text)
+                .execution_options(synchronize_session=False)
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            logger.exception(
+                "Recording the refresh of season %d failed", self.season_number
+            )
+            return True  # unknown, so carry on; the next write tries again
+        if result.rowcount != 1:
+            self.held = False
+            logger.warning(
+                "Season %d's refresh was claimed by another after this one went "
+                "quiet; this one stops",
+                self.season_number,
+            )
+            return False
+        self.written = text
+        return True
+
+
+def claim(season, kind):
+    """Claim the season's refresh. A Claim, or None if another refresh holds it.
+
+    A refresh still reporting in holds it; a lost one does not. The claim is
+    a conditional UPDATE against the status this caller read, so of two
+    callers claiming at once (two clicks landing on both workers) only one
+    gets it.
     """
     current = status(season)
     if current is not None and current["state"] == "running":
-        return False
-    season_id = season.id
-    seen = season.refresh_status
-    claim = json.dumps(
-        {
-            "state": "running",
-            "kind": kind,
-            "step": "starting",
-            "started": _now().isoformat(),
-            "messages": [],
-        }
-    )
+        return None
+    season_id, season_number, seen = season.id, season.number, season.refresh_status
+    now = _now().isoformat()
+    raw = {
+        "state": "running",
+        "kind": kind,
+        "claim": uuid.uuid4().hex,
+        "step": "starting",
+        "started": now,
+        "beat": now,
+        "messages": [],
+    }
+    written = json.dumps(raw)
     unchanged = (
         Season.refresh_status.is_(None)
         if seen is None
@@ -149,14 +232,26 @@ def start(season, kind, fetch_images=False):
     result = db.session.execute(
         update(Season)
         .where(Season.id == season_id, unchanged)
-        .values(refresh_status=claim)
+        .values(refresh_status=written)
         .execution_options(synchronize_session=False)
     )
     db.session.commit()
     if result.rowcount != 1:
+        return None
+    return Claim(season_id, season_number, raw, written)
+
+
+def start(season, kind, fetch_images=False):
+    """Claim a refresh of season and start it in a thread. True if started.
+
+    kind is "refresh" (the admin's button) or "create" (a season just
+    created; fetch_images also mirrors its headshots).
+    """
+    held = claim(season, kind)
+    if held is None:
         return False
     app = current_app._get_current_object()
-    _start_thread(lambda: _run(app, season_id, kind, fetch_images))
+    _start_thread(lambda: _run(app, held, kind, fetch_images))
     return True
 
 
@@ -168,71 +263,45 @@ def _start_thread(target):
     return thread
 
 
-def _run(app, season_id, kind, fetch_images):
+def _run(app, held, kind, fetch_images):
     """The refresh itself, in its own app context and database session."""
     with app.app_context():
-        season = db.session.get(Season, season_id)
+        season = db.session.get(Season, held.season_id)
         if season is None:
             return
-        record = _Record(season)
         try:
             if kind == "create":
-                _create(season, record, fetch_images)
+                _create(season, held, fetch_images)
             else:
-                _refresh(season, record)
+                _refresh(season, held)
+        except ClaimLost:
+            db.session.rollback()
         except Exception as e:  # anything a step did not expect
             db.session.rollback()
             logger.exception("Refresh of season %d failed", season.number)
-            record.messages.append(("error", f"Refresh stopped: {e}"))
+            held.messages.append(("error", f"Refresh stopped: {e}"))
         finally:
-            record.finish()
+            held.finish()
 
 
-class _Record:
-    """Writes a running refresh's progress to its season row."""
+def _download_and_refresh(season, held):
+    """Download survivoR and refresh the season; (count, warnings) or None.
 
-    def __init__(self, season):
-        self.season = season
-        self.raw = _read(season) or {}
-        self.messages = []
-
-    def step(self, text):
-        self.raw["step"] = text
-        self._save()
-
-    def finish(self):
-        self.raw.update(
-            state="finished",
-            step=None,
-            finished=_now().isoformat(),
-            messages=self.messages,
-        )
-        self._save()
-
-    def _save(self):
-        try:
-            self.season.refresh_status = json.dumps(self.raw)
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            logger.exception(
-                "Recording the refresh of season %d failed", self.season.number
-            )
-
-
-def _download_and_refresh(season, record):
-    """Download survivoR and refresh the season; (count, warnings) or None."""
+    A failure is recorded in held's messages; a lost claim is raised.
+    """
     try:
-        record.step("downloading survivoR")
-        commit = download_survivor_data()
-        record.step("updating the castaways")
+        held.checkpoint("downloading survivoR")
+        commit = download_survivor_data(progress=held.checkpoint)
+        held.checkpoint("updating the castaways")
         count, day_warnings = refresh_season(season)
+    except ClaimLost:
+        raise
     except Exception as e:
         db.session.rollback()
-        record.messages.append(("error", f"Refresh failed: {e}"))
+        held.messages.append(("error", f"Refresh failed: {e}"))
         return None
     if commit == SURVIVOR_BRANCH:
-        record.messages.append(
+        held.messages.append(
             (
                 "warning",
                 f"Data from survivoR {SURVIVOR_BRANCH}, not pinned to one commit: "
@@ -240,43 +309,43 @@ def _download_and_refresh(season, record):
             )
         )
     elif commit:
-        record.messages.append(("success", f"Data from survivoR commit {commit[:7]}."))
+        held.messages.append(("success", f"Data from survivoR commit {commit[:7]}."))
     return count, day_warnings
 
 
-def _refresh(season, record):
+def _refresh(season, held):
     """What the admin's Refresh button did inside the request."""
-    _export_picks(record, "before")
-    result = _download_and_refresh(season, record)
+    _export_picks(held, "before")
+    result = _download_and_refresh(season, held)
     if result is not None:
         count, day_warnings = result
-        record.messages.insert(
+        held.messages.insert(
             0, ("success", f"Refreshed {count} survivors from survivoR dataset!")
         )
-        record.messages += [("error", f"Data warning: {w}") for w in day_warnings]
-    record.step("looking up when Episode 2 starts")
+        held.messages += [("error", f"Data warning: {w}") for w in day_warnings]
+    held.checkpoint("looking up when Episode 2 starts")
     schedule.sync_episode2_time(season)
-    _export_picks(record, "after")
+    _export_picks(held, "after")
 
 
-def _create(season, record, fetch_images):
+def _create(season, held, fetch_images):
     """What creating a season did inside the request, after creating it."""
-    result = _download_and_refresh(season, record)
+    result = _download_and_refresh(season, held)
     if result is None:
         return
     count, day_warnings = result
-    record.messages.insert(0, ("success", f"Loaded {count} survivors from survivoR."))
-    record.messages += [("error", f"Data warning: {w}") for w in day_warnings]
+    held.messages.insert(0, ("success", f"Loaded {count} survivors from survivoR."))
+    held.messages += [("error", f"Data warning: {w}") for w in day_warnings]
     if fetch_images:
-        record.step("fetching headshots")
-        matched = generate_season_images(season)
-        record.messages.append(("success", f"Found {matched} headshot images."))
+        held.checkpoint("fetching headshots")
+        matched = generate_season_images(season, progress=held.checkpoint)
+        held.messages.append(("success", f"Found {matched} headshot images."))
 
 
-def _export_picks(record, when):
+def _export_picks(held, when):
     """Export picks around a refresh, so a refresh that changes data cannot
     lose them. A failure is logged, as it was inside the request."""
-    record.step(f"exporting picks ({when} the refresh)")
+    held.checkpoint(f"exporting picks ({when} the refresh)")
     try:
         export_all_picks()
     except Exception as e:

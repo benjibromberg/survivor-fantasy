@@ -328,9 +328,11 @@ The admin **Refresh** button, and creating a season on the admin page, run the
 same download and refresh in a background thread of the worker that took the
 click (`app/refresh_jobs.py`), so gunicorn's worker timeout does not apply to
 them. The season's admin page shows the refresh while it runs, reloading every
-5 seconds, then what it reported and how long it took. A refresh whose worker
-restarted partway shows as never finished after 15 minutes, and **Refresh**
-then starts a new one. A temp file a killed build left in `data/`
+5 seconds, then what it reported and how long it took. A refresh reports in
+after every table and every headshot; one that has not for 10 minutes (its
+worker restarted partway) shows as never finished, and **Refresh** then starts
+a new one. If the first was only slow, it stops at its next report instead of
+running beside the new one. A temp file a killed build left in `data/`
 (`survivoR.xlsx.<pid>.<random>.tmp`) is removed by the next build.
 
 ## Adding a season

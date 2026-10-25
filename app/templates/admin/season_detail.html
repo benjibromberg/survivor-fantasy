@@ -24,7 +24,7 @@
     {% if refresh.state == 'running' %}
     <p class="flash-success" role="status"><small>Refreshing from survivoR: {{ refresh.step or 'starting' }}. Started {{ refresh.elapsed_text }} ago; this page reloads every 5 seconds until it finishes.</small></p>
     {% elif refresh.state == 'lost' %}
-    <p class="flash-error"><small>The refresh from survivoR started {{ refresh.elapsed_text }} ago never finished: the worker running it probably restarted. Press Refresh from survivoR to run it again.</small></p>
+    <p class="flash-error"><small>The refresh from survivoR started {{ refresh.elapsed_text }} ago never finished: nothing has been heard from it for over 10 minutes, so the worker running it probably restarted. Press Refresh from survivoR to run it again.</small></p>
     {% else %}
     <p class="admin-page-meta">Last refresh from survivoR finished {{ refresh.ago_text }} ago, after {{ refresh.took_text }}.</p>
     {% for category, message in refresh.messages %}

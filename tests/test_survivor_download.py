@@ -326,6 +326,40 @@ class TestDownloadSurvivorData:
         assert swaps == [str(target)]
 
 
+class TestProgress:
+    """download_survivor_data() reports each table as it arrives, which is
+    how a refresh shows it is still alive (app/refresh_jobs.py)."""
+
+    def test_reports_each_table_then_the_build(self, target, upstream):
+        from app import data
+
+        steps = []
+
+        data.download_survivor_data(progress=steps.append)
+
+        total = len(data.SURVIVOR_TABLES)
+        assert steps == [
+            f"downloading survivoR: {n} of {total} tables" for n in range(1, total + 1)
+        ] + ["building survivoR.xlsx"]
+
+    def test_a_progress_report_that_raises_stops_before_anything_is_written(
+        self, target, upstream
+    ):
+        from app import data
+
+        target.write_bytes(OLD_BYTES)
+
+        def stop(step):
+            if step.startswith("downloading survivoR: 3 "):
+                raise RuntimeError("claim lost")
+
+        with pytest.raises(RuntimeError, match="claim lost"):
+            data.download_survivor_data(progress=stop)
+
+        assert target.read_bytes() == OLD_BYTES
+        assert len(upstream.calls) == 1 + 3
+
+
 class TestOneCommitPerRefresh:
     """raw.githubusercontent.com caches each file for five minutes, so for a
     while after an upstream push the tables fetched from master could come
