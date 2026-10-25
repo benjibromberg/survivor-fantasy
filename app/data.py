@@ -43,6 +43,19 @@ SURVIVOR_JSON_URL = (
 )
 _COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
 
+# Each of those requests is retried when it fails in a way likely to pass: a
+# 5xx or 429 reply, a refused or dropped connection, a timeout, a body cut off
+# partway. One failure used to skip the whole refresh. A 4xx other than 429
+# will not pass on its own and is not retried.
+FETCH_ATTEMPTS = 3
+FETCH_RETRY_WAIT = 2  # seconds before the first retry, doubled for each after
+FETCH_TIMEOUT = (10, 60)  # connect, read (seconds)
+_TRANSIENT_ERRORS = (
+    requests.ConnectionError,
+    requests.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+)
+
 # The survivoR.xlsx sheets the app reads, and the dev/json table each is built
 # from. A sheet read anywhere with pd.read_excel must be listed here, and
 # tests/test_survivor_json.py fails when one is not.
@@ -498,6 +511,38 @@ def _survivor_table_records(table, body):
     return records
 
 
+def _fetch(url, **kwargs):
+    """GET url, retrying a transient failure (see FETCH_ATTEMPTS).
+
+    Returns the response once it succeeds; raises the last error once the
+    attempts run out, or at once for a failure retrying cannot fix.
+    """
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        last = attempt == FETCH_ATTEMPTS
+        try:
+            resp = requests.get(url, timeout=FETCH_TIMEOUT, **kwargs)
+        except _TRANSIENT_ERRORS as e:
+            if last:
+                raise
+            problem = repr(e)
+        else:
+            transient = resp.status_code >= 500 or resp.status_code == 429
+            if last or not transient:
+                resp.raise_for_status()
+                return resp
+            problem = f"HTTP {resp.status_code}"
+        wait = FETCH_RETRY_WAIT * 2 ** (attempt - 1)
+        logger.warning(
+            "Fetching %s failed (%s), attempt %d of %d; retrying in %d s",
+            url,
+            problem,
+            attempt,
+            FETCH_ATTEMPTS,
+            wait,
+        )
+        time.sleep(wait)
+
+
 def survivor_head_commit():
     """The commit at the head of survivoR's default branch, as a full SHA.
 
@@ -505,12 +550,7 @@ def survivor_head_commit():
     address. Whatever comes back goes into every table's URL, so anything but
     a 40-character hex SHA is refused.
     """
-    resp = requests.get(
-        SURVIVOR_COMMIT_URL,
-        headers={"Accept": "application/vnd.github.sha"},
-        timeout=60,
-    )
-    resp.raise_for_status()
+    resp = _fetch(SURVIVOR_COMMIT_URL, headers={"Accept": "application/vnd.github.sha"})
     commit = resp.content.decode("ascii", "replace").strip()
     if not _COMMIT_SHA.fullmatch(commit):
         raise ValueError(
@@ -537,10 +577,7 @@ def download_survivor_data():
     commit = survivor_head_commit()
     bodies = {}
     for sheet, table in SURVIVOR_TABLES.items():
-        resp = requests.get(
-            SURVIVOR_JSON_URL.format(commit=commit, table=table), timeout=60
-        )
-        resp.raise_for_status()
+        resp = _fetch(SURVIVOR_JSON_URL.format(commit=commit, table=table))
         _check_survivor_values(table, _survivor_table_records(table, resp.content))
         bodies[sheet] = (table, resp.content)
 

@@ -166,7 +166,8 @@ def upstream(monkeypatch):
     `served[url]` can be replaced with an int (an HTTP status), an exception
     to raise, other bytes, or a list of those answered one per request, the
     last again once the rest are used. `calls` lists the URLs requested, in
-    order, and `headers` the headers sent with each.
+    order, `headers` the headers sent with each, and `waits` the seconds the
+    download asked to sleep before a retry (it never actually sleeps).
     """
     from app.data import SURVIVOR_TABLES
 
@@ -175,6 +176,7 @@ def upstream(monkeypatch):
         served[_url(table)] = (FIXTURE_JSON / f"{table}.json").read_bytes()
     calls = []
     sent = []
+    waits = []
 
     def fake_get(url, timeout=None, headers=None, **_kwargs):
         calls.append(url)
@@ -189,7 +191,8 @@ def upstream(monkeypatch):
         return _FakeResponse(200, body)
 
     monkeypatch.setattr("app.data.requests.get", fake_get)
-    return SimpleNamespace(served=served, calls=calls, headers=sent)
+    monkeypatch.setattr("app.data.time.sleep", waits.append)
+    return SimpleNamespace(served=served, calls=calls, headers=sent, waits=waits)
 
 
 def _sheet_names(path):
@@ -399,6 +402,114 @@ class TestOneCommitPerRefresh:
 
         assert upstream.calls == [COMMIT_URL]
         assert target.read_bytes() == OLD_BYTES
+
+
+TRANSIENT = [
+    500,
+    502,
+    503,
+    504,
+    429,
+    requests.ConnectionError("reset"),
+    requests.Timeout("slow"),
+    requests.exceptions.ChunkedEncodingError("cut off"),
+]
+TRANSIENT_IDS = [
+    "500",
+    "502",
+    "503",
+    "504",
+    "429",
+    "connection-error",
+    "timeout",
+    "cut-off",
+]
+
+
+class TestATransientFailureIsRetried:
+    """A 5xx or a timeout on any one of the requests used to skip the whole
+    refresh. A failure likely to pass is now retried, waiting longer before
+    each retry; one that will not pass (a 4xx) is not."""
+
+    @pytest.mark.parametrize("failure", TRANSIENT, ids=TRANSIENT_IDS)
+    def test_a_table_that_fails_once_is_fetched_again(self, target, upstream, failure):
+        from app import data
+
+        url = _url("castaways")
+        upstream.served[url] = [failure, upstream.served[url]]
+
+        data.download_survivor_data()
+
+        assert upstream.calls.count(url) == 2
+        assert set(pd.read_excel(target, "Castaways")["season"]) == {50, 51}
+        assert len(upstream.waits) == 1
+
+    def test_the_commit_lookup_is_retried_too(self, target, upstream):
+        from app import data
+
+        upstream.served[COMMIT_URL] = [503, FIXTURE_COMMIT.encode()]
+
+        assert data.download_survivor_data() == FIXTURE_COMMIT
+        assert upstream.calls[:2] == [COMMIT_URL, COMMIT_URL]
+
+    def test_each_retry_waits_longer_than_the_last(self, target, upstream):
+        from app import data
+
+        url = _url("episodes")
+        upstream.served[url] = [503] * (data.FETCH_ATTEMPTS - 1) + [
+            upstream.served[url]
+        ]
+
+        data.download_survivor_data()
+
+        waits = upstream.waits
+        assert len(waits) == data.FETCH_ATTEMPTS - 1 >= 2
+        assert waits[0] > 0
+        assert waits == sorted(set(waits))
+
+    @pytest.mark.parametrize("failure", TRANSIENT, ids=TRANSIENT_IDS)
+    def test_a_failure_that_persists_gives_up_and_keeps_the_previous_file(
+        self, target, upstream, failure
+    ):
+        from app import data
+
+        target.write_bytes(OLD_BYTES)
+        url = _url("vote_history")
+        upstream.served[url] = failure
+
+        with pytest.raises(requests.RequestException):
+            data.download_survivor_data()
+
+        assert upstream.calls.count(url) == data.FETCH_ATTEMPTS
+        assert len(upstream.waits) == data.FETCH_ATTEMPTS - 1
+        assert target.read_bytes() == OLD_BYTES
+        assert _leftovers(target) == []
+
+    @pytest.mark.parametrize("status", [400, 401, 403, 404])
+    def test_a_client_error_is_not_retried(self, target, upstream, status):
+        from app import data
+
+        url = _url("jury_votes")
+        upstream.served[url] = status
+
+        with pytest.raises(requests.HTTPError):
+            data.download_survivor_data()
+
+        assert upstream.calls.count(url) == 1
+        assert upstream.waits == []
+
+    def test_a_table_that_is_not_rows_is_not_retried(self, target, upstream):
+        """A bad body is upstream's data, not a failed request."""
+        from app import data
+
+        url = _url("castaways")
+        upstream.served[url] = b"{}"
+
+        with pytest.raises(ValueError):
+            data.download_survivor_data()
+
+        assert upstream.calls.count(url) == 1
+        assert upstream.waits == []
 
 
 @pytest.fixture()
