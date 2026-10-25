@@ -15,6 +15,7 @@ from urllib.parse import quote
 import pandas as pd
 import requests
 from openpyxl import Workbook
+from openpyxl.cell import WriteOnlyCell
 from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.utils import get_column_letter
 
@@ -381,13 +382,33 @@ def write_survivor_workbook(path, tables):
             worksheet.calculate_dimension = lambda last_cell=last_cell: (
                 f"A1:{last_cell}"
             )
-            worksheet.append(header)
+            worksheet.append(_as_text_where_formula(worksheet, header))
             for row in rows:
-                worksheet.append(row)
+                worksheet.append(_as_text_where_formula(worksheet, row))
         workbook.save(path)
     except BaseException:
         _remove_sheet_temp_files(workbook)
         raise
+
+
+def _as_text_where_formula(worksheet, row):
+    """The row, with every string that starts with = given as a text cell.
+
+    openpyxl writes a string starting with = as a formula, which stores no
+    value, so pd.read_excel reads it back as NaN: a castaway named =Q would
+    lose the name. survivoR's values are data, never formulas, so such a
+    string goes in as a cell whose type is fixed to text after the value is
+    set.
+    """
+    if not any(isinstance(value, str) and value.startswith("=") for value in row):
+        return row
+    cells = []
+    for value in row:
+        if isinstance(value, str) and value.startswith("="):
+            value = WriteOnlyCell(worksheet, value=value)
+            value.data_type = "s"
+        cells.append(value)
+    return cells
 
 
 def _remove_sheet_temp_files(workbook):

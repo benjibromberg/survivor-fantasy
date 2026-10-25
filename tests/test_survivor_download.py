@@ -439,6 +439,48 @@ class TestAWriteThatFailsPartway:
         assert sorted(p.name for p in system_temp.iterdir()) == []
 
 
+class TestTextStartingWithEquals:
+    """openpyxl takes a string starting with = for a formula. A formula cell
+    has no stored value, so pd.read_excel read a castaway named =Q back as
+    NaN. survivoR's values are data, never formulas."""
+
+    def test_a_castaway_named_like_a_formula_reads_back_as_text(self, target, upstream):
+        from app import data
+
+        _with_value(upstream, "castaways", "castaway", "=Q")
+
+        data.download_survivor_data()
+
+        castaways = pd.read_excel(target, "Castaways")
+        assert castaways["castaway"].iloc[0] == "=Q"
+
+    def test_no_cell_is_written_as_a_formula(self, tmp_path):
+        """Column names too, and whatever follows the =."""
+        from openpyxl import load_workbook
+
+        from app.data import write_survivor_workbook
+
+        path = tmp_path / "book.xlsx"
+        records = [{"=name": "=Q", "season": 51, "note": "=SUM(A1:A2)", "eq": "="}]
+
+        write_survivor_workbook(str(path), [("Sheet", records)])
+
+        frame = pd.read_excel(path, "Sheet")
+        assert list(frame.columns) == ["=name", "season", "note", "eq"]
+        assert frame.iloc[0].tolist() == ["=Q", 51, "=SUM(A1:A2)", "="]
+        book = load_workbook(path)
+        try:
+            types = {
+                c.value: c.data_type for row in book["Sheet"].iter_rows() for c in row
+            }
+        finally:
+            book.close()
+        assert types["=Q"] == "s"
+        assert types["=SUM(A1:A2)"] == "s"
+        assert types["=name"] == "s"
+        assert types[51] == "n"
+
+
 class TestOneWayIn:
     """Every copy of survivoR.xlsx comes from download_survivor_data()."""
 
