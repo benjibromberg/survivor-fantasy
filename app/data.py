@@ -333,6 +333,52 @@ def _write_atomically(path, write):
             os.remove(tmp)
 
 
+# A temp file is abandoned once its writer has exited, and in any case after
+# this long: a container restart can hand a dead writer's pid to a new
+# process, and no build takes anywhere near an hour.
+ABANDONED_TEMP_AGE = 60 * 60  # seconds
+
+
+def _pid_running(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:  # running, as another user
+        return True
+    return True
+
+
+def _remove_abandoned_temp_files(path):
+    """Delete the temp files that writers killed mid-write left beside path.
+
+    _write_atomically removes its temp file when write() raises, but a
+    process killed outright (SIGKILL after a gunicorn timeout, out of memory,
+    a container stop) runs no cleanup, and its file would stay for good. The
+    pid in each name says whose it is: a file whose writer has exited, or
+    that is older than ABANDONED_TEMP_AGE, is removed; any other is a write
+    in progress (the other gunicorn worker's, or another thread's) and stays.
+    """
+    directory = os.path.dirname(path) or "."
+    name = re.compile(re.escape(os.path.basename(path)) + r"\.(\d+)\.[0-9a-f]{8}\.tmp")
+    try:
+        entries = os.listdir(directory)
+    except FileNotFoundError:
+        return
+    for entry in entries:
+        match = name.fullmatch(entry)
+        if not match:
+            continue
+        tmp = os.path.join(directory, entry)
+        try:
+            age = time.time() - os.path.getmtime(tmp)
+            if age > ABANDONED_TEMP_AGE or not _pid_running(int(match.group(1))):
+                os.remove(tmp)
+                logger.warning("Removed %s, left by a writer that was killed", tmp)
+        except FileNotFoundError:
+            continue
+
+
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -571,9 +617,11 @@ def download_survivor_data():
     fetch, a table that is not rows, or a value the workbook cannot hold
     (_check_survivor_values) leaves the previous file as it was. The
     workbook is then written beside it and swapped in (_write_atomically), so
-    a reader never sees half of one. Each table is parsed twice, once to check
+    a reader never sees half of one; first, any temp file a killed build left
+    is removed (_remove_abandoned_temp_files). Each table is parsed twice, once to check
     it and once to write it, so only one is ever held parsed in memory.
     """
+    _remove_abandoned_temp_files(SURVIVOR_DATA_FILE)
     commit = survivor_head_commit()
     bodies = {}
     for sheet, table in SURVIVOR_TABLES.items():

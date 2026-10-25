@@ -15,7 +15,10 @@ yesterday's file in place.
 import json
 import os
 import pathlib
+import subprocess
+import sys
 import tempfile
+import time
 from types import SimpleNamespace
 
 import pandas as pd
@@ -510,6 +513,112 @@ class TestATransientFailureIsRetried:
 
         assert upstream.calls.count(url) == 1
         assert upstream.waits == []
+
+
+def _dead_pid():
+    """The pid of a process that has already exited."""
+    done = subprocess.run(
+        [sys.executable, "-c", "import os; print(os.getpid())"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return int(done.stdout)
+
+
+def _temp_beside(target, pid):
+    """A temp file named the way _write_atomically names its own."""
+    path = target.parent / f"{target.name}.{pid}.0badf00d.tmp"
+    path.write_bytes(b"half a workbook")
+    return path
+
+
+class TestTempFilesAKilledWriterLeft:
+    """_write_atomically removes its temp file when the write raises, but a
+    worker killed outright (SIGKILL after a timeout, out of memory, a
+    container stop) runs no cleanup, and its survivoR.xlsx.<pid>.<random>.tmp
+    stayed in the data directory for good. The next build removes it."""
+
+    def test_a_killed_writers_temp_file_goes_with_the_next_build(
+        self, target, upstream
+    ):
+        from app import data
+
+        writer = (
+            "import os, sys, time\n"
+            "path = f'{sys.argv[1]}.{os.getpid()}.0badf00d.tmp'\n"
+            "open(path, 'wb').write(b'half a workbook')\n"
+            "print('writing', flush=True)\n"
+            "time.sleep(60)\n"
+        )
+        proc = subprocess.Popen(
+            [sys.executable, "-c", writer, str(target)],
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            assert proc.stdout.readline().strip() == "writing"
+        finally:
+            proc.kill()
+            proc.wait()
+            proc.stdout.close()
+        assert _leftovers(target) == [f"{target.name}.{proc.pid}.0badf00d.tmp"]
+
+        data.download_survivor_data()
+
+        assert _leftovers(target) == []
+
+    def test_a_build_that_fails_removes_a_dead_writers_file_too(self, target, upstream):
+        """The sweep comes first, so a day whose build fails still cleans up."""
+        from app import data
+
+        _temp_beside(target, _dead_pid())
+        upstream.served[_url("castaways")] = 404
+
+        with pytest.raises(requests.HTTPError):
+            data.download_survivor_data()
+
+        assert _leftovers(target) == []
+
+    def test_a_running_writers_temp_file_is_left_alone(self, target, upstream):
+        """Both workers build at 08:00: the other one's file is mid-write."""
+        from app import data
+
+        live = _temp_beside(target, os.getppid())
+
+        data.download_survivor_data()
+
+        assert _leftovers(target) == [live.name]
+
+    def test_an_hour_old_temp_file_goes_whatever_its_pid(self, target, upstream):
+        """A restarted container reuses pids; no build takes an hour."""
+        from app import data
+
+        old = _temp_beside(target, os.getppid())
+        an_hour_and_a_bit_ago = time.time() - 3700
+        os.utime(old, (an_hour_and_a_bit_ago, an_hour_and_a_bit_ago))
+
+        data.download_survivor_data()
+
+        assert _leftovers(target) == []
+
+    def test_nothing_else_in_the_data_directory_is_touched(self, target, upstream):
+        from app import data
+
+        dead = _dead_pid()
+        others = [
+            "survivor_fantasy.db",
+            "survivoR.xlsx.bak",
+            f"survivoR.xlsx.{dead}.tmp",
+            f"other.xlsx.{dead}.0badf00d.tmp",
+            f"survivoR.xlsx.{dead}.0badf00d.tmp.keep",
+        ]
+        for name in others:
+            (target.parent / name).write_bytes(b"not ours")
+
+        data.download_survivor_data()
+
+        assert _leftovers(target) == sorted(others)
 
 
 @pytest.fixture()
