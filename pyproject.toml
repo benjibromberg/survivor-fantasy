@@ -25,3 +25,12 @@ known-first-party = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Fail on a leaked SQLite connection or file. Python reports one only when
+# the garbage collector finalizes it (for connections, from 3.13 on), and
+# pytest turns a warning raised there into PytestUnraisableExceptionWarning,
+# so both must be errors. Close what a fixture opens: the session with
+# db.session.remove(), then the pool with db.engine.dispose().
+filterwarnings = [
+    "error::ResourceWarning",
+    "error::pytest.PytestUnraisableExceptionWarning",
+]
