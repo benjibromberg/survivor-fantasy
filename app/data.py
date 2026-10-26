@@ -1,19 +1,24 @@
 """Refresh season data from the survivoR dataset (open-source, hosted on GitHub)."""
 
+import contextlib
 import hashlib
 import io
 import json
 import logging
+import math
 import os
 import re
 import time
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from urllib.parse import quote
 
 import pandas as pd
 import requests
 from openpyxl import Workbook
+from openpyxl.cell import WriteOnlyCell
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.utils import get_column_letter
 
 from .models import Pick, Season, SoleSurvivorPick, Survivor, TeamName, User, db
@@ -25,8 +30,37 @@ logger = logging.getLogger(__name__)
 # then: in October 2026 the xlsx stayed at US51 episode 2 while the JSON reached
 # episode 4. So download_survivor_data() fetches the JSON and writes
 # survivoR.xlsx itself, with the sheet names the rest of the app reads.
+#
+# raw.githubusercontent.com caches each file for five minutes, so tables fetched
+# from the branch just after an upstream push can come from two commits. The
+# branch's head commit is resolved once, through GitHub's "Get a commit"
+# endpoint (the application/vnd.github.sha media type answers with the bare
+# 40-character SHA), and every table is fetched at that commit. That endpoint
+# allows an address 60 requests an hour without a token, shared by everything
+# behind the address, so when the lookup fails the tables are fetched from the
+# branch as they were before it existed, and the log says so.
+SURVIVOR_BRANCH = "master"  # survivoR's default branch
+SURVIVOR_COMMIT_URL = (
+    f"https://api.github.com/repos/doehm/survivoR/commits/{SURVIVOR_BRANCH}"
+)
 SURVIVOR_JSON_URL = (
-    "https://raw.githubusercontent.com/doehm/survivoR/master/dev/json/{table}.json"
+    "https://raw.githubusercontent.com/doehm/survivoR/{commit}/dev/json/{table}.json"
+)
+_COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
+
+# Each of those requests is retried when it fails in a way likely to pass: a
+# 5xx or 429 reply, a refused or dropped connection, a timeout, a body cut off
+# partway. One failure used to skip the whole refresh. A 4xx other than 429
+# will not pass on its own and is not retried. A reply that says how long to
+# wait (Retry-After) is waited out, unless that is longer than FETCH_MAX_WAIT.
+FETCH_ATTEMPTS = 3
+FETCH_RETRY_WAIT = 2  # seconds before the first retry, doubled for each after
+FETCH_MAX_WAIT = 30  # seconds: a longer Retry-After fails at once instead
+FETCH_TIMEOUT = (10, 60)  # connect, read (seconds)
+_TRANSIENT_ERRORS = (
+    requests.ConnectionError,
+    requests.Timeout,
+    requests.exceptions.ChunkedEncodingError,
 )
 
 # The survivoR.xlsx sheets the app reads, and the dev/json table each is built
@@ -64,15 +98,17 @@ def _data_dir():
 SURVIVOR_DATA_FILE = os.path.join(_data_dir(), "survivoR.xlsx")
 
 
-def _build_nickname_map():
+def _build_nickname_map(castaways=None):
     """Build castaway_id → most common name across all US seasons.
 
     For returning players who appear with different names (e.g. Oscar vs Ozzy),
-    uses the name that appears most often across their seasons.
+    uses the name that appears most often across their seasons. castaways is
+    the Castaways sheet, read from survivoR.xlsx when not given.
     """
     from collections import Counter
 
-    castaways = pd.read_excel(SURVIVOR_DATA_FILE, "Castaways")
+    if castaways is None:
+        castaways = pd.read_excel(SURVIVOR_DATA_FILE, "Castaways")
     us = castaways[castaways["version"] == "US"]
     result = {}
     for cid, group in us.groupby("castaway_id"):
@@ -249,14 +285,15 @@ def compute_castaway_stats(s_conf, s_vh, s_cr, s_am, idol_ids):
     }
 
 
-def read_episodes():
+def read_episodes(book=None):
     """The survivoR Episodes sheet. The only place it is read.
 
     Two callers want it: the Episode 2 air time (app/schedule.py) and a
     season's episode titles (season_episode_info, stored by refresh_season).
-    Reading it twice is how the two drift apart, so they share this.
+    Reading it twice is how the two drift apart, so they share this. book is
+    an open pd.ExcelFile to read it from, survivoR.xlsx when not given.
     """
-    return pd.read_excel(SURVIVOR_DATA_FILE, "Episodes")
+    return pd.read_excel(book if book is not None else SURVIVOR_DATA_FILE, "Episodes")
 
 
 def season_episode_info(episodes, season_number):
@@ -306,6 +343,52 @@ def _write_atomically(path, write):
             os.remove(tmp)
 
 
+# A temp file is abandoned once its writer has exited, and in any case after
+# this long: a container restart can hand a dead writer's pid to a new
+# process, and no build takes anywhere near an hour.
+ABANDONED_TEMP_AGE = 60 * 60  # seconds
+
+
+def _pid_running(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:  # running, as another user
+        return True
+    return True
+
+
+def _remove_abandoned_temp_files(path):
+    """Delete the temp files that writers killed mid-write left beside path.
+
+    _write_atomically removes its temp file when write() raises, but a
+    process killed outright (SIGKILL after a gunicorn timeout, out of memory,
+    a container stop) runs no cleanup, and its file would stay for good. The
+    pid in each name says whose it is: a file whose writer has exited, or
+    that is older than ABANDONED_TEMP_AGE, is removed; any other is a write
+    in progress (the other gunicorn worker's, or another thread's) and stays.
+    """
+    directory = os.path.dirname(path) or "."
+    name = re.compile(re.escape(os.path.basename(path)) + r"\.(\d+)\.[0-9a-f]{8}\.tmp")
+    try:
+        entries = os.listdir(directory)
+    except FileNotFoundError:
+        return
+    for entry in entries:
+        match = name.fullmatch(entry)
+        if not match:
+            continue
+        tmp = os.path.join(directory, entry)
+        try:
+            age = time.time() - os.path.getmtime(tmp)
+            if age > ABANDONED_TEMP_AGE or not _pid_running(int(match.group(1))):
+                os.remove(tmp)
+                logger.warning("Removed %s, left by a writer that was killed", tmp)
+        except FileNotFoundError:
+            continue
+
+
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -322,6 +405,16 @@ def _is_date_column(records, column):
     )
 
 
+def _sheet_columns(records):
+    """(columns, the columns that hold dates) for one survivoR JSON table.
+
+    The JSON leaves a null field out of its row instead of writing null, so the
+    columns are every key any row has, in the order they first appear.
+    """
+    columns = list(dict.fromkeys(key for record in records for key in record))
+    return columns, {c for c in columns if _is_date_column(records, c)}
+
+
 def survivor_sheet_rows(records):
     """Yield the header, then one row per record, for one survivoR JSON table.
 
@@ -335,8 +428,7 @@ def survivor_sheet_rows(records):
     limits the JSON sets: floats carry at most 4 decimal places, and a column
     with no value in any row is absent rather than empty.
     """
-    columns = list(dict.fromkeys(key for record in records for key in record))
-    dates = {c for c in columns if _is_date_column(records, c)}
+    columns, dates = _sheet_columns(records)
     yield columns
     for record in records:
         row = []
@@ -361,16 +453,106 @@ def write_survivor_workbook(path, tables):
     given to the writer, which asks the worksheet for calculate_dimension().
     """
     workbook = Workbook(write_only=True)
-    for sheet, records in tables:
-        rows = survivor_sheet_rows(records)
-        header = next(rows)
-        worksheet = workbook.create_sheet(sheet)
-        last_cell = f"{get_column_letter(max(len(header), 1))}{len(records) + 1}"
-        worksheet.calculate_dimension = lambda last_cell=last_cell: f"A1:{last_cell}"
-        worksheet.append(header)
-        for row in rows:
-            worksheet.append(row)
-    workbook.save(path)
+    try:
+        for sheet, records in tables:
+            rows = survivor_sheet_rows(records)
+            header = next(rows)
+            worksheet = workbook.create_sheet(sheet)
+            last_cell = f"{get_column_letter(max(len(header), 1))}{len(records) + 1}"
+            worksheet.calculate_dimension = lambda last_cell=last_cell: (
+                f"A1:{last_cell}"
+            )
+            worksheet.append(_as_text_where_formula(worksheet, header))
+            for row in rows:
+                worksheet.append(_as_text_where_formula(worksheet, row))
+        workbook.save(path)
+    except BaseException:
+        _remove_sheet_temp_files(workbook)
+        raise
+
+
+def _as_text_where_formula(worksheet, row):
+    """The row, with every string that starts with = given as a text cell.
+
+    openpyxl writes a string starting with = as a formula, which stores no
+    value, so pd.read_excel reads it back as NaN: a castaway named =Q would
+    lose the name. survivoR's values are data, never formulas, so such a
+    string goes in as a cell whose type is fixed to text after the value is
+    set.
+    """
+    if not any(isinstance(value, str) and value.startswith("=") for value in row):
+        return row
+    cells = []
+    for value in row:
+        if isinstance(value, str) and value.startswith("="):
+            value = WriteOnlyCell(worksheet, value=value)
+            value.data_type = "s"
+        cells.append(value)
+    return cells
+
+
+def _remove_sheet_temp_files(workbook):
+    """Delete the files a write-only workbook streams its sheets into.
+
+    openpyxl writes each sheet's rows to a file of its own in the system temp
+    directory and deletes it once it is zipped into the workbook. A write that
+    fails before then would leave them until the process exits (openpyxl
+    registers an atexit hook), which for a gunicorn worker is weeks: up to
+    about 63 MB per failed attempt at full size. Each sheet's row stream and
+    file writer are openpyxl 3.1's private WriteOnlyWorksheet._rows and
+    _writer; tests/test_survivor_download.py fails if they stop being found.
+    The row stream is closed first, while its file is still open, or closing
+    it later (when it is garbage-collected) writes to a closed file.
+    """
+    for worksheet in workbook.worksheets:
+        writer = getattr(worksheet, "_writer", None)
+        if writer is None:
+            continue
+        rows = getattr(worksheet, "_rows", None)
+        if rows is not None:
+            with contextlib.suppress(Exception):
+                rows.close()
+        with contextlib.suppress(Exception):
+            writer.close()
+        with contextlib.suppress(OSError, ValueError):
+            writer.cleanup()
+
+
+def _check_survivor_values(table, records):
+    """Refuse a value the workbook cannot hold, before any writing starts.
+
+    The shape check passes a table whose rows are dicts; a single bad value
+    inside one would then abort the write halfway. Three kinds would: a value
+    that is not a single number, string or bool (openpyxl cannot convert a
+    list or an object), a string holding a control character openpyxl refuses
+    (ILLEGAL_CHARACTERS_RE, which XML cannot carry), and, in a column that
+    becomes dates (_is_date_column), YYYY-MM-DD text that is no real date,
+    such as 2026-02-30.
+    """
+    columns, dates = _sheet_columns(records)
+    for column in columns:
+        if ILLEGAL_CHARACTERS_RE.search(column):
+            raise ValueError(
+                f"survivoR {table}.json column name {column!r} holds a control character"
+            )
+    for number, record in enumerate(records, 1):
+        for column, value in record.items():
+            if value is None:
+                continue
+            problem = None
+            if not isinstance(value, (str, int, float)):
+                problem = "is not a single value"
+            elif isinstance(value, str) and ILLEGAL_CHARACTERS_RE.search(value):
+                problem = "holds a control character"
+            elif column in dates:
+                try:
+                    datetime.strptime(value, "%Y-%m-%d")
+                except ValueError:
+                    problem = "is not a real date"
+            if problem:
+                raise ValueError(
+                    f"survivoR {table}.json row {number}, {column}: {value!r} {problem}"
+                )
 
 
 def _survivor_table_records(table, body):
@@ -385,21 +567,125 @@ def _survivor_table_records(table, body):
     return records
 
 
-def download_survivor_data():
+def _retry_after(resp):
+    """The seconds a reply's Retry-After header asks for, or None.
+
+    The header is either a number of seconds or an HTTP date.
+    """
+    value = (resp.headers.get("Retry-After") or "").strip()
+    if not value:
+        return None
+    if value.isdigit():
+        return int(value)
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return max(0, math.ceil((when - datetime.now(UTC)).total_seconds()))
+
+
+def _fetch(url, **kwargs):
+    """GET url, retrying a transient failure (see FETCH_ATTEMPTS).
+
+    Returns the response once it succeeds; raises the last error once the
+    attempts run out, or at once for a failure retrying cannot fix.
+    """
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        last = attempt == FETCH_ATTEMPTS
+        wait = FETCH_RETRY_WAIT * 2 ** (attempt - 1)
+        try:
+            resp = requests.get(url, timeout=FETCH_TIMEOUT, **kwargs)
+        except _TRANSIENT_ERRORS as e:
+            if last:
+                raise
+            problem = repr(e)
+        else:
+            transient = resp.status_code >= 500 or resp.status_code == 429
+            asked = _retry_after(resp) if transient else None
+            if asked is not None:
+                last = last or asked > FETCH_MAX_WAIT
+                wait = max(wait, asked)
+            if last or not transient:
+                resp.raise_for_status()
+                return resp
+            problem = f"HTTP {resp.status_code}"
+        logger.warning(
+            "Fetching %s failed (%s), attempt %d of %d; retrying in %d s",
+            url,
+            problem,
+            attempt,
+            FETCH_ATTEMPTS,
+            wait,
+        )
+        time.sleep(wait)
+
+
+def survivor_head_commit():
+    """The commit at the head of survivoR's default branch, as a full SHA.
+
+    Unauthenticated, this is one of the 60 requests an hour GitHub allows an
+    address; past that GitHub answers 403, which is not retried. Whatever
+    comes back goes into every table's URL, so anything but a 40-character
+    hex SHA is refused.
+    """
+    resp = _fetch(SURVIVOR_COMMIT_URL, headers={"Accept": "application/vnd.github.sha"})
+    commit = resp.content.decode("ascii", "replace").strip()
+    if not _COMMIT_SHA.fullmatch(commit):
+        raise ValueError(
+            f"GitHub did not return a commit for survivoR {SURVIVOR_BRANCH}: "
+            f"{commit[:60]!r}"
+        )
+    return commit
+
+
+def download_survivor_data(progress=None):
     """Rebuild survivoR.xlsx from survivoR's dev/json tables on GitHub.
 
+    Returns the survivoR commit it was built from. Every table is fetched at
+    that one commit (survivor_head_commit), so a refresh never mixes tables
+    from before and after an upstream push. If the commit cannot be looked
+    up, every table is fetched from SURVIVOR_BRANCH instead, as before the
+    lookup existed, the log says this refresh is not pinned to one commit,
+    and SURVIVOR_BRANCH is returned in place of a commit.
+
     Every table is fetched and checked before anything is written, so a failed
-    fetch or a table that is not rows leaves the previous file as it was. The
+    fetch, a table that is not rows, or a value the workbook cannot hold
+    (_check_survivor_values) leaves the previous file as it was. The
     workbook is then written beside it and swapped in (_write_atomically), so
-    a reader never sees half of one. Each table is parsed twice, once to check
-    it and once to write it, so only one is ever held parsed in memory.
+    a reader never sees half of one; first, any temp file a killed build left
+    is removed (_remove_abandoned_temp_files). Each table is parsed twice,
+    once to check it and once to write it, so only one is ever held parsed in
+    memory.
+
+    progress, if given, is called with a short description after each table
+    arrives and before the build, which is how a refresh shows it is alive
+    (app/refresh_jobs.py). If it raises, the download stops there, before
+    anything is written.
     """
+    _remove_abandoned_temp_files(SURVIVOR_DATA_FILE)
+    try:
+        commit = survivor_head_commit()
+    except (requests.RequestException, ValueError) as e:
+        logger.warning(
+            "Could not look up survivoR's head commit (%s); fetching every table "
+            "from %s, so this refresh is not pinned to one commit",
+            e,
+            SURVIVOR_BRANCH,
+        )
+        commit = SURVIVOR_BRANCH
     bodies = {}
     for sheet, table in SURVIVOR_TABLES.items():
-        resp = requests.get(SURVIVOR_JSON_URL.format(table=table), timeout=60)
-        resp.raise_for_status()
-        _survivor_table_records(table, resp.content)
+        resp = _fetch(SURVIVOR_JSON_URL.format(commit=commit, table=table))
+        _check_survivor_values(table, _survivor_table_records(table, resp.content))
         bodies[sheet] = (table, resp.content)
+        if progress:
+            progress(
+                f"downloading survivoR: {len(bodies)} of {len(SURVIVOR_TABLES)} tables"
+            )
+    if progress:
+        progress("building survivoR.xlsx")
 
     def write(tmp):
         write_survivor_workbook(
@@ -411,7 +697,12 @@ def download_survivor_data():
         )
 
     _write_atomically(SURVIVOR_DATA_FILE, write)
-    logger.info("Built survivoR.xlsx from %d survivoR tables", len(bodies))
+    logger.info(
+        "Built survivoR.xlsx from %d survivoR tables at commit %s",
+        len(bodies),
+        commit,
+    )
+    return commit
 
 
 def refresh_season(season):
@@ -420,19 +711,25 @@ def refresh_season(season):
     Updates boot order, jury status, placement, results, challenge stats,
     confessionals, votes, advantages, and per-episode cumulative stats.
     """
-    castaways = pd.read_excel(SURVIVOR_DATA_FILE, "Castaways")
-    confessionals = pd.read_excel(SURVIVOR_DATA_FILE, "Confessionals")
-    vote_history = pd.read_excel(SURVIVOR_DATA_FILE, "Vote History")
-    challenge_results = pd.read_excel(SURVIVOR_DATA_FILE, "Challenge Results")
-    advantage_movement = pd.read_excel(SURVIVOR_DATA_FILE, "Advantage Movement")
-    advantage_details = pd.read_excel(SURVIVOR_DATA_FILE, "Advantage Details")
-    tribe_mapping = pd.read_excel(SURVIVOR_DATA_FILE, "Tribe Mapping")
-    boot_mapping = pd.read_excel(SURVIVOR_DATA_FILE, "Boot Mapping")
-    tribe_colours = pd.read_excel(SURVIVOR_DATA_FILE, "Tribe Colours")
-    castaway_scores = pd.read_excel(SURVIVOR_DATA_FILE, "Castaway Scores")
-    jury_votes = pd.read_excel(SURVIVOR_DATA_FILE, "Jury Votes")
-    castaway_details = pd.read_excel(SURVIVOR_DATA_FILE, "Castaway Details")
-    episodes = read_episodes()
+    # Every sheet from one open file: download_survivor_data() can swap a new
+    # build in at any moment, and an open file keeps reading the build it
+    # opened, so no refresh reads some sheets from one build and some from
+    # the next.
+    with pd.ExcelFile(SURVIVOR_DATA_FILE) as book:
+        castaways = pd.read_excel(book, "Castaways")
+        confessionals = pd.read_excel(book, "Confessionals")
+        vote_history = pd.read_excel(book, "Vote History")
+        challenge_results = pd.read_excel(book, "Challenge Results")
+        advantage_movement = pd.read_excel(book, "Advantage Movement")
+        advantage_details = pd.read_excel(book, "Advantage Details")
+        tribe_mapping = pd.read_excel(book, "Tribe Mapping")
+        boot_mapping = pd.read_excel(book, "Boot Mapping")
+        tribe_colours = pd.read_excel(book, "Tribe Colours")
+        castaway_scores = pd.read_excel(book, "Castaway Scores")
+        jury_votes = pd.read_excel(book, "Jury Votes")
+        castaway_details = pd.read_excel(book, "Castaway Details")
+        season_summary = pd.read_excel(book, "Season Summary")
+        episodes = read_episodes(book)
 
     def us(df):
         return us_season_filter(df, season.number)
@@ -752,7 +1049,7 @@ def refresh_season(season):
         return cumulative
 
     # Apply nicknames for returning players (e.g. Oscar → Ozzy)
-    nickname_map = _build_nickname_map()
+    nickname_map = _build_nickname_map(castaways)
 
     # Build lookup of existing survivors by castaway_id
     existing = {
@@ -766,7 +1063,6 @@ def refresh_season(season):
     season.episode_info = json.dumps(episode_info) if episode_info else None
 
     # Season metadata from survivoR (required for new-era seasons 41+)
-    season_summary = pd.read_excel(SURVIVOR_DATA_FILE, "Season Summary")
     ss = season_summary[
         (season_summary["version"] == "US")
         & (season_summary["season"] == season.number)
@@ -1110,7 +1406,7 @@ def hand_entered_survivor_count(season):
     return Survivor.query.filter_by(season_id=season.id, castaway_id=None).count()
 
 
-def generate_season_images(season, force=False):
+def generate_season_images(season, force=False, progress=None):
     """Mirror a season's headshots from fantasysurvivorgame.com onto our disk.
 
     For each survivor, tries headshot_url_candidates() in order and keeps the
@@ -1121,12 +1417,15 @@ def generate_season_images(season, force=False):
     file is skipped without any network call (pass force=True to re-fetch).
     Failures are logged and never raise; a survivor with no usable image keeps
     its previous image_url (None renders the letter placeholder).
-    Returns number of survivors with a usable image.
+    Returns number of survivors with a usable image. progress, if given, is
+    called before each survivor, as download_survivor_data calls it.
     """
     survivors = Survivor.query.filter_by(season_id=season.id).all()
     matched = 0
     fetched_any = False
-    for surv in survivors:
+    for number, surv in enumerate(survivors, 1):
+        if progress:
+            progress(f"fetching headshots: {number} of {len(survivors)}")
         existing = _local_headshot_path(surv.image_url)
         if not force and existing and os.path.exists(existing):
             matched += 1

@@ -523,9 +523,9 @@ class TestSyncTriggers:
     def test_admin_refresh_fills_the_time(self, client, lookup, monkeypatch):
         c, db = client
         season = _season(db)
-        monkeypatch.setattr("app.routes.download_survivor_data", lambda: None)
-        monkeypatch.setattr("app.routes.refresh_season", lambda s: (0, []))
-        monkeypatch.setattr("app.routes.export_all_picks", lambda: [])
+        monkeypatch.setattr("app.refresh_jobs.download_survivor_data", lambda **_: None)
+        monkeypatch.setattr("app.refresh_jobs.refresh_season", lambda s: (0, []))
+        monkeypatch.setattr("app.refresh_jobs.export_all_picks", lambda: [])
         _login_admin(c)
 
         c.post(f"/admin/season/{season.id}/refresh")

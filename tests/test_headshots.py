@@ -207,6 +207,16 @@ class TestGenerateSeasonImages:
         assert danny.image_url != thien_an.image_url
         assert nobody.image_url is None
 
+    def test_reports_each_castaway_as_it_goes(self, app, remote):
+        """The progress a refresh shows while it fetches headshots."""
+        _, db = app
+        season, _ = _add_season(db, 51, ["Danny", "Thien An", "Nobody"])
+        steps = []
+
+        generate_season_images(season, progress=steps.append)
+
+        assert steps == [f"fetching headshots: {n} of 3" for n in (1, 2, 3)]
+
     def test_failed_fetch_leaves_image_url_none(self, app, remote, caplog):
         _, db = app
         season, (q,) = _add_season(db, 46, ["Q"])

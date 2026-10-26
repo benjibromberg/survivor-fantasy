@@ -15,14 +15,11 @@ from flask import (
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
-from . import schedule, wildcards
+from . import refresh_jobs, schedule, wildcards
 from .data import (
-    download_survivor_data,
     export_all_picks,
     export_season_picks,
-    generate_season_images,
     hand_entered_survivor_count,
-    refresh_season,
     store_uploaded_headshot,
 )
 from .models import (
@@ -2199,26 +2196,27 @@ def admin_seasons():
             season = Season(number=number, name=f"Season {number}", is_active=False)
             db.session.add(season)
             db.session.commit()
+            flash(
+                f"Season {number} created. It is inactive until you activate "
+                "it from the seasons list.",
+                "success",
+            )
 
-            # Auto-fetch from survivoR
-            try:
-                download_survivor_data()
-                count, day_warnings = refresh_season(season)
+            # Fetch its cast from survivoR (and its headshots unless
+            # unchecked) beside the request: see app/refresh_jobs.py.
+            fetch_images = "fetch_images" in request.form
+            if refresh_jobs.start(season, "create", fetch_images=fetch_images):
                 flash(
-                    f"Season {number} created with {count} survivors! It is "
-                    "inactive until you activate it from the seasons list.",
+                    "Its castaways are loading from survivoR in the background; "
+                    "this page shows when they are in.",
                     "success",
                 )
-                for w in day_warnings:
-                    flash(f"Data warning: {w}", "error")
-
-                # Generate images unless unchecked
-                if "fetch_images" in request.form:
-                    matched = generate_season_images(season)
-                    flash(f"Found {matched} headshot images.", "success")
-            except Exception as e:
-                db.session.rollback()
-                flash(f"Season created but data fetch failed: {e}", "error")
+            else:
+                flash(
+                    "Loading its castaways from survivoR did not start. Press "
+                    "Refresh from survivoR.",
+                    "error",
+                )
 
             return redirect(url_for("main.admin_season_detail", season_id=season.id))
 
@@ -2270,6 +2268,7 @@ def admin_season_detail(season_id):
         default_config=DEFAULT_CONFIG,
         legacy_config=LEGACY_CONFIG,
         wildcard=wildcards.admin_view(season),
+        refresh=refresh_jobs.status(season),
     )
 
 
@@ -2376,29 +2375,20 @@ def admin_refresh(season_id):
         )
         return redirect(url_for("main.admin_season_detail", season_id=season.id))
 
-    # Auto-export picks before refresh (so picks are preserved if refresh changes data)
-    try:
-        export_all_picks()
-    except Exception as e:
-        logger.warning("Pick export before refresh failed: %s", e)
-
-    try:
-        download_survivor_data()
-        count, day_warnings = refresh_season(season)
-        flash(f"Refreshed {count} survivors from survivoR dataset!", "success")
-        for w in day_warnings:
-            flash(f"Data warning: {w}", "error")
-    except Exception as e:
-        db.session.rollback()
-        flash(f"Refresh failed: {e}", "error")
-
-    schedule.sync_episode2_time(season)
-
-    # Auto-export picks after refresh (capture any name/id updates)
-    try:
-        export_all_picks()
-    except Exception as e:
-        logger.warning("Pick export after refresh failed: %s", e)
+    # The refresh (picks exported before and after it, then the Episode 2
+    # time looked up) runs beside the request: see app/refresh_jobs.py.
+    if refresh_jobs.start(season, "refresh"):
+        flash(
+            "Refresh from survivoR started. It runs in the background; this "
+            "page shows its progress, then its result.",
+            "success",
+        )
+    else:
+        flash(
+            "A refresh of this season is already running. This page shows its "
+            "progress, then its result.",
+            "error",
+        )
 
     return redirect(url_for("main.admin_season_detail", season_id=season.id))
 

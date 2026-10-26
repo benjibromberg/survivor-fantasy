@@ -69,6 +69,10 @@ class Season(db.Model):
     # JSON: {episode: {title, date}} from the survivoR Episodes sheet, keyed by
     # episode number as a string so it lines up with Survivor.episode_stats.
     episode_info = db.Column(db.Text)
+    # JSON: the last refresh from survivoR started on the admin pages, while
+    # it runs and after (app/refresh_jobs.py). On the row, so either gunicorn
+    # worker can show it.
+    refresh_status = db.Column(db.Text)
     survivors = db.relationship("Survivor", backref="season", lazy=True)
     picks = db.relationship("Pick", backref="season", lazy=True)
 

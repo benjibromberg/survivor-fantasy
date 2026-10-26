@@ -364,3 +364,41 @@ class TestSameSeasonInTheApp:
                 assert built_score is None
             else:
                 assert built_score == pytest.approx(score, abs=JSON_DECIMALS_TOLERANCE)
+
+
+class TestOneWorkbookPerRefresh:
+    """download_survivor_data() can swap a new build in at any moment.
+    refresh_season() read each sheet by path, so one refresh could read some
+    sheets from the old build and the rest from the new. It now opens the
+    file once and reads every sheet from that, and an open file keeps
+    reading the build it opened."""
+
+    def test_a_build_swapped_in_mid_refresh_is_not_read(
+        self, app, monkeypatch, built_xlsx, tmp_path
+    ):
+        import os
+        import shutil
+
+        from app import data
+
+        xlsx = tmp_path / "survivoR.xlsx"
+        shutil.copy(built_xlsx, xlsx)
+        undisturbed = _refresh_from(app, monkeypatch, xlsx, 51)
+        real_read_excel = data.pd.read_excel
+        reads = []
+
+        def read_then_swap(source, *args, **kwargs):
+            frame = real_read_excel(source, *args, **kwargs)
+            reads.append(args[:1])
+            if len(reads) == 1:
+                newer = tmp_path / "newer.xlsx"
+                newer.write_bytes(b"a build that is not the one it opened")
+                os.replace(newer, xlsx)
+            return frame
+
+        monkeypatch.setattr(data.pd, "read_excel", read_then_swap)
+
+        swapped = _refresh_from(app, monkeypatch, xlsx, 51)
+
+        assert len(reads) > 1
+        assert swapped == undisturbed

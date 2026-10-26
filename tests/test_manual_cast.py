@@ -642,7 +642,7 @@ class TestRefreshIsHeldBack:
     @pytest.fixture()
     def spy(self, monkeypatch):
         """Record refresh_season calls instead of performing them."""
-        from app import data, routes
+        from app import data, refresh_jobs
 
         called = []
 
@@ -650,10 +650,10 @@ class TestRefreshIsHeldBack:
             called.append(season.number)
             return 0, []
 
-        monkeypatch.setattr(routes, "refresh_season", fake_refresh)
+        monkeypatch.setattr(refresh_jobs, "refresh_season", fake_refresh)
         monkeypatch.setattr(data, "refresh_season", fake_refresh)
-        monkeypatch.setattr(routes, "download_survivor_data", lambda: None)
-        monkeypatch.setattr(data, "download_survivor_data", lambda: None)
+        monkeypatch.setattr(refresh_jobs, "download_survivor_data", lambda **_: None)
+        monkeypatch.setattr(data, "download_survivor_data", lambda **_: None)
         return called
 
     def _refresh(self, league, season):
