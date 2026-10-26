@@ -22,7 +22,7 @@ def refresh_active_seasons(app):
     shows the run like any other refresh.
     """
     with app.app_context():
-        from . import refresh_jobs
+        from . import db, refresh_jobs
         from .data import (
             download_survivor_data,
             export_all_picks,
@@ -65,6 +65,8 @@ def refresh_active_seasons(app):
             commit = download_survivor_data(progress=report)
         except Exception as e:
             logger.error(f"Failed to download survivoR data: {e}")
+            # Recording the failure commits the session; save nothing else.
+            db.session.rollback()
             for _season, claim in claimed:
                 claim.messages.append(("error", f"Refresh failed: {e}"))
                 claim.finish()
@@ -94,6 +96,9 @@ def refresh_active_seasons(app):
                     logger.warning(f"Season {season.number} day data: {w}")
                     claim.messages.append(("error", f"Data warning: {w}"))
             except Exception as e:
+                # refresh_season can fail after changing the season; recording
+                # the failure commits the session, so undo those changes first.
+                db.session.rollback()
                 logger.error(f"Auto-refresh failed for season {season.number}: {e}")
                 claim.messages.append(("error", f"Refresh failed: {e}"))
             finally:

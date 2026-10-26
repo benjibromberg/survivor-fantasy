@@ -644,3 +644,89 @@ class TestTheDailyRefreshTakesTheClaimToo:
         self._run_daily()
 
         assert "daily 8am refresh" in _page(c, daily.season)
+
+
+class TestARefreshThatFailsHalfwaySavesNothing:
+    """refresh_season can raise after it has changed the season (its cast
+    size check runs after merge_episode_num and episode_info are set; a bad
+    castaway row fails after earlier ones were updated). Every path rolls
+    those changes back before it records the failure, because recording it
+    commits the session."""
+
+    @staticmethod
+    def _changes_then_fails(season):
+        season.name = "PARTIAL"
+        raise RuntimeError("bad castaway row")
+
+    @staticmethod
+    def _name(db, season):
+        db.session.refresh(season)
+        return season.name
+
+    def test_the_daily_refresh(self, client, monkeypatch):
+        from flask import current_app
+
+        from app.scheduler import refresh_active_seasons
+
+        _c, db = client
+        season = _season(db)
+        season.is_active = True
+        db.session.commit()
+        monkeypatch.setattr("app.data.download_survivor_data", lambda **_: COMMIT)
+        monkeypatch.setattr("app.data.refresh_season", self._changes_then_fails)
+        monkeypatch.setattr("app.data.export_all_picks", lambda: [])
+        monkeypatch.setattr("app.schedule.episode2_start", lambda _n: (None, None))
+
+        refresh_active_seasons(current_app._get_current_object())
+
+        assert self._name(db, season) == "Season 51"
+        status = _status(db, season)
+        assert status["state"] == "finished"
+        assert ("error", "Refresh failed: bad castaway row") in status["messages"]
+
+    def test_the_daily_refresh_whose_download_fails(self, client, monkeypatch):
+        """Nothing is pending when the download fails today; if anything ever
+        is, recording the failure must not save it."""
+        from flask import current_app
+
+        from app.models import Season
+        from app.scheduler import refresh_active_seasons
+
+        _c, db = client
+        season = _season(db)
+        season.is_active = True
+        db.session.commit()
+        season_id = season.id
+
+        def download(**_):
+            db.session.get(Season, season_id).name = "PARTIAL"
+            raise requests.ConnectionError("upstream is down")
+
+        monkeypatch.setattr("app.data.download_survivor_data", download)
+        monkeypatch.setattr("app.data.export_all_picks", lambda: [])
+        monkeypatch.setattr("app.schedule.episode2_start", lambda _n: (None, None))
+
+        refresh_active_seasons(current_app._get_current_object())
+
+        assert self._name(db, season) == "Season 51"
+        status = _status(db, season)
+        assert ("error", "Refresh failed: upstream is down") in status["messages"]
+
+    @pytest.mark.parametrize("path", ["refresh", "create"])
+    def test_an_admin_refresh(self, client, survivor, monkeypatch, path):
+        from app import refresh_jobs
+        from app.models import Season
+
+        c, db = client
+        _login(c)
+        monkeypatch.setattr(refresh_jobs, "refresh_season", self._changes_then_fails)
+        if path == "refresh":
+            season = _season(db)
+            c.post(f"/admin/season/{season.id}/refresh")
+        else:
+            c.post("/admin/seasons", data={"number": "51"})
+            season = Season.query.filter_by(number=51).one()
+
+        assert self._name(db, season) == "Season 51"
+        status = _status(db, season)
+        assert ("error", "Refresh failed: bad castaway row") in status["messages"]
