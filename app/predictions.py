@@ -293,11 +293,14 @@ def _score_all_users(
     surv_by_id,
     season,
     current_elim_count,
-    merge_threshold,
+    replacements_from,
     at_merge_stats,
     user_ss_picks,
 ):
     """Score all users and return the winner's user_id.
+
+    replacements_from: elimination count before which replacements score
+        nothing (replacements.scoring_start).
 
     at_merge_stats: dict {survivor_id: {attr: at_merge_val}} for replacement picks.
         Precomputed once to avoid repeated JSON parsing in the hot loop.
@@ -312,8 +315,8 @@ def _score_all_users(
                 continue
             # Replacement timing: skip if merge hasn't happened
             if (
-                pick.pick_type in ("pmr_w", "pmr_d")
-                and current_elim_count < merge_threshold
+                pick.pick_type in replacements.TYPES
+                and current_elim_count < replacements_from
             ):
                 continue
 
@@ -528,9 +531,10 @@ def calculate_win_probabilities(season):
     current_post_merge = max(0, current_max_vo - merge_threshold)
 
     # Precompute at-merge stat values for replacement pick scoring
-    # (avoids repeated JSON parsing in the hot loop). The baseline episode is
-    # the leaderboard's, so odds and standings score replacements alike.
-    _, merge_episode = replacements.scoring_start(season)
+    # (avoids repeated JSON parsing in the hot loop). The start count and the
+    # baseline episode are the leaderboard's, so odds and standings score
+    # replacements alike.
+    replacements_from, merge_episode = replacements.scoring_start(season)
 
     at_merge_stats = {}
     if merge_episode:
@@ -574,7 +578,7 @@ def calculate_win_probabilities(season):
             surv_by_id,
             season,
             current_max_vo,
-            merge_threshold,
+            replacements_from,
             at_merge_stats,
             user_ss_picks,
         )
@@ -627,7 +631,7 @@ def calculate_win_probabilities(season):
             surv_by_id,
             season,
             current_max_vo,
-            merge_threshold,
+            replacements_from,
             at_merge_stats,
             user_ss_picks,
         )
