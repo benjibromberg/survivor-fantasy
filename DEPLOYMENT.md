@@ -209,6 +209,39 @@ not switched on after the fact, since that would hide wildcards the admin has
 already entered. The time, the override and the switch are exported with the
 season's picks, so a re-seed with `--picks-dir` restores them.
 
+### Replacement self-service
+
+Players who lost a castaway in or before the merge episode pick their own
+replacement once the app knows when the next episode starts. A lost draft pick
+earns a draft replacement; if only the wildcard went out, a wildcard
+replacement. The merge episode comes from survivoR's Tribe Mapping, and the
+next episode's start is looked up like Episode 2's: from TVmaze, or a week
+after the merge episode at 8 PM Eastern. The lookup runs with the daily
+refresh, the admin **Refresh** button, when a season is activated, and when the
+**Replacement Picks** form on the season's admin page is saved. From then on:
+
+- An eligible player chooses their replacement on **My Team**: any castaway
+  still in the game who is not already on their own team. They can change it
+  as often as they like.
+- Picks lock 15 minutes before that episode. After that, enter any that are
+  missing under Manage Picks.
+- Replacements stay off the leaderboard, its timeline, charts and win odds,
+  and score no points, until every eligible player has one. The season admin
+  page shows who is still to pick.
+
+**Deploying on the day of the episode.** The daily refresh runs at 8 AM
+Eastern, so a deploy later that day has no lock time until something triggers
+the lookup. Open the season's admin page and press **Save** under Replacement
+Picks with the time field blank, or press **Refresh**. The page then shows
+when picks lock.
+
+Type a different time to override the lookup; clear the field to go back to
+automatic. Like the wildcard window, the lookup never switches a season on
+once that episode's lock has passed. Clearing the time after the lock reveals
+every replacement, which is the way out if an eligible player never picks and
+you would rather not enter one for them. The time is not yet exported with the
+season's picks, so a re-seed loses it.
+
 ## How It Works
 
 - **`cloudflared`** runs the remotely-managed tunnel from the `CF_TUNNEL_TOKEN`
