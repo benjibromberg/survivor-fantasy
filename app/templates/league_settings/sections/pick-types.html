@@ -13,16 +13,16 @@
     {% if draft_repl_mult == 0 and wc_repl_mult == 0 %}
     <div class="ls-value">
         <dt>Replacement</dt>
-        <dd>0 pts, roster only<small>After the merge, if a pick went out pre-merge</small></dd>
+        <dd>0 pts, roster only<small>After the merge, if a pick went out in or before the merge episode</small></dd>
     </div>
     {% else %}
     <div class="ls-value">
         <dt>Replacement</dt>
-        <dd>{{ "%.0f"|format(draft_repl_mult * 100) }}%<small>After the merge, if a draft pick went out pre-merge. Post-selection stats only.</small></dd>
+        <dd>{{ "%.0f"|format(draft_repl_mult * 100) }}%<small>After the merge, if a draft pick went out in or before the merge episode. Post-selection stats only.</small></dd>
     </div>
     <div class="ls-value">
         <dt>Replacement &frac12; pts</dt>
-        <dd>{{ "%.0f"|format(wc_repl_mult * 100) }}%<small>After the merge, if only your Wildcard went out pre-merge. Post-selection stats only.</small></dd>
+        <dd>{{ "%.0f"|format(wc_repl_mult * 100) }}%<small>After the merge, if only your Wildcard went out by the merge episode. Post-selection stats only.</small></dd>
     </div>
     {% endif %}
 </dl>

@@ -18,16 +18,24 @@
         <dt>Picked</dt>
         <dd>After the merge</dd>
     </div>
+    <div class="ls-value">
+        <dt>Locks</dt>
+        <dd>{% if replacement_self_service %}15 min before the next episode{% else %}Admin entry only{% endif %}</dd>
+    </div>
 </dl>
 
-<p>If one of your picks was eliminated <strong>before the merge</strong>, you may select a <strong>Replacement</strong> from any remaining castaway not already on a roster.</p>
+<p>If one of your picks went out <strong>in or before the merge episode</strong>, you may select one <strong>Replacement</strong> from any castaway still in the game who is not already on your own team. Castaways on other players' teams are allowed, and two players can take the same one.</p>
 
 <h2>Eligibility</h2>
 <ul>
-    <li>A <strong>drafted</strong> pick eliminated pre-merge earns you a full-strength replacement.</li>
-    <li>If only your <strong>Wildcard</strong> went out pre-merge, you get a wildcard-strength replacement.</li>
-    <li>If none of your picks went out pre-merge, you are not eligible.</li>
+    <li>A <strong>drafted</strong> pick out in or before the merge episode earns you a full-strength replacement. That includes the castaway voted out at the first merged Tribal.</li>
+    <li>If only your <strong>Wildcard</strong> went out by then, you get a wildcard-strength replacement.</li>
+    <li>If none of your picks went out by the end of the merge episode, you are not eligible.</li>
 </ul>
+
+{% if replacement_self_service %}
+<p>Pick your Replacement yourself on <strong>My Team</strong>. You can change it as often as you like until picks lock 15 minutes before the first episode after the merge; after that only the league admin can enter one. Replacements stay hidden, and score no points, until every eligible player has picked.</p>
+{% endif %}
 
 <h2>Scoring</h2>
 {% if draft_repl_mult == 0 and wc_repl_mult == 0 %}
@@ -35,5 +43,5 @@
 <p>Replacements still appear on your roster and their stats are tracked; their point contribution is zero.</p>
 {% else %}
 <p>Replacements earn points only for what their castaway does <strong>from the moment you pick them</strong>. There are no retroactive points.</p>
-<p class="ls-example">The merge is Episode 8 and your drafted castaway goes out in Episode 9. You pick a replacement who has already survived 9 tribals and won an immunity. None of that counts. If they survive 4 more tribals and win, you score those 4 tribals plus any bonuses earned after you selected them.</p>
+<p class="ls-example">The merge is Episode 7 and your drafted castaway went out in Episode 5. Before Episode 8 you pick a replacement who has already survived 9 tribals and won an immunity. None of that counts. If they survive 4 more tribals and win, you score those 4 tribals plus any bonuses earned from Episode 8 on.</p>
 {% endif %}
