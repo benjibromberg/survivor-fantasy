@@ -15,7 +15,7 @@ from flask import (
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
-from . import schedule, wildcards
+from . import replacements, schedule, wildcards
 from .data import (
     download_survivor_data,
     export_all_picks,
@@ -265,7 +265,7 @@ def _build_leaderboard(season):
 
     users = User.query.join(Pick).filter(Pick.season_id == season.id).distinct().all()
     team_names = TeamName.for_season(season.id)
-    wildcards_hidden = wildcards.are_hidden(season)
+    hidden_types = replacements.hidden_types(season)
     leaderboard_data = []
 
     # Build display results for same-day eliminations (e.g. "T-5th voted out")
@@ -290,27 +290,16 @@ def _build_leaderboard(season):
                 for s in non_final:
                     _result_display[s.id] = tied_result
 
-    # Wildcards are picked after episode 1; replacements after the merge
+    # Wildcards are picked after episode 1; replacements after the merge.
+    # Replacements score only what happens after `merge_episode`.
     current_elim_count = season.current_tribal_count
-    merge_elim = season.merge_threshold  # None if merge data unknown
-
-    # Find merge episode for post-merge-only replacement scoring
-    merge_episode = None
-    if merge_elim is not None:
-        for s in season.survivors:
-            if (
-                s.voted_out_order
-                and s.voted_out_order == merge_elim
-                and s.elimination_episode
-            ):
-                merge_episode = s.elimination_episode
-                break
+    merge_elim, merge_episode = replacements.scoring_start(season)
 
     for user in users:
         picks = Pick.query.filter_by(user_id=user.id, season_id=season.id).all()
         # `picks` still feeds the reminders below; only scoring skips
-        # wildcards that are hidden until every player has picked
-        scored = wildcards.scored_picks(picks, wildcards_hidden)
+        # wildcards and replacements that are hidden until the reveal
+        scored = replacements.visible_picks(picks, hidden_types)
         total = 0
         pick_details = []
 
@@ -503,24 +492,11 @@ def _build_leaderboard(season):
             # Wildcard reminder
             if current_elim_count > 0 and "wildcard" not in pick_types:
                 warnings.append("Wildcard not yet picked")
-            # Replacement eligibility after merge
-            if merge_elim is not None and current_elim_count >= merge_elim:
-                has_replacement = "pmr_w" in pick_types or "pmr_d" in pick_types
-                if not has_replacement:
-                    draft_elim = any(
-                        p.pick_type == "draft"
-                        and p.survivor.voted_out_order > merge_elim
-                        for p in picks
-                    )
-                    wc_elim = any(
-                        p.pick_type == "wildcard"
-                        and p.survivor.voted_out_order > merge_elim
-                        for p in picks
-                    )
-                    if draft_elim:
-                        warnings.append("Eligible for draft replacement")
-                    elif wc_elim:
-                        warnings.append("Eligible for wildcard replacement")
+            # Replacement eligibility: a castaway lost by the merge episode
+            if not pick_types & set(replacements.TYPES):
+                kind = replacements.entitlement(season, picks)
+                if kind:
+                    warnings.append(f"Eligible for {replacements.KIND_LABELS[kind]}")
 
         leaderboard_data.append(
             {
@@ -852,6 +828,8 @@ def _settings_context(season):
         "examples": examples,
         "PICK_TYPE_LABELS": PICK_TYPE_LABELS,
         "wildcard_self_service": bool(season) and wildcards.is_self_service(season),
+        "replacement_self_service": bool(season)
+        and replacements.is_self_service(season),
     }
 
 
@@ -1014,26 +992,15 @@ def leaderboard(season_id):
     if leaderboard_data and effective_as_of > 0:
         scoring = get_scoring_system(season.scoring_system, season.get_scoring_config())
         users = [e["user"] for e in leaderboard_data]
-        wildcards_hidden = wildcards.are_hidden(season)
+        hidden_types = replacements.hidden_types(season)
         user_picks = {}
         for user in users:
-            user_picks[user.id] = wildcards.scored_picks(
+            user_picks[user.id] = replacements.visible_picks(
                 Pick.query.filter_by(user_id=user.id, season_id=season.id).all(),
-                wildcards_hidden,
+                hidden_types,
             )
 
-        prog_merge = season.merge_threshold  # None if merge data unknown
-        # Find merge episode for replacement scoring
-        prog_merge_ep = None
-        if prog_merge is not None:
-            for s in season.survivors:
-                if (
-                    s.voted_out_order
-                    and s.voted_out_order == prog_merge
-                    and s.elimination_episode
-                ):
-                    prog_merge_ep = s.elimination_episode
-                    break
+        prog_merge, prog_merge_ep = replacements.scoring_start(season)
 
         # Pre-fetch sole survivor picks for all users
         user_ss_picks = {}
@@ -1302,12 +1269,12 @@ def _compare_cache_key(season):
     import hashlib
 
     state = "|".join(f"{s.id}:{s.voted_out_order}" for s in season.survivors)
-    # Hidden wildcards are left out, so the key changes at the reveal
+    # Hidden picks are left out, so the key changes at the reveal
     picks = "|".join(
         f"{p.user_id}:{p.survivor_id}:{p.pick_type}"
-        for p in wildcards.scored_picks(
+        for p in replacements.visible_picks(
             Pick.query.filter_by(season_id=season.id).order_by(Pick.id).all(),
-            wildcards.are_hidden(season),
+            replacements.hidden_types(season),
         )
     )
     config = season.scoring_config or "{}"
@@ -1336,27 +1303,16 @@ def _build_compare_data(season):
     }
 
     users = User.query.join(Pick).filter(Pick.season_id == season.id).distinct().all()
-    wildcards_hidden = wildcards.are_hidden(season)
+    hidden_types = replacements.hidden_types(season)
     user_picks = {}
     for user in users:
-        user_picks[user.id] = wildcards.scored_picks(
+        user_picks[user.id] = replacements.visible_picks(
             Pick.query.filter_by(user_id=user.id, season_id=season.id).all(),
-            wildcards_hidden,
+            hidden_types,
         )
 
-    # Find merge episode for accurate replacement scoring
-    cmp_merge = season.merge_threshold  # None if merge data unknown
+    cmp_merge, merge_episode = replacements.scoring_start(season)
     current_elim_count = max_elim
-    merge_episode = None
-    if cmp_merge is not None:
-        for s in season.survivors:
-            if (
-                s.voted_out_order
-                and s.voted_out_order == cmp_merge
-                and s.elimination_episode
-            ):
-                merge_episode = s.elimination_episode
-                break
 
     comparisons = []
     for preset_name, config in presets.items():
@@ -1562,6 +1518,7 @@ def my_team_season(season_id):
         team_name=TeamName.for_season(season.id).get(current_user.id),
         can_rename=season.is_active or current_user.is_admin,
         wildcard=wildcards.player_view(season, current_user),
+        replacement=replacements.player_view(season, current_user),
         my_seasons=my_seasons,
         team_name_max_length=TEAM_NAME_MAX_LENGTH,
     )
@@ -1591,6 +1548,22 @@ def my_team_wildcard(season_id):
         flash("Wildcard saved!", "success")
     else:
         flash("Wildcard removed.", "success")
+    return redirect(url_for("main.my_team_season", season_id=season.id))
+
+
+@main_bp.route("/my-team/<int:season_id>/replacement", methods=["POST"])
+@login_required
+def my_team_replacement(season_id):
+    """A player sets, changes, or removes their own replacement."""
+    season = db.get_or_404(Season, season_id)
+    choice = request.form.get("survivor_id", "")
+    error = replacements.set_pick(season, current_user, choice)
+    if error:
+        flash(error, "error")
+    elif choice.strip():
+        flash("Replacement saved!", "success")
+    else:
+        flash("Replacement removed.", "success")
     return redirect(url_for("main.my_team_season", season_id=season.id))
 
 
@@ -2270,6 +2243,7 @@ def admin_season_detail(season_id):
         default_config=DEFAULT_CONFIG,
         legacy_config=LEGACY_CONFIG,
         wildcard=wildcards.admin_view(season),
+        replacement=replacements.admin_view(season),
     )
 
 
@@ -2324,6 +2298,62 @@ def admin_wildcard_window(season_id):
         flash(
             "Wildcard self-service starts once Episode 2's time is known. It "
             "is looked up daily for the active season.",
+            "success",
+        )
+    return back
+
+
+@main_bp.route("/admin/season/<int:season_id>/replacement-window", methods=["POST"])
+@login_required
+def admin_replacement_window(season_id):
+    """Override when the first episode after the merge starts.
+
+    The time is normally filled in automatically (app/schedule.py). A time
+    that differs from the one shown becomes an override that the automatic
+    lookup never replaces; a blank time goes back to automatic.
+    """
+    denied = _require_admin()
+    if denied:
+        return denied
+
+    season = db.get_or_404(Season, season_id)
+    back = redirect(url_for("main.admin_season_detail", season_id=season.id))
+    try:
+        starts_at = wildcards.parse_league_time(
+            request.form.get("replacement_starts_at")
+        )
+    except ValueError:
+        flash("Enter the episode start as a date and time.", "error")
+        return back
+
+    try:
+        if starts_at is None:
+            season.replacement_starts_at = None
+            season.replacement_manual = False
+        elif season.replacement_manual or starts_at != season.replacement_starts_at:
+            # Saving the form unchanged keeps an automatic time automatic
+            season.replacement_starts_at = starts_at
+            season.replacement_manual = True
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception("Saving the replacement time failed (season %s)", season.id)
+        flash("Could not save the replacement lock time.", "error")
+        return back
+
+    schedule.sync_replacement_time(season)
+
+    if replacements.is_self_service(season):
+        flash(
+            "Replacement picks lock "
+            f"{wildcards.format_league_time(replacements.lock_at(season))}.",
+            "success",
+        )
+    else:
+        flash(
+            "Replacement self-service starts once the merge episode and the "
+            "next episode's time are known. Both are looked up daily for the "
+            "active season.",
             "success",
         )
     return back
@@ -2393,6 +2423,7 @@ def admin_refresh(season_id):
         flash(f"Refresh failed: {e}", "error")
 
     schedule.sync_episode2_time(season)
+    schedule.sync_replacement_time(season)
 
     # Auto-export picks after refresh (capture any name/id updates)
     try:
@@ -2465,6 +2496,7 @@ def admin_toggle_active(season_id):
         season.is_active = True
     db.session.commit()
     schedule.sync_episode2_time(season)
+    schedule.sync_replacement_time(season)
     flash(
         f"Season {season.number} {'activated' if season.is_active else 'deactivated'}.",
         "success",
