@@ -64,6 +64,42 @@
     {% endif %}
 </section>
 
+<!-- Replacement self-service -->
+<section>
+    <h2 class="section-title">Replacement Picks</h2>
+    <p><small>Players who lost a castaway by the merge episode pick their own replacement on My Team once the next episode's start time is known. Picks lock 15 minutes before it and stay hidden until every eligible player has picked; enter any that are missing yourself under Manage Picks after the lock. The time is looked up automatically for the active season; type a different one to override it, or clear the field to go back to automatic.</small></p>
+    <form method="POST" action="{{ url_for('main.admin_replacement_window', season_id=season.id) }}" class="admin-inline-form admin-form-wide">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="replacement_starts_at">{% if replacement.next_episode %}Episode {{ replacement.next_episode }}{% else %}First episode after the merge{% endif %} starts (Eastern)</label>
+        <input type="datetime-local" id="replacement_starts_at" name="replacement_starts_at" value="{{ replacement.form_value }}">
+        <button type="submit" class="outline">Save</button>
+    </form>
+    <p class="admin-page-meta">
+        {% if replacement.manual %}
+        Time entered by hand; the automatic lookup will not change it.
+        {% elif replacement.enabled %}
+        Time filled in automatically from the TV schedule.
+        {% elif not replacement.merge_known %}
+        The merge episode is not known yet; the time is looked up once it is.
+        {% elif season.is_active %}
+        Time not known yet; it is looked up daily.
+        {% else %}
+        Time is looked up once this season is active.
+        {% endif %}
+    </p>
+    {% if replacement.enabled %}
+    <p class="admin-page-meta">
+        Locks <strong>{{ replacement.lock_label }}</strong> &middot;
+        <strong>{{ replacement.picked }} of {{ replacement.total }}</strong> eligible players have picked
+        {% if replacement.waiting %}
+        &middot; waiting on {% for u in replacement.waiting %}{{ u.display_name or u.username }}{{ ', ' if not loop.last }}{% endfor %}
+        {% elif replacement.total %}
+        &middot; replacements are revealed
+        {% endif %}
+    </p>
+    {% endif %}
+</section>
+
 <!-- Scoring -->
 <section>
     <h2 class="section-title">Scoring Components</h2>

@@ -102,6 +102,50 @@
 </article>
 {% endif %}
 
+{% if replacement %}
+<article id="replacement">
+    <h2 class="section-title">Replacement</h2>
+    {% if replacement.pick %}
+    <p class="my-replacement-current">
+        Your replacement: <strong>{{ replacement.pick.survivor.name }}</strong>
+    </p>
+    {% endif %}
+
+    {% if not replacement.blocked %}
+    <p>You lost a castaway by the merge episode, so you get a <strong>{{ replacement.kind_label }}</strong>.</p>
+    <form method="POST" action="{{ url_for('main.my_team_replacement', season_id=season.id) }}" class="my-team-name-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <select name="survivor_id" aria-label="Replacement castaway">
+            <option value="">{{ 'No replacement' if replacement.pick else 'Choose a castaway' }}</option>
+            {% for s in replacement.options %}
+            <option value="{{ s.id }}"{% if replacement.pick and replacement.pick.survivor_id == s.id %} selected{% endif %}>{{ s.name }}{% if s.tribe %} ({{ s.tribe }}){% endif %}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Save</button>
+    </form>
+    <small>
+        Any castaway still in the game who is not already on your team.
+        {% if replacement.pick %}Change it as often as you like until it locks{% else %}Locks{% endif %}
+        {{ replacement.lock_label }}, 15 minutes before the next episode.
+    </small>
+    {% else %}
+    <p>{{ replacement.blocked }}</p>
+    {% endif %}
+
+    {% if replacement.total %}
+    <p class="my-wildcard-status">
+        <small>
+        {% if replacement.hidden %}
+        {{ replacement.picked }} of {{ replacement.total }} eligible players have picked. Replacements stay hidden, and score no points, until everyone eligible has.
+        {% else %}
+        Everyone eligible has picked, so replacements are now on the leaderboard.
+        {% endif %}
+        </small>
+    </p>
+    {% endif %}
+</article>
+{% endif %}
+
 <h2 class="section-title">Picks</h2>
 {% if entry and entry.picks %}
 {% for warning in entry.warnings %}

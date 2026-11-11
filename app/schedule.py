@@ -1,7 +1,8 @@
-"""When Episode 2 starts, looked up instead of typed in.
+"""When Episode 2, and the first episode after the merge, start.
 
-Wildcard picks lock 15 minutes before Episode 2 (see app/wildcards.py). The
-start time comes from TVmaze, which lists CBS air times with their UTC offset
+Wildcard picks lock 15 minutes before Episode 2 (see app/wildcards.py) and
+replacement picks 15 minutes before the first episode after the merge (see
+app/replacements.py). Each start time comes from TVmaze, which lists CBS air times with their UTC offset
 before the episodes air. When TVmaze cannot answer, it is estimated from the
 survivoR dataset: one week after the premiere, at 8 PM Eastern. Every
 new-era season so far (41 to 50) aired Episode 2 exactly seven days after
@@ -17,7 +18,7 @@ import pandas as pd
 import requests
 from sqlalchemy.exc import SQLAlchemyError
 
-from . import wildcards
+from . import replacements, wildcards
 from .models import db
 
 logger = logging.getLogger(__name__)
@@ -87,38 +88,54 @@ def tvmaze_episode_start(season_number, episode=2):
     return start
 
 
+def week_after_episode(episodes, season_number, episode):
+    """Estimate the episode after `episode`, as naive UTC, or None.
+
+    One week after `episode`'s air date in the survivoR Episodes sheet, at
+    8 PM Eastern.
+    """
+    if episodes.empty:
+        return None
+    previous = episodes[
+        (episodes["version"] == "US")
+        & (episodes["season"] == season_number)
+        & (episodes["episode"] == episode)
+    ]
+    if previous.empty or pd.isna(previous.iloc[0]["episode_date"]):
+        return None
+    day = pd.Timestamp(previous.iloc[0]["episode_date"]).date() + timedelta(days=7)
+    local = datetime.combine(day, USUAL_AIR_TIME, tzinfo=wildcards.LEAGUE_TZ)
+    return local.astimezone(UTC).replace(tzinfo=None)
+
+
 def episode2_from_premiere(episodes, season_number):
     """Estimate Episode 2 from the survivoR Episodes sheet, as naive UTC, or None.
 
     One week after Episode 1's air date, at 8 PM Eastern.
     """
-    if episodes.empty:
-        return None
-    premiere = episodes[
-        (episodes["version"] == "US")
-        & (episodes["season"] == season_number)
-        & (episodes["episode"] == 1)
-    ]
-    if premiere.empty or pd.isna(premiere.iloc[0]["episode_date"]):
-        return None
-    day = pd.Timestamp(premiere.iloc[0]["episode_date"]).date() + timedelta(days=7)
-    local = datetime.combine(day, USUAL_AIR_TIME, tzinfo=wildcards.LEAGUE_TZ)
-    return local.astimezone(UTC).replace(tzinfo=None)
+    return week_after_episode(episodes, season_number, 1)
 
 
-def survivor_episode2_start(season_number):
-    """Episode 2 estimated from the local survivoR dataset, or None.
+def _read_episodes():
+    """The survivoR Episodes sheet, or None if it cannot be read.
 
     The sheet is read by data.read_episodes(), which also feeds the stored
-    episode titles, so the air date here and the dates shown on a castaway's
+    episode titles, so the air dates here and the dates shown on a castaway's
     sheet cannot come from different reads.
     """
     from . import data
 
     try:
-        episodes = data.read_episodes()
+        return data.read_episodes()
     except (OSError, ValueError, KeyError) as e:
         logger.warning("survivoR Episodes sheet unavailable: %s", e)
+        return None
+
+
+def survivor_episode2_start(season_number):
+    """Episode 2 estimated from the local survivoR dataset, or None."""
+    episodes = _read_episodes()
+    if episodes is None:
         return None
     return episode2_from_premiere(episodes, season_number)
 
@@ -179,5 +196,77 @@ def sync_episode2_time(season):
         return False
     logger.info(
         "Season %d: Episode 2 starts %s UTC (from %s)", season.number, start, source
+    )
+    return True
+
+
+# ── The first episode after the merge (replacement lock) ──────────────────
+
+
+def episode_after_merge_start(season_number, merge_episode):
+    """Return (start of the episode after the merge as naive UTC, source), or (None, None)."""
+    start = tvmaze_episode_start(season_number, merge_episode + 1)
+    if start is not None:
+        return start, "TVmaze"
+    episodes = _read_episodes()
+    if episodes is not None:
+        start = week_after_episode(episodes, season_number, merge_episode)
+        if start is not None:
+            return start, "survivoR"
+    return None, None
+
+
+def sync_replacement_time(season):
+    """Fill in or update when the first episode after the merge starts.
+
+    Returns True if it changed. Same rules as sync_episode2_time: only the
+    active season is looked up, and only once its merge episode is known; a
+    time the admin typed in is never overwritten; the time only moves while
+    the replacement window is open, and a season whose episode has already
+    locked is not switched on after the fact (that would hide replacements
+    the admin already entered). Never raises.
+    """
+    if (
+        not season.is_active
+        or season.replacement_manual
+        or season.merge_episode_num is None
+    ):
+        return False
+    if season.replacement_starts_at is not None and replacements.lock_passed(
+        season.replacement_starts_at
+    ):
+        return False
+
+    try:
+        start, source = episode_after_merge_start(
+            season.number, season.merge_episode_num
+        )
+    except Exception:
+        logger.exception(
+            "Post-merge episode lookup failed for season %d", season.number
+        )
+        return False
+    if (
+        start is None
+        or start == season.replacement_starts_at
+        or replacements.lock_passed(start)
+    ):
+        return False
+
+    try:
+        season.replacement_starts_at = start
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception(
+            "Saving the replacement lock time failed for season %d", season.number
+        )
+        return False
+    logger.info(
+        "Season %d: Episode %d (after the merge) starts %s UTC (from %s)",
+        season.number,
+        season.merge_episode_num + 1,
+        start,
+        source,
     )
     return True

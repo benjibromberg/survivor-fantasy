@@ -66,6 +66,12 @@ class Season(db.Model):
     episode2_manual = db.Column(db.Boolean, default=False)
     # Admin switch: False keeps wildcards admin-entered even with a known time
     wildcard_self_service = db.Column(db.Boolean, default=True)
+    # When the first episode after the merge starts, as naive UTC. Replacement
+    # picks lock 15 minutes before it (app/replacements.py). Filled in
+    # automatically for the active season (app/schedule.py) unless typed in.
+    replacement_starts_at = db.Column(db.DateTime, nullable=True)
+    # True when the admin entered replacement_starts_at by hand
+    replacement_manual = db.Column(db.Boolean, default=False)
     # JSON: {episode: {title, date}} from the survivoR Episodes sheet, keyed by
     # episode number as a string so it lines up with Survivor.episode_stats.
     episode_info = db.Column(db.Text)

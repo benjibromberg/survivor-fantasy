@@ -10,8 +10,11 @@ scheduler = BackgroundScheduler()
 def refresh_active_seasons(app):
     """Download latest survivoR data and refresh all active seasons.
 
-    Also looks up when Episode 2 starts (the wildcard lock), first and
-    independently, so a survivoR download failure does not hold it up.
+    Also looks up when Episode 2 starts (the wildcard lock) and when the
+    first episode after the merge starts (the replacement lock), first and
+    independently, so a survivoR download failure does not hold them up. The
+    replacement lock is looked up again after the refresh, which is what
+    first records the merge episode.
     """
     with app.app_context():
         from .data import (
@@ -21,10 +24,11 @@ def refresh_active_seasons(app):
             refresh_season,
         )
         from .models import Season
-        from .schedule import sync_episode2_time
+        from .schedule import sync_episode2_time, sync_replacement_time
 
         for season in Season.query.filter_by(is_active=True).all():
             sync_episode2_time(season)
+            sync_replacement_time(season)
 
         try:
             download_survivor_data()
@@ -58,6 +62,8 @@ def refresh_active_seasons(app):
                     logger.warning(f"Season {season.number} day data: {w}")
             except Exception as e:
                 logger.error(f"Auto-refresh failed for season {season.number}: {e}")
+                continue
+            sync_replacement_time(season)
 
         # Export picks after refresh (capture updated names/stats)
         try:

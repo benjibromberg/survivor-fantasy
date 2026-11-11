@@ -98,18 +98,15 @@ def _picker_ids(season):
 
 
 def are_hidden(season):
-    """True while wildcards must stay off the public pages for this season."""
+    """True while wildcards must stay off the public pages for this season.
+
+    Public pages filter through replacements.hidden_types(), which combines
+    this with the replacement reveal.
+    """
     if not is_self_service(season):
         return False
     drafters, wildcarders = _picker_ids(season)
     return bool(drafters - wildcarders)
-
-
-def scored_picks(picks, hidden):
-    """Drop wildcards from `picks` when they are hidden (see are_hidden)."""
-    if not hidden:
-        return picks
-    return [p for p in picks if p.pick_type != "wildcard"]
 
 
 def progress(season):

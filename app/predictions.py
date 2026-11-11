@@ -8,7 +8,7 @@ import time
 
 import pandas as pd
 
-from . import wildcards
+from . import replacements
 from .data import SURVIVOR_DATA_FILE, get_idol_ids
 from .models import Pick, SoleSurvivorPick, Survivor, User, calculate_ss_streak
 from .scoring import SCORING_STAT_KEYS, get_scoring_system
@@ -48,12 +48,12 @@ def _cache_key(season, scoring_config):
     survivors = Survivor.query.filter_by(season_id=season.id).all()
     # Ordered by each table's unique columns rather than row id: re-saving
     # the same picks creates new rows but should not change the key
-    # Hidden wildcards are left out, so the key changes at the reveal
-    picks = wildcards.scored_picks(
+    # Hidden picks are left out, so the key changes at the reveal
+    picks = replacements.visible_picks(
         Pick.query.filter_by(season_id=season.id)
         .order_by(Pick.user_id, Pick.survivor_id)
         .all(),
-        wildcards.are_hidden(season),
+        replacements.hidden_types(season),
     )
     ss_picks = (
         SoleSurvivorPick.query.filter_by(season_id=season.id)
@@ -467,13 +467,13 @@ def calculate_win_probabilities(season):
     if not users_with_picks:
         return empty
 
-    # Pre-load picks (wildcards score nothing while they are hidden)
-    wildcards_hidden = wildcards.are_hidden(season)
+    # Pre-load picks (wildcards and replacements score nothing while hidden)
+    hidden_types = replacements.hidden_types(season)
     user_picks = {}
     for user in users_with_picks:
-        user_picks[user.id] = wildcards.scored_picks(
+        user_picks[user.id] = replacements.visible_picks(
             Pick.query.filter_by(user_id=user.id, season_id=season.id).all(),
-            wildcards_hidden,
+            hidden_types,
         )
 
     surv_by_id = {s.id: s for s in survivors}
@@ -528,16 +528,9 @@ def calculate_win_probabilities(season):
     current_post_merge = max(0, current_max_vo - merge_threshold)
 
     # Precompute at-merge stat values for replacement pick scoring
-    # (avoids repeated JSON parsing in the hot loop)
-    merge_episode = None
-    for s in survivors:
-        if (
-            s.voted_out_order
-            and s.voted_out_order == merge_threshold
-            and s.elimination_episode
-        ):
-            merge_episode = s.elimination_episode
-            break
+    # (avoids repeated JSON parsing in the hot loop). The baseline episode is
+    # the leaderboard's, so odds and standings score replacements alike.
+    _, merge_episode = replacements.scoring_start(season)
 
     at_merge_stats = {}
     if merge_episode:
