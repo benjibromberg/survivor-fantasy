@@ -22,9 +22,10 @@ replacements and they are always visible.
 """
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC
 
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import joinedload
 
 from . import wildcards
 from .models import Pick, Survivor, User, db
@@ -32,12 +33,8 @@ from .models import Pick, Survivor, User, db
 logger = logging.getLogger(__name__)
 
 TYPES = ("pmr_w", "pmr_d")
-LOCK_LEAD = timedelta(minutes=15)
 KIND_LABELS = {"pmr_d": "draft replacement", "pmr_w": "wildcard replacement"}
-
-
-def now_utc():
-    return datetime.now(UTC)
+# The league keeps one clock and one lock lead, both in app/wildcards.py
 
 
 # ── Eligibility ───────────────────────────────────────────────────────────
@@ -72,7 +69,12 @@ def entitlement(season, picks):
 def _entitled_and_picked(season):
     """Return ({user id: entitlement} for eligible players, ids with a replacement)."""
     by_user = {}
-    for pick in Pick.query.filter_by(season_id=season.id).all():
+    picks = (
+        Pick.query.options(joinedload(Pick.survivor))
+        .filter_by(season_id=season.id)
+        .all()
+    )
+    for pick in picks:
         by_user.setdefault(pick.user_id, []).append(pick)
     entitled = {}
     picked = set()
@@ -132,12 +134,7 @@ def lock_at(season):
     """Aware UTC moment replacements lock, or None if self-service is off."""
     if not is_self_service(season):
         return None
-    return season.replacement_starts_at.replace(tzinfo=UTC) - LOCK_LEAD
-
-
-def lock_passed(starts_at):
-    """True once picks for an episode starting at `starts_at` (naive UTC) lock."""
-    return now_utc() >= starts_at.replace(tzinfo=UTC) - LOCK_LEAD
+    return season.replacement_starts_at.replace(tzinfo=UTC) - wildcards.LOCK_LEAD
 
 
 # ── The reveal ────────────────────────────────────────────────────────────
@@ -237,7 +234,7 @@ def edit_block_reason(season, user, existing=None, kind=None):
         )
     if existing is None:
         existing = current_pick(season, user)
-    if now_utc() >= lock_at(season):
+    if wildcards.now_utc() >= lock_at(season):
         if existing is not None:
             return "Your replacement is locked."
         return "Replacement picks are locked. Ask the league admin to enter yours."
@@ -259,7 +256,7 @@ def set_pick(season, user, raw_survivor_id):
     if not raw:
         if existing is None:
             return None
-        return _commit(lambda: db.session.delete(existing))
+        return _commit(lambda: _delete_replacements(season, user))
 
     eligible = {str(s.id): s for s in eligible_survivors(season, user)}
     survivor = eligible.get(raw)
@@ -267,20 +264,30 @@ def set_pick(season, user, raw_survivor_id):
         return "That castaway is not available as a replacement."
 
     def apply():
-        if existing is not None:
-            existing.survivor_id = survivor.id
-            existing.pick_type = kind
-        else:
-            db.session.add(
-                Pick(
-                    user_id=user.id,
-                    season_id=season.id,
-                    survivor_id=survivor.id,
-                    pick_type=kind,
-                )
+        # Delete-then-insert in one transaction rather than updating the row
+        # read above: two saves racing (a double click) would otherwise both
+        # insert. SQLite takes one writer at a time, so the later save either
+        # deletes the earlier row or fails and asks the player to try again.
+        _delete_replacements(season, user)
+        db.session.add(
+            Pick(
+                user_id=user.id,
+                season_id=season.id,
+                survivor_id=survivor.id,
+                pick_type=kind,
             )
+        )
 
     return _commit(apply)
+
+
+def _delete_replacements(season, user):
+    """Delete every replacement row the player has this season (one, normally)."""
+    Pick.query.filter(
+        Pick.user_id == user.id,
+        Pick.season_id == season.id,
+        Pick.pick_type.in_(TYPES),
+    ).delete(synchronize_session="fetch")
 
 
 def player_view(season, user):
@@ -296,7 +303,7 @@ def player_view(season, user):
         "pick": pick,
         "kind_label": KIND_LABELS.get(kind),
         "blocked": blocked,
-        "locked": now_utc() >= lock,
+        "locked": wildcards.now_utc() >= lock,
         "options": [] if blocked else eligible_survivors(season, user),
         "lock_label": wildcards.format_league_time(lock),
         "picked": picked,

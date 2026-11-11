@@ -70,7 +70,7 @@ def league(client, tmp_path, monkeypatch):
     Kim lost nobody: not eligible.
     """
     c, db = client
-    from app import predictions, replacements, routes
+    from app import predictions, routes, wildcards
     from app.models import Pick, Season, Survivor, User
 
     monkeypatch.setattr(
@@ -80,7 +80,8 @@ def league(client, tmp_path, monkeypatch):
     routes._compare_cache.clear()
 
     clock = {"now": BEFORE_LOCK}
-    monkeypatch.setattr(replacements, "now_utc", lambda: clock["now"])
+    # One league clock: wildcards.now_utc is what both locks read
+    monkeypatch.setattr(wildcards, "now_utc", lambda: clock["now"])
 
     season = Season(
         number=99,
@@ -325,6 +326,43 @@ class TestPlayerSetsReplacement:
 
         assert _replacement(league.pat, league.season)[0] == "Castaway6"
 
+    def test_saving_leaves_exactly_one_replacement(self, league):
+        """Two simultaneous saves could each add a row; the next save heals it."""
+        from app.models import Pick
+
+        for idx in (5, 6):
+            league.db.session.add(
+                Pick(
+                    user_id=league.pat.id,
+                    season_id=league.season.id,
+                    survivor_id=league.survivors[idx].id,
+                    pick_type="pmr_d",
+                )
+            )
+        league.db.session.commit()
+
+        _pick_as(league, PAT_EMAIL, league.survivors[4])
+
+        assert _replacement(league.pat, league.season) == ("Castaway5", "pmr_d")
+
+    def test_removing_clears_every_replacement_row(self, league):
+        from app.models import Pick
+
+        for idx in (5, 6):
+            league.db.session.add(
+                Pick(
+                    user_id=league.pat.id,
+                    season_id=league.season.id,
+                    survivor_id=league.survivors[idx].id,
+                    pick_type="pmr_d",
+                )
+            )
+        league.db.session.commit()
+
+        _pick_as(league, PAT_EMAIL, "")
+
+        assert _replacement(league.pat, league.season) is None
+
     def test_requires_login(self, league):
         resp = _pick(league, league.survivors[4])
 
@@ -524,6 +562,25 @@ class TestHiddenUntilEveryEligiblePlayerHasPicked:
 
         assert "Castaway5" not in _pick_names(_board(league.season)["pat"])
 
+    @pytest.mark.parametrize("as_of", [0, 1, 3])
+    def test_hidden_replacement_is_absent_from_timeline_views(self, league, as_of):
+        """The timeline rewinds castaways; the reveal must not rewind with them."""
+        _pick_as(league, PAT_EMAIL, league.survivors[8])
+
+        resp = league.c.get(f"/leaderboard/{league.season.id}?as_of={as_of}")
+
+        assert resp.status_code == 200
+        assert b"Castaway9" not in resp.data
+
+    def test_revealed_replacement_stays_off_pre_merge_timeline_views(self, league):
+        _pick_as(league, PAT_EMAIL, league.survivors[8])
+        _pick_as(league, SAM_EMAIL, league.survivors[5])
+        _pick_as(league, LEE_EMAIL, league.survivors[6])
+        sid = league.season.id
+
+        assert b"Castaway9" not in league.c.get(f"/leaderboard/{sid}?as_of=1").data
+        assert b"Castaway9" in league.c.get(f"/leaderboard/{sid}?as_of=3").data
+
     def test_compare_cache_key_changes_at_the_reveal(self, league):
         from app.routes import _compare_cache_key
 
@@ -596,6 +653,18 @@ class TestRevealedReplacementsBeforeTheJurySizeIsKnown:
         _all_eligible_pick(league)
 
         assert league.season.merge_threshold is None
+        assert "Castaway5" in _pick_names(_board(league.season)["pat"])
+
+    def test_same_day_boots_still_let_replacements_count(self, league):
+        """Two boots on one day: the start point counts days, like the tribal count."""
+        from app import replacements
+
+        league.survivors[1].day_voted_out = league.survivors[0].day_voted_out
+        league.db.session.commit()
+
+        assert league.season.current_tribal_count == 2
+        assert replacements.scoring_start(league.season) == (2, MERGE_EPISODE)
+        _all_eligible_pick(league)
         assert "Castaway5" in _pick_names(_board(league.season)["pat"])
 
     def test_stats_up_to_the_merge_episode_do_not_count(self, league):

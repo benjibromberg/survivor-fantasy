@@ -259,13 +259,24 @@ def _episode_rows(survivor, as_of_episode=None, episode_info=None):
     return rows
 
 
-def _build_leaderboard(season):
-    """Build leaderboard data for a season. Reads current state of survivor objects."""
+def _build_leaderboard(season, hidden_types=None, replacement_start=None):
+    """Build leaderboard data for a season. Reads current state of survivor objects.
+
+    `hidden_types` (replacements.hidden_types) and `replacement_start`
+    (replacements.scoring_start) are worked out here when not given. A caller
+    that has rewound the castaways for a timeline view (_apply_as_of) must
+    work them out first and pass them in: who is eligible, and so whether
+    replacements are still hidden, depends on who is out now, not who was
+    out at the step being shown.
+    """
     scoring = get_scoring_system(season.scoring_system, season.get_scoring_config())
 
     users = User.query.join(Pick).filter(Pick.season_id == season.id).distinct().all()
     team_names = TeamName.for_season(season.id)
-    hidden_types = replacements.hidden_types(season)
+    if hidden_types is None:
+        hidden_types = replacements.hidden_types(season)
+    if replacement_start is None:
+        replacement_start = replacements.scoring_start(season)
     leaderboard_data = []
 
     # Build display results for same-day eliminations (e.g. "T-5th voted out")
@@ -293,7 +304,7 @@ def _build_leaderboard(season):
     # Wildcards are picked after episode 1; replacements after the merge.
     # Replacements score only what happens after `merge_episode`.
     current_elim_count = season.current_tribal_count
-    merge_elim, merge_episode = replacements.scoring_start(season)
+    merge_elim, merge_episode = replacement_start
 
     for user in users:
         picks = Pick.query.filter_by(user_id=user.id, season_id=season.id).all()
@@ -919,12 +930,17 @@ def leaderboard(season_id):
         if pt["as_of"] <= effective_as_of:
             active_timeline_idx = i
 
-    # Apply as_of filter (affects both leaderboard and predictions)
+    # Apply as_of filter (affects both leaderboard and predictions). The
+    # reveal and the replacement start are judged on the live state first.
+    hidden_types = replacements.hidden_types(season)
+    replacement_start = replacements.scoring_start(season)
     restore = None
     if as_of is not None:
         restore = _apply_as_of(season, as_of)
 
-    leaderboard_data, scoring_name = _build_leaderboard(season)
+    leaderboard_data, scoring_name = _build_leaderboard(
+        season, hidden_types, replacement_start
+    )
 
     active_count = sum(1 for s in season.survivors if s.voted_out_order == 0)
 

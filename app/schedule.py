@@ -18,7 +18,7 @@ import pandas as pd
 import requests
 from sqlalchemy.exc import SQLAlchemyError
 
-from . import replacements, wildcards
+from . import wildcards
 from .models import db
 
 logger = logging.getLogger(__name__)
@@ -232,7 +232,7 @@ def sync_replacement_time(season):
         or season.merge_episode_num is None
     ):
         return False
-    if season.replacement_starts_at is not None and replacements.lock_passed(
+    if season.replacement_starts_at is not None and _lock_has_passed(
         season.replacement_starts_at
     ):
         return False
@@ -249,7 +249,7 @@ def sync_replacement_time(season):
     if (
         start is None
         or start == season.replacement_starts_at
-        or replacements.lock_passed(start)
+        or _lock_has_passed(start)
     ):
         return False
 
