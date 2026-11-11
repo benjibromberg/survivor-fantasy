@@ -63,7 +63,7 @@ Each fantasy player has a roster of Survivor castaways built through a snake dra
 | ---- | ------- | ----------- |
 | **Draft** | Full points | Before the season (snake draft, 4 picks each) |
 | **Wildcard** | Half points (0.5x) | After first elimination |
-| **Replacement** | 0 pts (roster only) | After merge, if a pick was eliminated pre-merge |
+| **Replacement** | 0 pts (roster only) | After merge, if a pick went out in or before the merge episode |
 
 If there are more players than the cast can support, the group is split into balanced sub-drafts so everyone still gets 4 picks. Replacement picks appear on your roster but don't earn points — they keep you engaged after losing a pick early.
 
