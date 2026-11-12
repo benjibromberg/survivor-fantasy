@@ -322,12 +322,54 @@ class TestReplayDetail:
         # Every replay fold reads the same, so a screen reader also hears which
         assert '<span class="visually-hidden"> in Season 50</span>' in summary
 
-    def test_a_season_with_the_same_order_keeps_its_one_line_summary(self, league):
+    def test_a_season_with_the_same_order_keeps_its_summary_and_gets_the_detail(
+        self, league
+    ):
+        """It used to keep only its one-line summary; the league asked for the
+        breakdown on every season, labelled for what it answers there."""
         _, same = self._rows(league)
 
         assert "Sam still wins" in same
         assert "Same finishing order" in same
-        assert "<details" not in same and "ls-replay" not in same
+        tag = re.search(r"<details[^>]*>", same).group(0)
+        assert 'class="fold ls-replay"' in tag
+        assert " open" in tag and "data-mobile-collapsed" in tag
+        summary = re.search(r"<summary>(.*?)</summary>", same, re.S).group(1)
+        assert "How the points change" in summary
+        assert "Why the order changes" not in summary
+        assert '<span class="visually-hidden"> in Season 49</span>' in summary
+
+    def test_a_same_order_season_names_what_moved_each_player(self, league):
+        _, same = self._rows(league)
+        sam, pat = same.split("&middot; Pat</dt>")
+
+        # Legacy's flat tribals and merge bonus give way to Final Tribal and
+        # placement: Sam gains overall, Pat loses, and the order holds.
+        assert "<dd>18.5 pts" in sam and "was 16.0, 1st &middot; +2.5 pts" in sam
+        assert "S49C6&nbsp;+4.5, S49C7&nbsp;+4.0" in sam
+        assert sam.index("Final Tribal and placement") < sam.index("surviving tribals")
+        assert "everything else" in sam and "immunity wins&nbsp;+1.0" in sam
+        assert "was 13.0, 2nd &middot; &minus;1.0 pts" in pat
+        assert "up " not in pat and "down " not in pat
+
+    def test_a_season_scored_the_same_both_ways_has_nothing_to_open(self, league):
+        """Season 51 on Season 50's own scoring: Season 50 replays unchanged,
+        while Season 49 (Legacy) still moves and keeps its fold."""
+        from app.scoring.history import SCORING_VERSIONS
+
+        run6 = next(v for v in SCORING_VERSIONS if v["key"] == "run-6")["config"]
+        league.s51.scoring_config = json.dumps(dict(run6))
+        league.db.session.commit()
+
+        past = _block(_page(league), "past-seasons")
+        unchanged, legacy = (
+            _season_row(past, "Season 50"),
+            _season_row(past, "Season 49"),
+        )
+
+        assert "Same finishing order" in unchanged
+        assert "<details" not in unchanged and "ls-replay" not in unchanged
+        assert 'class="fold ls-replay"' in legacy
 
 
 class TestComponentTotalsOnRealEntries:
