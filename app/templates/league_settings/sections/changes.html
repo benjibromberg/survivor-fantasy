@@ -114,6 +114,14 @@
     </div>
     {% endfor %}
 </dl>
+{# The same breakdown the earlier seasons get, under the standings rather
+   than in place of them: the list above is the quick read. #}
+{% if standings_changed %}
+<details class="fold ls-replay" open data-mobile-collapsed>
+    <summary><span class="ls-replay-toggle">Why the points change<span class="visually-hidden"> in {{ this_season }}</span></span></summary>
+    {{ replay_players(standings, 'currently' if proposal else 'was') }}
+</details>
+{% endif %}
 </section>
 {% endif %}
 {% endif %}

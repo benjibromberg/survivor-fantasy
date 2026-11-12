@@ -1024,21 +1024,14 @@ def _replays(season, old_config, new_config):
         .order_by(Season.number.desc())
         .all()
     )
+    # The season itself, both ways: the same rows as an earlier season's
+    # replay, so its standings and its reasons come from one path.
     standings = []
     if any(s.id == season.id for s in seasons):
-        old = _ranked(_build_leaderboard(season, scoring_config=old_config)[0])
-        new = _ranked(_build_leaderboard(season, scoring_config=new_config)[0])
-        for uid, (name, points, rank) in sorted(new.items(), key=lambda kv: kv[1][2]):
-            _, old_points, old_rank = old[uid]
-            standings.append(
-                {
-                    "name": name,
-                    "old_points": old_points,
-                    "old_rank": old_rank,
-                    "points": points,
-                    "rank": rank,
-                }
-            )
+        standings = _replay_players(
+            _build_leaderboard(season, scoring_config=old_config)[0],
+            _build_leaderboard(season, scoring_config=new_config)[0],
+        )
 
     past = []
     for other in seasons:
@@ -1069,7 +1062,11 @@ def _replays(season, old_config, new_config):
             }
         )
 
-    result = {"standings": standings, "past": past}
+    result = {
+        "standings": standings,
+        "standings_changed": _points_changed(standings),
+        "past": past,
+    }
     if len(_changes_cache) >= _CHANGES_CACHE_MAX:
         _changes_cache.clear()
     _changes_cache[key] = (_changes_cache_clock(), result)

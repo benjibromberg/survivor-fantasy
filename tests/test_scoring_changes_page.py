@@ -372,6 +372,55 @@ class TestReplayDetail:
         assert 'class="fold ls-replay"' in legacy
 
 
+def _standings_fold(page):
+    """The reasons fold under the current season's standings, or None."""
+    block = _block(page, "standings")
+    return block.split("<details", 1)[1] if "<details" in block else None
+
+
+class TestCurrentSeasonReasons:
+    """Season 51, on Season 50's Run 6 and then its own scoring: immunity
+    wins now score, so both players gain and the order holds."""
+
+    def test_the_standings_get_a_fold_of_reasons_closed_on_phones(self, league):
+        fold = _standings_fold(_page(league))
+
+        tag = fold.split(">", 1)[0]
+        assert 'class="fold ls-replay"' in tag
+        assert " open" in tag and "data-mobile-collapsed" in tag
+        summary = re.search(r"<summary>(.*?)</summary>", fold, re.S).group(1)
+        assert "Why the points change" in summary
+        assert '<span class="visually-hidden"> in Season 51</span>' in summary
+
+    def test_names_the_groups_and_castaways_behind_each_change(self, league):
+        sam, pat = _standings_fold(_page(league)).split("&middot; Pat</dt>")
+
+        assert "<dd>5.0 pts" in sam and "was 4.0, 1st &middot; +1.0 pts" in sam
+        assert "immunity wins" in sam
+        assert "S51C6&nbsp;+0.5, S51C7&nbsp;+0.5" in sam
+        assert "was 2.0, 2nd &middot; +0.5 pts" in pat
+        assert '<span class="ls-replay-who">S51C8</span>' in pat
+
+    def test_says_currently_while_a_proposal_is_open(self, proposal):
+        fold = _standings_fold(_page(proposal))
+
+        assert "<small>currently " in fold
+        assert "<small>was " not in fold
+
+    def test_no_fold_when_the_season_scores_the_same_both_ways(self, league):
+        """Season 51 on Season 50's scoring: the standings stay, nothing to open."""
+        from app.scoring.history import SCORING_VERSIONS
+
+        run6 = next(v for v in SCORING_VERSIONS if v["key"] == "run-6")["config"]
+        league.s51.scoring_config = json.dumps(dict(run6))
+        league.db.session.commit()
+
+        page = _page(league)
+
+        assert "standings, both ways" in _block(page, "standings")
+        assert _standings_fold(page) is None
+
+
 class TestComponentTotalsOnRealEntries:
     def test_components_add_up_to_each_players_total(self, league):
         """Checked on _build_leaderboard's entries, with a wildcard in them."""
@@ -872,6 +921,7 @@ class TestReplayCache:
 
         ((_stored, result),) = _changes_cache.values()
         assert any(row["players"] for row in result["past"])
+        assert any(p["reasons"] for p in result["standings"])
         walk(result)
 
 
