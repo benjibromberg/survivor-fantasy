@@ -344,9 +344,15 @@ Nav and tab bar say **League**, not Settings: the admin's own account page
 already owns the "Settings" label in the More sheet, and "League settings"
 renders on two lines in the nav at 700px.
 
+**Folds inside folds** (Scoring changes): section folds are `details.fold` with
+`open data-mobile-collapsed`, open on desktop and closed on phones. The detail
+folds inside them (`.fold.ls-replay`) carry neither and start closed everywhere,
+so a long list stays a list of summaries: 5,589px tall at 1280, not 17,472px.
+
 ## Decisions Log
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-11-12 | Scoring changes: a breakdown for every season, in folds that start closed | The league asked to see why points move for every replayed season and for the current one, not only where the order changes. Each player gets the groups that moved them, rounded so the parts add up to the shown change. Open by default, those details made the page 17,472px tall at 1280, so the detail folds start closed on every screen (5,589px) while the section folds keep open on desktop, closed on phones. |
 | 2026-11-12 | Season admin page by task | One long column of data sections made the common jobs hard to find, and opening a scoring vote took five steps. The page now leads with the vote (a starting point, a closing time, Propose), then the pick windows, the scoring readout, the season data and the danger zone, with the components and the castaway table folded away. |
 | 2026-11-11 | Scoring changes page, and the analysis keeps its history | The league needed to see what changed and why without a long message. The page compares the season's stored config with the previous season's, lists the league's rules with their values, and replays standings both ways from real picks, so it cannot disagree with the scores. Earlier analysis runs stay downloadable from the analysis page, and each season names the version it played under (`app/scoring/history.py`). Values and replays are label-above-value rows, not tables, as on every League page. A proposal put to a vote turns the page into current-versus-proposed with a ballot; names and comments show to everyone, since the league is small and the comments are the discussion. |
 | 2026-10-02 | Rules page became League settings | It was already a configuration readout wearing the wrong name: it rendered `num_players`, `tribal_base` and `finale_size` and listed which components were active, inside ten accordions. Accordions suit prose you read; that page was values you look up, which is why the sections never fit them. Hub of cards plus label-above-value detail pages instead, and the wide tables are gone. |
