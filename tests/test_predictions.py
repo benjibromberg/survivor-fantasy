@@ -347,6 +347,23 @@ class TestCacheKeyQueries:
 # ── Cached results follow the picks ───────────────────────────────────────
 
 
+class TestOddsForConsecutiveOrders:
+    def test_the_odds_this_fixture_had_before_numbering_from_the_count(self, league):
+        """Measured before the simulation numbered the castaways still in from
+        how many are out rather than from the highest order: with orders 1, 2
+        the two agree, so the odds must not move."""
+        from app.predictions import calculate_win_probabilities
+
+        frozen, projected, total, exhaustive, _ = calculate_win_probabilities(
+            league.season
+        )
+
+        assert (total, exhaustive) == (24, True)
+        for mode in (frozen, projected):
+            odds = {v["user"].username: v["win_pct"] for v in mode.values()}
+            assert odds == pytest.approx({"playerone": 175 / 3, "playertwo": 125 / 3})
+
+
 class TestWinProbabilityCache:
     def test_new_players_pick_is_scored_without_clearing_cache(self, league):
         from app.predictions import calculate_win_probabilities

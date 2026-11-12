@@ -456,7 +456,12 @@ def calculate_win_probabilities(season):
     if not season_structure_known(season):
         return empty
 
-    current_max_vo = max((s.voted_out_order for s in eliminated), default=0)
+    # How many are out, not the highest order so far. survivoR has always
+    # given a same-day pair consecutive orders, but if it ever records an
+    # unordered pair under one order, numbering from the highest would stop
+    # the simulated finishers short of num_players: no 1st place, and every
+    # finisher scored a place too low. For consecutive orders the two agree.
+    n_out = len(eliminated)
     # Which picks count yet, by day like the standings. Taken now, before the
     # simulation renumbers anyone: with no day data the count falls back to
     # the highest order, which a simulated finish would push to the end.
@@ -526,7 +531,7 @@ def calculate_win_probabilities(season):
 
     merge_threshold = season.merge_threshold
     jury_threshold = merge_threshold
-    current_post_merge = max(0, current_max_vo - merge_threshold)
+    current_post_merge = max(0, n_out - merge_threshold)
 
     # Precompute at-merge stat values for replacement pick scoring
     # (avoids repeated JSON parsing in the hot loop). The start count and the
@@ -561,7 +566,7 @@ def calculate_win_probabilities(season):
     for ordering in orderings:
         # --- Frozen mode: original ordering, current stats ---
         for i, surv in enumerate(ordering):
-            surv.voted_out_order = current_max_vo + i + 1
+            surv.voted_out_order = n_out + i + 1
         n_fin = season.n_finalists
         finalist_threshold = season.num_players - n_fin
         for s in survivors:
@@ -589,7 +594,7 @@ def calculate_win_probabilities(season):
 
         # Set projected elimination order
         for i, surv in enumerate(proj_ordering):
-            surv.voted_out_order = current_max_vo + i + 1
+            surv.voted_out_order = n_out + i + 1
         # Re-compute jury for remaining (ordering may differ from frozen)
         for surv in remaining:
             surv.made_jury = (
@@ -600,7 +605,7 @@ def calculate_win_probabilities(season):
         # Adjust stats with per-player immunity rates
         for surv in remaining:
             sim_tribals = surv.voted_out_order - 1
-            additional_tribals = max(0, sim_tribals - current_max_vo)
+            additional_tribals = max(0, sim_tribals - n_out)
             sim_post_merge = max(0, sim_tribals - merge_threshold)
             additional_post_merge = max(0, sim_post_merge - current_post_merge)
 
