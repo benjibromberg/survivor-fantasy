@@ -2024,90 +2024,17 @@ def admin_picks(season_id):
     users = User.query.order_by(User.username).all()
 
     if request.method == "POST":
-        target_user_id = int(request.form["user_id"])
-
-        # Clear existing picks for this user+season
-        Pick.query.filter_by(user_id=target_user_id, season_id=season.id).delete()
-
-        # Draft picks
-        draft_ids = request.form.getlist("draft")
-        for i, sid in enumerate(draft_ids):
-            db.session.add(
-                Pick(
-                    user_id=target_user_id,
-                    season_id=season.id,
-                    survivor_id=int(sid),
-                    pick_type="draft",
-                    pick_order=i + 1,
-                )
-            )
-
-        # Wildcard
-        wc = request.form.get("wildcard")
-        if wc:
-            db.session.add(
-                Pick(
-                    user_id=target_user_id,
-                    season_id=season.id,
-                    survivor_id=int(wc),
-                    pick_type="wildcard",
-                )
-            )
-
-        # Post-jury replacement (wildcard pts)
-        pmr_w = request.form.get("pmr_w")
-        if pmr_w:
-            db.session.add(
-                Pick(
-                    user_id=target_user_id,
-                    season_id=season.id,
-                    survivor_id=int(pmr_w),
-                    pick_type="pmr_w",
-                )
-            )
-
-        # Post-jury replacement (draft pts)
-        pmr_d = request.form.get("pmr_d")
-        if pmr_d:
-            db.session.add(
-                Pick(
-                    user_id=target_user_id,
-                    season_id=season.id,
-                    survivor_id=int(pmr_d),
-                    pick_type="pmr_d",
-                )
-            )
-
-        # Sole Survivor pick with episode tracking
-        ss_survivor = request.form.get("sole_survivor")
-        ss_episode = request.form.get("ss_episode", "").strip()
-        if ss_survivor and ss_episode:
-            ss_episode_int = int(ss_episode)
-            # Check if pick already exists for this user/season/episode
-            existing = SoleSurvivorPick.query.filter_by(
-                user_id=target_user_id, season_id=season.id, episode=ss_episode_int
-            ).first()
-            if existing:
-                existing.survivor_id = int(ss_survivor)
-            else:
-                db.session.add(
-                    SoleSurvivorPick(
-                        user_id=target_user_id,
-                        season_id=season.id,
-                        survivor_id=int(ss_survivor),
-                        episode=ss_episode_int,
-                    )
-                )
-
-        db.session.commit()
-        target_user = db.session.get(User, target_user_id)
-        flash(
-            f"Picks saved for {target_user.display_name or target_user.username}!",
-            "success",
-        )
-        # Back to the editor on the same player: on draft night the next
-        # thing done is the next player's picks
-        return redirect(
+        # Everything is checked before the player's picks are cleared, so a
+        # refused form saves nothing and leaves their picks as they were.
+        # Unchecked, an unknown player or a bad episode raised a server
+        # error, and a castaway from another season was saved.
+        target_user = db.session.get(User, request.form.get("user_id", type=int) or 0)
+        if target_user is None:
+            flash("Choose a player.", "error")
+            return redirect(url_for("main.admin_picks", season_id=season.id))
+        target_user_id = target_user.id
+        name = _player_label(target_user)
+        back = redirect(
             url_for(
                 "main.admin_picks",
                 season_id=season.id,
@@ -2115,6 +2042,108 @@ def admin_picks(season_id):
                 _anchor="change-picks",
             )
         )
+        in_season = {str(s.id) for s in survivors}
+        chosen = request.form.getlist("draft") + [
+            request.form.get(field, "")
+            for field in ("wildcard", "pmr_w", "pmr_d", "sole_survivor")
+        ]
+        if any(raw.strip() and raw.strip() not in in_season for raw in chosen):
+            flash("Every castaway must be one from this season.", "error")
+            return back
+        ss_episode = request.form.get("ss_episode", "").strip()
+        if ss_episode and not (ss_episode.isdigit() and int(ss_episode) >= 1):
+            flash("Enter the Sole Survivor episode as a number, 1 or more.", "error")
+            return back
+
+        try:
+            # Clear existing picks for this user+season
+            Pick.query.filter_by(user_id=target_user_id, season_id=season.id).delete()
+
+            # Draft picks
+            draft_ids = request.form.getlist("draft")
+            for i, sid in enumerate(draft_ids):
+                db.session.add(
+                    Pick(
+                        user_id=target_user_id,
+                        season_id=season.id,
+                        survivor_id=int(sid),
+                        pick_type="draft",
+                        pick_order=i + 1,
+                    )
+                )
+
+            # Wildcard
+            wc = request.form.get("wildcard")
+            if wc:
+                db.session.add(
+                    Pick(
+                        user_id=target_user_id,
+                        season_id=season.id,
+                        survivor_id=int(wc),
+                        pick_type="wildcard",
+                    )
+                )
+
+            # Wildcard replacement
+            pmr_w = request.form.get("pmr_w")
+            if pmr_w:
+                db.session.add(
+                    Pick(
+                        user_id=target_user_id,
+                        season_id=season.id,
+                        survivor_id=int(pmr_w),
+                        pick_type="pmr_w",
+                    )
+                )
+
+            # Draft replacement
+            pmr_d = request.form.get("pmr_d")
+            if pmr_d:
+                db.session.add(
+                    Pick(
+                        user_id=target_user_id,
+                        season_id=season.id,
+                        survivor_id=int(pmr_d),
+                        pick_type="pmr_d",
+                    )
+                )
+
+            # Sole Survivor pick with episode tracking
+            ss_survivor = request.form.get("sole_survivor")
+            if ss_survivor and ss_episode:
+                ss_episode_int = int(ss_episode)
+                # Check if pick already exists for this user/season/episode
+                existing = SoleSurvivorPick.query.filter_by(
+                    user_id=target_user_id, season_id=season.id, episode=ss_episode_int
+                ).first()
+                if existing:
+                    existing.survivor_id = int(ss_survivor)
+                else:
+                    db.session.add(
+                        SoleSurvivorPick(
+                            user_id=target_user_id,
+                            season_id=season.id,
+                            survivor_id=int(ss_survivor),
+                            episode=ss_episode_int,
+                        )
+                    )
+
+            db.session.commit()
+        except SQLAlchemyError:
+            # Most likely one castaway chosen twice (uq_user_season_survivor);
+            # the rollback restores the picks the delete above cleared
+            db.session.rollback()
+            logger.exception("Saving picks for player %s failed", target_user_id)
+            flash(
+                f"Could not save the picks for {name}. Check that no castaway "
+                "is chosen twice.",
+                "error",
+            )
+            return back
+        flash(f"Picks saved for {name}!", "success")
+        # Back to the editor on the same player: on draft night the next
+        # thing done is the next player's picks
+        return back
 
     # Every pick in the season in two queries, then grouped per player
     survivors_by_id = {s.id: s for s in survivors}

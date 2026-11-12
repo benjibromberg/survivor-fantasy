@@ -463,6 +463,139 @@ class TestPicksPage:
         assert f'href="/admin/season/{empty.id}#season-data"' in page
 
 
+class TestPicksEditorChecks:
+    """The full editor refuses a bad form before clearing anything.
+
+    It replaces every pick a player has, so a refusal must leave them as
+    they were rather than half-saved.
+    """
+
+    def _save(self, league, user_id, **fields):
+        data = {"user_id": user_id, **fields}
+        return league.c.post(f"/admin/picks/{league.s61.id}", data=data)
+
+    def _id(self, league, name, season=61):
+        return str(league.cast[(season, name)].id)
+
+    def _sole_survivor_picks(self):
+        from app.models import SoleSurvivorPick
+
+        return sorted(
+            (p.survivor.name, p.episode) for p in SoleSurvivorPick.query.all()
+        )
+
+    def test_a_valid_form_saves_every_kind(self, league):
+        _login(league.c)
+
+        resp = self._save(
+            league,
+            league.sam.id,
+            draft=[self._id(league, "Di")],
+            wildcard=self._id(league, "Bo"),
+            sole_survivor=self._id(league, "Ada"),
+            ss_episode="2",
+        )
+
+        assert resp.status_code == 302
+        assert _picks_of(league.sam, league.s61) == [
+            ("Bo", "wildcard"),
+            ("Di", "draft"),
+        ]
+        assert self._sole_survivor_picks() == [("Ada", 2)]
+        assert not _errors(league.c)
+
+    def test_a_blank_episode_still_saves_the_other_picks(self, league):
+        _login(league.c)
+
+        self._save(
+            league,
+            league.sam.id,
+            draft=[self._id(league, "Di")],
+            sole_survivor=self._id(league, "Ada"),
+            ss_episode="",
+        )
+
+        assert _picks_of(league.sam, league.s61) == [("Di", "draft")]
+        assert self._sole_survivor_picks() == []
+        assert not _errors(league.c)
+
+    @pytest.mark.parametrize("user_id", ["424242", "", "abc"])
+    def test_an_unknown_player_is_refused(self, league, user_id):
+        from app.models import Pick
+
+        _login(league.c)
+        before = Pick.query.count()
+
+        resp = self._save(league, user_id, draft=[self._id(league, "Di")])
+
+        assert resp.status_code == 302
+        assert resp.headers["Location"].endswith(f"/admin/picks/{league.s61.id}")
+        assert Pick.query.count() == before
+        assert "Choose a player." in _errors(league.c)
+
+    @pytest.mark.parametrize(
+        "field", ["draft", "wildcard", "pmr_w", "pmr_d", "sole_survivor"]
+    )
+    def test_a_castaway_from_another_season_is_refused(self, league, field):
+        _login(league.c)
+        stray = self._id(league, "Di", season=60)
+
+        resp = self._save(
+            league,
+            league.sam.id,
+            **{"draft": [self._id(league, "Bo")], field: stray},
+            ss_episode="1",
+        )
+
+        assert resp.status_code == 302
+        assert _picks_of(league.sam, league.s61) == [("Cy", "draft")]
+        assert self._sole_survivor_picks() == []
+        assert any("from this season" in msg for msg in _errors(league.c))
+
+    def test_a_castaway_id_that_is_not_a_number_is_refused(self, league):
+        _login(league.c)
+
+        self._save(league, league.sam.id, draft=["abc"])
+
+        assert _picks_of(league.sam, league.s61) == [("Cy", "draft")]
+        assert _errors(league.c)
+
+    @pytest.mark.parametrize("episode", ["abc", "0", "-1", "2.5"])
+    def test_an_episode_that_is_not_a_number_is_refused(self, league, episode):
+        _login(league.c)
+
+        resp = self._save(
+            league,
+            league.sam.id,
+            draft=[self._id(league, "Di")],
+            sole_survivor=self._id(league, "Ada"),
+            ss_episode=episode,
+        )
+
+        assert resp.status_code == 302
+        assert _picks_of(league.sam, league.s61) == [("Cy", "draft")]
+        assert self._sole_survivor_picks() == []
+        assert any("episode as a number" in msg for msg in _errors(league.c))
+
+    def test_a_castaway_chosen_twice_keeps_the_players_picks(self, league):
+        """The unique constraint fails at commit; the rollback restores them."""
+        _login(league.c)
+
+        resp = self._save(
+            league,
+            league.pat.id,
+            draft=[self._id(league, "Cy")],
+            wildcard=self._id(league, "Cy"),
+        )
+
+        assert resp.status_code == 302
+        assert _picks_of(league.pat, league.s61) == [
+            ("Ada", "draft"),
+            ("Bo", "wildcard"),
+        ]
+        assert any("chosen twice" in msg for msg in _errors(league.c))
+
+
 class TestEnterAPick:
     def _add(self, league, user, kind, survivor, season=None, **extra):
         season = season or league.s61
