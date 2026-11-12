@@ -2599,24 +2599,28 @@ def admin_seasons():
             return redirect(url_for("main.admin_season_detail", season_id=season.id))
 
     seasons = Season.query.order_by(Season.number.desc()).all()
+    castaway_counts = dict(
+        db.session.query(Survivor.season_id, db.func.count())
+        .group_by(Survivor.season_id)
+        .all()
+    )
 
-    # Label each season's scoring config
-    def _cfg_matches(cfg, ref):
-        """Check if cfg matches ref on all shared keys (ignore extras)."""
-        return all(cfg.get(key) == ref[key] for key in ref)
-
-    scoring_labels = {}
+    # The version each season plays under, read as the season page reads it,
+    # so the list and the page name the same version
+    scoring = {}
     for season in seasons:
-        cfg = season.get_scoring_config()
-        if not cfg or _cfg_matches(cfg, DEFAULT_CONFIG):
-            scoring_labels[season.id] = "Default"
-        elif _cfg_matches(cfg, LEGACY_CONFIG):
-            scoring_labels[season.id] = "Legacy"
-        else:
-            scoring_labels[season.id] = "Custom"
+        version, diffs = describe_config(
+            {**DEFAULT_CONFIG, **season.get_scoring_config()}
+        )
+        scoring[season.id] = {"name": version["name"], "changed": len(diffs)}
 
     return render_template(
-        "admin/seasons.html", seasons=seasons, scoring_labels=scoring_labels
+        "admin/seasons.html",
+        seasons=seasons,
+        castaway_counts=castaway_counts,
+        scoring=scoring,
+        player_count=User.query.count(),
+        linked_count=User.query.filter(User.email.isnot(None)).count(),
     )
 
 

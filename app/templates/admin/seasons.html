@@ -1,81 +1,91 @@
 {% extends "base.html" %}
-{% block title %}Admin - Seasons{% endblock %}
+{% block title %}Admin{% endblock %}
 {% block content %}
-<h1>Manage Seasons</h1>
-<p><a href="{{ url_for('main.admin_players') }}" role="button" class="outline admin-btn-sm">Manage Players</a></p>
+{% set active = seasons|selectattr('is_active')|first %}
+<h1>Admin</h1>
+<p class="admin-page-meta">
+    {% if active %}
+    {{ active.name or 'Season ' ~ active.number }} is active: the leaderboard opens on it and the daily refresh updates it.
+    {% else %}
+    No season is active.
+    {% endif %}
+</p>
 
-<section>
-    <h2 class="section-title">Create New Season</h2>
-    <form method="POST" style="max-width: 28rem;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="admin-form-row">
-            <label>
-                Season #
-                <input type="number" name="number" required placeholder="50">
-            </label>
-            <label>
-                <input type="checkbox" name="fetch_images" checked>
-                Fetch images
-            </label>
-            <button type="submit">Create</button>
+{# Sections are tasks. A season's own work (its vote, pick windows, data and
+   deletion) is on its admin page, which the season's name opens. #}
+
+<section id="seasons" aria-labelledby="seasons-heading">
+    <h2 class="section-title" id="seasons-heading">Seasons</h2>
+    {% if seasons %}
+    <ul class="admin-cards">
+        {% for season in seasons %}
+        {% set label = season.name or 'Season ' ~ season.number %}
+        <li class="admin-card{% if season.is_active %} admin-card-active{% endif %}">
+            <h3 class="subsection-title admin-card-title"><a href="{{ url_for('main.admin_season_detail', season_id=season.id) }}">{{ label }}</a></h3>
+            <dl class="admin-facts">
+                {% if season.name and season.name != 'Season ' ~ season.number %}
+                <div class="ls-value"><dt>Season</dt><dd>{{ season.number }}</dd></div>
+                {% endif %}
+                <div class="ls-value"><dt>Castaways</dt><dd>{{ castaway_counts.get(season.id, 0) }}</dd></div>
+                <div class="ls-value">
+                    <dt>Scoring</dt>
+                    <dd>{{ scoring[season.id].name }}{% if scoring[season.id].changed %}<small>{{ scoring[season.id].changed }} value{{ 's' if scoring[season.id].changed != 1 }} changed</small>{% endif %}</dd>
+                </div>
+                <div class="ls-value"><dt>Status</dt><dd>{{ 'Active' if season.is_active else 'Inactive' }}</dd></div>
+            </dl>
+            <div class="admin-toolbar">
+                <a href="{{ url_for('main.admin_picks', season_id=season.id) }}" role="button" class="outline admin-btn-sm">Picks<span class="visually-hidden"> for {{ label }}</span></a>
+                <a href="{{ url_for('main.admin_players', season_id=season.id) }}" role="button" class="outline admin-btn-sm">Team names<span class="visually-hidden"> for {{ label }}</span></a>
+                <form method="POST" action="{{ url_for('main.admin_toggle_active', season_id=season.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="outline secondary admin-btn-sm">{{ 'Deactivate' if season.is_active else 'Make active' }}<span class="visually-hidden"> {{ label }}</span></button>
+                </form>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No seasons yet. Create one below.</p>
+    {% endif %}
+
+    <details class="fold"{% if not seasons %} open{% endif %}>
+        <summary><h3 class="subsection-title">Create a season</h3></summary>
+        <div class="fold-body">
+            <p><small>Downloads the season from survivoR, with headshots if ticked, and opens its admin page. A new season starts inactive, so the leaderboard stays on the current one until you make it active. Only new-era seasons (41 and later) are supported.</small></p>
+            <form method="POST" class="admin-fields-row">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="admin-field">
+                    <label for="new-season-number">Season number</label>
+                    <input type="number" id="new-season-number" name="number" min="41" required
+                           placeholder="e.g. {{ (seasons|map(attribute='number')|max) + 1 if seasons else 50 }}">
+                </div>
+                <label class="admin-check">
+                    <input type="checkbox" name="fetch_images" checked>
+                    Fetch headshots
+                </label>
+                <button type="submit" class="admin-submit">Create season</button>
+            </form>
         </div>
-    </form>
+    </details>
 </section>
 
-{% if seasons %}
-<section>
-    <div class="admin-form-row">
-        <h2 class="section-title">Existing Seasons</h2>
-        <form method="POST" action="{{ url_for('main.admin_export_all_picks') }}" style="margin:0;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="outline admin-btn-sm">Export All Picks</button>
-        </form>
-    </div>
-    <div class="table-scroll">
-    <table class="admin-table">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Name</th>
-                <th>Survivors</th>
-                <th>Scoring</th>
-                <th>Active</th>
-                <th></th>
-                <th></th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for season in seasons %}
-            <tr>
-                <td>{{ season.number }}</td>
-                <td>{{ season.name or '-' }}</td>
-                <td>{{ season.survivors|length }}</td>
-                <td>{{ scoring_labels.get(season.id, 'Default') }}</td>
-                <td>
-                    <form method="POST" action="{{ url_for('main.admin_toggle_active', season_id=season.id) }}" style="margin:0">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <label class="admin-check">
-                            <input type="checkbox" {% if season.is_active %}checked{% endif %}
-                                onchange="this.form.submit()">
-                            <span class="visually-hidden">Active season</span>
-                        </label>
-                    </form>
-                </td>
-                <td><a href="{{ url_for('main.admin_season_detail', season_id=season.id) }}" role="button" class="outline admin-btn-sm">Manage</a></td>
-                <td><a href="{{ url_for('main.admin_players', season_id=season.id) }}" role="button" class="outline admin-btn-sm">Players</a></td>
-                <td>
-                    <form method="POST" action="{{ url_for('main.admin_delete_season', season_id=season.id) }}" style="margin:0"
-                          onsubmit="var c = prompt('This will permanently delete {{ season.name or 'Season ' ~ season.number }} and all its survivors and picks.\n\nType \'delete season\' to confirm:'); return c &amp;&amp; c.trim().toLowerCase() === 'delete season';">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="outline secondary admin-btn-sm">Delete</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<section id="players" aria-labelledby="players-heading">
+    <h2 class="section-title" id="players-heading">Players</h2>
+    <dl class="admin-facts">
+        <div class="ls-value"><dt>Players</dt><dd>{{ player_count }}</dd></div>
+        <div class="ls-value"><dt>Can log in</dt><dd>{{ linked_count }}</dd></div>
+    </dl>
+    <div class="admin-toolbar">
+        <a href="{{ url_for('main.admin_players') }}" role="button" class="outline admin-btn-sm">Manage players</a>
     </div>
 </section>
-{% endif %}
+
+<section id="backups" aria-labelledby="backups-heading">
+    <h2 class="section-title" id="backups-heading">Backups</h2>
+    <form method="POST" action="{{ url_for('main.admin_export_all_picks') }}" class="admin-toolbar">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="outline admin-submit">Export all picks</button>
+    </form>
+    <p><small>Writes every season's picks, and each player's login email, to the picks folder in the data directory. A season's refresh also exports its picks, before and after.</small></p>
+</section>
 {% endblock %}
