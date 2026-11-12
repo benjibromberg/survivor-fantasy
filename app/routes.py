@@ -2433,6 +2433,8 @@ def admin_players(season_id):
         "admin/players.html",
         players=players,
         season=season,
+        # Every season, for the "Team names for season" switch
+        seasons=Season.query.order_by(Season.number.desc()).all(),
         seasons_by_player=_seasons_by_player(),
         admin_email=current_app.config["ADMIN_EMAIL"],
         team_names=TeamName.for_season(season.id) if season else {},
