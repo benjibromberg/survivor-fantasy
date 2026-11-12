@@ -1727,3 +1727,9 @@ def test_the_search_uses_the_sites_rules():
 
     assert analyze_scoring.ORDERINGS is rules.ORDERINGS
     assert analyze_scoring.satisfies_orderings is rules.satisfies_orderings
+
+
+def test_expanded_configs_score_no_sole_survivor_points():
+    """The chart builders score expanded configs; the league has Sole Survivor off."""
+    assert expand_config({"first_val": 5})["sole_survivor_val"] == 0
+    assert expand_config({"sole_survivor_val": 2})["sole_survivor_val"] == 2
