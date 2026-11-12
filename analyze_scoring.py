@@ -1600,6 +1600,76 @@ def evaluate_config(config, scenarios):
 _worker_scenarios = None
 
 
+# ── Sharding the sweep across nodes ─────────────────────────────────────────
+#
+# One process pool is one node. To use many, each job evaluates one slice of
+# the same deterministic config list (--shard K/N) and writes it to disk; a
+# final job loads every slice (--merge-shards N) and carries on with
+# refinement and the report as if it had evaluated them itself.
+
+
+def parse_shard(text):
+    """Parse "K/N" into (K, N), with 0 <= K < N. Raises ValueError otherwise."""
+    try:
+        k_text, n_text = text.split("/")
+        k, n = int(k_text), int(n_text)
+    except (AttributeError, ValueError):
+        raise ValueError(f"--shard expects K/N, got {text!r}") from None
+    if not 0 <= k < n:
+        raise ValueError(f"--shard {text!r}: need 0 <= K < N")
+    return k, n
+
+
+def shard_configs(configs, shard, n_shards):
+    """Every n_shards-th config starting at `shard`: slices are disjoint and even."""
+    return configs[shard::n_shards]
+
+
+def shard_path(shard_dir, shard, n_shards):
+    return os.path.join(str(shard_dir), f"shard-{shard:03d}-of-{n_shards:03d}.json")
+
+
+def write_shard(path, results):
+    """Write one slice's (config, metrics) results, atomically."""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = f"{path}.tmp"
+    with open(tmp, "w") as f:
+        json.dump([{"config": c, "metrics": m} for c, m in results], f)
+    os.replace(tmp, path)
+
+
+def _restore_tuples(config):
+    """JSON stores tuples (placement_ratio) as lists; refinement needs them back.
+
+    Refinement finds a value's position in PARAM_GRID by equality, and a
+    list never equals the tuple there, so the parameter would be skipped.
+    """
+    return {k: tuple(v) if isinstance(v, list) else v for k, v in config.items()}
+
+
+def load_shards(shard_dir, n_shards, expected_total):
+    """Load every slice of an N-way sweep. Raises ValueError if any is missing.
+
+    Also checks the total against the configs the merge job built itself, so
+    a slice from a different sample size or seed cannot pass unnoticed.
+    """
+    paths = [shard_path(shard_dir, k, n_shards) for k in range(n_shards)]
+    missing = [os.path.basename(p) for p in paths if not os.path.isfile(p)]
+    if missing:
+        raise ValueError(f"missing shards: {', '.join(missing)}")
+    results = []
+    for path in paths:
+        with open(path) as f:
+            results.extend(
+                (_restore_tuples(r["config"]), r["metrics"]) for r in json.load(f)
+            )
+    if len(results) != expected_total:
+        raise ValueError(
+            f"shards hold {len(results)} configs, expected {expected_total}"
+        )
+    return results
+
+
 def _init_worker(scenarios):
     global _worker_scenarios
     _worker_scenarios = scenarios
@@ -2326,6 +2396,24 @@ def main():
         default=None,
         help="Re-export from a saved checkpoint (skip optimization)",
     )
+    parser.add_argument(
+        "--shard",
+        type=str,
+        default=None,
+        help="Evaluate only slice K of N of the sweep (K/N), write it, and stop",
+    )
+    parser.add_argument(
+        "--merge-shards",
+        type=int,
+        default=None,
+        help="Load all N slices instead of evaluating, then refine and report",
+    )
+    parser.add_argument(
+        "--shard-dir",
+        type=str,
+        default="results/shards",
+        help="Where slices are written and read (default: results/shards)",
+    )
     args = parser.parse_args()
 
     # Sanitize file path arguments
@@ -2420,27 +2508,44 @@ def main():
     configs.append(dict(DEFAULT_PARAMS))
     configs.append(dict(LEGACY_PARAMS))
 
+    shard = parse_shard(args.shard) if args.shard else None
+    if shard:
+        configs = shard_configs(configs, *shard)
+        print(f"Shard {shard[0]}/{shard[1]}: {len(configs)} of the configs")
+
     n_workers = args.cores if args.cores else max(1, mp.cpu_count() - 2)
     n_workers = max(1, min(n_workers, mp.cpu_count()))
-    print(
-        f"Evaluating {len(configs)} configs across {n_workers} CPU cores ({mp.cpu_count()} available)..."
-    )
 
-    results = []
-    with mp.Pool(n_workers, initializer=_init_worker, initargs=(scenarios,)) as pool:
-        for i, result in enumerate(pool.imap_unordered(_evaluate_worker, configs)):
-            results.append(result)
-            done = i + 1
-            if done % 200 == 0 or done == len(configs):
-                elapsed = time.time() - t0
-                rate = done / elapsed
-                eta = (len(configs) - done) / rate
-                print(
-                    f"  {done}/{len(configs)} evaluated  ({rate:.1f}/sec, ~{eta:.0f}s remaining)"
-                )
+    if args.merge_shards:
+        results = load_shards(args.shard_dir, args.merge_shards, len(configs))
+        print(f"Merged {args.merge_shards} shards: {len(results)} configs")
+    else:
+        print(
+            f"Evaluating {len(configs)} configs across {n_workers} CPU cores ({mp.cpu_count()} available)..."
+        )
+        results = []
+        with mp.Pool(
+            n_workers, initializer=_init_worker, initargs=(scenarios,)
+        ) as pool:
+            for i, result in enumerate(pool.imap_unordered(_evaluate_worker, configs)):
+                results.append(result)
+                done = i + 1
+                if done % 200 == 0 or done == len(configs):
+                    elapsed = time.time() - t0
+                    rate = done / elapsed
+                    eta = (len(configs) - done) / rate
+                    print(
+                        f"  {done}/{len(configs)} evaluated  ({rate:.1f}/sec, ~{eta:.0f}s remaining)"
+                    )
 
     results.sort(key=lambda x: x[1]["composite"], reverse=True)
     print(f"Phase 1 completed in {time.time() - t0:.1f}s")
+
+    if shard:
+        path = shard_path(args.shard_dir, *shard)
+        write_shard(path, results)
+        print(f"Wrote shard to {path}")
+        return
 
     # ── Phase 2: Iterative neighborhood refinement ──────────────────
     # Take top configs, perturb each param ±2 steps, evaluate neighbors.
