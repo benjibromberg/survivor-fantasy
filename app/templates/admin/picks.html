@@ -120,20 +120,21 @@
                         </select>
                     </div>
                     <div class="admin-field">
-                        <label for="edit-pmr-d">Draft replacement</label>
+                        {# What it replaces is in the label, not a line under the
+                           select: the row aligns field bottoms, so a hint under
+                           two of the three selects pushed Wildcard's lower. #}
+                        <label for="edit-pmr-d">Draft replacement (for a lost draft pick)</label>
                         <select name="pmr_d" id="edit-pmr-d">
                             <option value="">None</option>
                             {{ castaway_options() }}
                         </select>
-                        <small>For a lost draft pick</small>
                     </div>
                     <div class="admin-field">
-                        <label for="edit-pmr-w">Wildcard replacement</label>
+                        <label for="edit-pmr-w">Wildcard replacement (for a lost wildcard)</label>
                         <select name="pmr_w" id="edit-pmr-w">
                             <option value="">None</option>
                             {{ castaway_options() }}
                         </select>
-                        <small>For a lost wildcard</small>
                     </div>
                 </div>
 
