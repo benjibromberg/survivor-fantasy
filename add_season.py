@@ -170,7 +170,10 @@ def validate_pick_file(data, castaway_names):
 
     def check_name(player, name, what):
         remapped = NICKNAME_MAP.get(str(name).lower(), name)
-        if str(remapped).lower() != str(name).lower():
+        # The loader only takes the mapped name when this season has that
+        # castaway (seed._resolve_survivor), and only then would it place
+        # someone other than the name written.
+        if str(remapped).lower() != str(name).lower() and remapped in names:
             problems.append(
                 f'{player}: {what} "{name}" would be remapped to "{remapped}" '
                 "by the loader; use the castaway's exact name"

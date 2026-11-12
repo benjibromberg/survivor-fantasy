@@ -63,6 +63,11 @@ NICKNAME_MAP = {
     "brandon donlon": "Brandon",
     "brandon meyer": "Brando",
     "niko": "Sifu",
+    # survivoR renamed season 51's US0760 from Danny to Kilby after the
+    # league's pick files and the site's own pick exports were written.
+    # Seasons 41 and 44 have a Danny of their own, which _resolve_survivor
+    # still finds, because a mapped name a season lacks falls back.
+    "danny": "Kilby",
 }
 
 
@@ -269,12 +274,19 @@ def build_season_from_survivor_db(season_number, ref_data):
 
 
 def _resolve_survivor(surv_name, survivor_map):
-    """Resolve a survivor name to a Survivor object using nickname map and prefix matching."""
-    lookup = NICKNAME_MAP.get(surv_name.lower(), surv_name).lower()
-    survivor = survivor_map.get(lookup)
+    """Resolve a pick file's name to one of this season's Survivors.
+
+    Tries the NICKNAME_MAP name, then the name as written, then a prefix.
+    The map is shared by every season, so a mapped name this season does
+    not have (season 51's "danny" -> "Kilby", read in season 44, which has
+    its own Danny) falls back to the name as written instead of failing.
+    """
+    written = surv_name.lower()
+    mapped = NICKNAME_MAP.get(written, surv_name).lower()
+    survivor = survivor_map.get(mapped) or survivor_map.get(written)
     if not survivor:
         for key, surv in survivor_map.items():
-            if key.startswith(surv_name.lower()):
+            if key.startswith(written):
                 survivor = surv
                 break
     return survivor
