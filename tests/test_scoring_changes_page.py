@@ -314,6 +314,14 @@ class TestReplayDetail:
         assert 'class="fold ls-replay"' in tag
         assert " open" in tag and "data-mobile-collapsed" in tag
 
+    def test_the_fold_is_labelled_by_what_it_answers(self, league):
+        changed, _ = self._rows(league)
+
+        summary = re.search(r"<summary>(.*?)</summary>", changed, re.S).group(1)
+        assert "Why the order changes" in summary
+        # Every replay fold reads the same, so a screen reader also hears which
+        assert '<span class="visually-hidden"> in Season 50</span>' in summary
+
     def test_a_season_with_the_same_order_keeps_its_one_line_summary(self, league):
         _, same = self._rows(league)
 

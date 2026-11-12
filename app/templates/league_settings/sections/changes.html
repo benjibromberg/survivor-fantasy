@@ -159,7 +159,7 @@
 <details class="fold" open data-mobile-collapsed id="past-seasons">
     <summary><h2 id="past-seasons-heading">Earlier seasons under {{ new_label if proposal else this_season ~ "'s scoring" }}</h2></summary>
     <div class="fold-body">
-    <p>These seasons were played under their own scoring. This is how they would have finished under {{ new_label if proposal else this_season ~ "'s" }}, as a what-if. Where the order changes, open the season for each player's points both ways and what moved them.</p>
+    <p>These seasons were played under their own scoring. This is how they would have finished under {{ new_label if proposal else this_season ~ "'s" }}, as a what-if. Where the order changes, open the season to see why.</p>
     <dl class="ls-values ls-values-wide">
         {% for row in past %}
         <div class="ls-value">
@@ -171,7 +171,7 @@
                    around it, so the list of seasons stays scannable. #}
                 {% if row.players %}
                 <details class="fold ls-replay" open data-mobile-collapsed>
-                    <summary><span class="ls-replay-toggle">Points both ways, and why<span class="visually-hidden"> for {{ row.label }}</span></span></summary>
+                    <summary><span class="ls-replay-toggle">Why the order changes<span class="visually-hidden"> in {{ row.label }}</span></span></summary>
                     <dl class="ls-values ls-values-wide ls-replay-body">
                         {% for p in row.players %}
                         <div class="ls-value">
