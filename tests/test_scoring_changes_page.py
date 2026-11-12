@@ -1338,3 +1338,98 @@ class TestHowTheLeaguePlays:
 
         tag = page.split('id="league-play"', 1)[0].rsplit("<", 1)[1]
         assert tag.startswith("details") and "data-mobile-collapsed" in tag
+
+
+def _analysis(league):
+    resp = league.c.get("/scoring-analysis")
+    assert resp.status_code == 200
+    return resp.data.decode()
+
+
+def _newest_run_config():
+    from app.scoring.history import analysis_runs
+
+    return analysis_runs()[0]["config"]
+
+
+class TestHowTheLeaguePlaysOnTheAnalysisPage:
+    def test_today_against_the_newest_recommendation(self, league, simulator):
+        simulator.seed(league.s51.get_scoring_config(), _metrics(suspense=0.5))
+        simulator.seed(_newest_run_config(), _metrics(suspense=0.6))
+
+        section = _block(_analysis(league), "league-play")
+
+        row = _metric_row(
+            section, "Share of the season the eventual winner isn't in 1st"
+        )
+        assert _cells(row) == {"Today": ("50%", False), "Run 7": ("60%", True)}
+        assert "Season 51&#39;s scoring now" in section
+        assert "Run 7&#39;s recommendation" in section
+
+    def test_an_open_proposal_is_a_third_column(self, proposal, simulator):
+        simulator.seed(proposal.s51.get_scoring_config(), _metrics())
+        simulator.seed(_newest_run_config(), _metrics())
+        simulator.seed(_open(proposal).get_config(), _metrics())
+
+        section = _block(_analysis(proposal), "league-play")
+
+        row = _metric_row(section, "Overall simulation score")
+        assert list(_cells(row)) == ["Today", "Run 7", "Proposed"]
+
+    def test_the_same_rows_as_scoring_changes(self, proposal, simulator):
+        simulator.seed(proposal.s51.get_scoring_config(), _metrics())
+        simulator.seed(_newest_run_config(), _metrics())
+        simulator.seed(_open(proposal).get_config(), _metrics())
+
+        def labels(page):
+            return re.findall(r"<dt>([^<]+)</dt>", _block(page, "league-play"))
+
+        assert labels(_analysis(proposal)) == labels(_page(proposal))
+
+    def test_before_the_numbers_exist_it_says_so_and_starts_them(
+        self, league, simulator
+    ):
+        from app import league_metrics
+
+        simulator.hold()
+
+        section = _block(_analysis(league), "league-play")
+
+        assert "being worked out" in section
+        assert _sent(simulator) == [
+            [
+                league_metrics.effective_config(league.s51.get_scoring_config()),
+                league_metrics.effective_config(_newest_run_config()),
+            ]
+        ]
+
+    def test_no_page_view_runs_the_simulator(self, proposal, simulator, monkeypatch):
+        import analyze_scoring
+
+        def ran(*args, **kwargs):
+            raise AssertionError("the simulator ran inside a request")
+
+        for name in ("load_all_seasons", "evaluate_config", "run_metrics_jobs"):
+            monkeypatch.setattr(analyze_scoring, name, ran)
+        simulator.hold()
+
+        assert "being worked out" in _block(_analysis(proposal), "league-play")
+        assert len(simulator.commands) == 1
+
+    def test_without_an_active_season_it_compares_the_default(self, league, simulator):
+        league.s51.is_active = False
+        league.db.session.commit()
+        simulator.seed({}, _metrics())
+        simulator.seed(_newest_run_config(), _metrics())
+
+        section = _block(_analysis(league), "league-play")
+
+        row = _metric_row(section, "Overall simulation score")
+        assert list(_cells(row)) == ["Default", "Run 7"]
+
+    def test_it_sits_near_the_top_and_starts_closed_on_phones(self, league):
+        page = _analysis(league)
+
+        assert page.index('id="league-play"') < page.index('id="how-we-tested"')
+        tag = page.split('id="league-play"', 1)[0].rsplit("<", 1)[1]
+        assert tag.startswith("details") and "data-mobile-collapsed" in tag

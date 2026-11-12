@@ -680,7 +680,45 @@ def _apply_as_of(season, as_of):
 
 @main_bp.route("/scoring-analysis")
 def scoring_analysis():
-    return render_template("scoring_analysis.html", runs=analysis_runs())
+    runs = analysis_runs()
+    return render_template(
+        "scoring_analysis.html", runs=runs, play=_analysis_play(runs)
+    )
+
+
+def _analysis_play(runs):
+    """Today's scoring against the newest run's recommendation, for the
+    analysis page, with the active season's open proposal when there is one.
+
+    Starts working out any config's metrics that are missing; never waits.
+    """
+    if not runs:
+        return None
+    season = Season.get_active()
+    if season is not None:
+        columns = [
+            (
+                "Today",
+                f"Season {season.number}'s scoring now",
+                season.get_scoring_config(),
+            )
+        ]
+    else:
+        columns = [("Default", "the site's default scoring", {})]
+    newest = runs[0]
+    # "Run 7: league rules" -> "Run 7", short enough for a phone's cell
+    short = newest["name"].split(":", 1)[0]
+    columns.append((short, f"{short}'s recommendation", newest["config"]))
+    proposal = proposals.open_proposal(season) if season is not None else None
+    if proposal is not None:
+        columns.append(
+            (
+                "Proposed",
+                "the proposal open for the league's vote",
+                proposal.get_config(),
+            )
+        )
+    return league_metrics.compare(columns)
 
 
 # The league-settings hub and its detail pages. Order here is the order the

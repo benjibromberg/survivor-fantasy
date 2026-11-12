@@ -132,6 +132,11 @@ never deleted, and each vote belongs to one proposal.
   Neither waits for `closes_at`, and the tally is advisory: `adopt` always applies
   the config to this season, with nothing automatic behind `next`. It copies the
   season's old `scoring_config` into `replaced_config` first.
+- **How the league plays**: proposing starts `league_metrics.request_metrics`
+  for the proposal and the season's current config, a background run of the
+  simulator (`app/league_metrics.py`). Scoring changes and the analysis page show
+  the results side by side (`_league_play.html`); a page view starts any that
+  are missing and never waits for them.
 - **History as stretches**: `_season_periods()` in `routes.py` makes each adopted
   proposal one stretch on its `replaced_config`, ending on its adoption date with
   its tally, followed by the current config. Adopting mid-season adds to a
