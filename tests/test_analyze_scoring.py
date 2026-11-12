@@ -26,6 +26,7 @@ from analyze_scoring import (
     evaluate_config,
     expand_config,
     find_config_rank,
+    impact_params,
     load_shards,
     parse_shard,
     placement_order,
@@ -1695,3 +1696,17 @@ class TestSharding:
 
         with pytest.raises(ValueError, match="expected 3"):
             load_shards(tmp_path, 1, expected_total=3)
+
+
+class TestImpactParams:
+    def test_drops_parameters_the_sweep_never_varies(self):
+        rows = [
+            ("wildcard_multiplier", "Wildcard", "x"),
+            ("sole_survivor_val", "Sole Survivor", "y"),
+        ]
+
+        assert impact_params(rows) == [("wildcard_multiplier", "Wildcard", "x")]
+
+    def test_sole_survivor_is_not_swept(self):
+        """The sweep scores every config with no Sole Survivor points."""
+        assert "sole_survivor_val" not in PARAM_GRID
