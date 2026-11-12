@@ -2450,6 +2450,54 @@ details.lb-champion[open] > summary.lb-row {
     padding-left: 0.75rem;
 }
 
+/* Scoring changes ballot. Each choice is a full-width row at least 2.5rem
+   tall: the label carries the tap target and the radio stays its natural
+   size, as .admin-check does for checkboxes. */
+.ls-vote-form fieldset {
+    margin-bottom: 1rem;
+}
+
+.ls-choice {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 2.5rem;
+    margin: 0;
+    cursor: pointer;
+}
+
+.ls-choice input[type="radio"] {
+    margin: 0;
+}
+
+/* Jump from the proposal banner to the ballot, a full tap target on phones */
+.ls-jump {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
+}
+
+/* The reasons for a scoring change read as sentences, not as values */
+.ls-why {
+    padding-left: 1.1rem;
+}
+
+.ls-why li {
+    margin-bottom: 0.6rem;
+}
+
+/* old -> new on one line, the new value carrying the weight */
+.ls-changes dd strong {
+    color: var(--sand-light);
+}
+
+.admin-proposal {
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+
 /* Scoring changes: whether a league rule holds for the season's values */
 .ls-rule-status {
     margin-left: 0.5rem;
