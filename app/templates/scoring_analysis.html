@@ -18,6 +18,12 @@
 </div>
 </details>
 
+<!-- Today's scoring against the newest recommendation (app/league_metrics.py) -->
+{% if play %}
+{% from "_league_play.html" import league_play %}
+{{ league_play(play, "How a season plays under today's scoring and under the newest run's recommendation, on the metrics the analysis scores every config by. The site works these out for exactly these configs, so an open proposal gets its numbers too.") }}
+{% endif %}
+
 <!-- Methodology -->
 <details class="fold" open data-mobile-collapsed>
     <summary><h2 id="how-we-tested">How We Tested</h2></summary>

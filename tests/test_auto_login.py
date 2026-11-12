@@ -14,8 +14,9 @@ ACCESS_HEADER = "Cf-Access-Authenticated-User-Email"
 # Nothing in this file is about the page it fetches; these tests need any URL
 # that is public and returns 200, so the Access header can be exercised on the
 # way in. It used to be /rules, which has since become the League settings hub.
-# /scoring-analysis is a two-line view with no database access, so it is the
-# cheapest public 200 in the app.
+# /scoring-analysis is still one of the cheapest public 200s in the app: it
+# reads the active season and its open proposal, and starts no work a test
+# can see, because tests/conftest.py replaces the background metrics run.
 #
 # If this URL ever moves or gains a login requirement, this suite fails for a
 # reason that has nothing to do with authentication. Several tests below assert

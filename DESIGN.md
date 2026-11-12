@@ -336,6 +336,16 @@ cards here are the navigation, which was the argument that retired it.
 styles the `li` with a more specific selector, so a `list-style` on the `ul`
 never reaches the marker and a square appears beside every card.
 
+**How the league plays** (`.lp-*`, the one macro in `_league_play.html`) puts
+the simulator's metrics for two or three scoring configs on Scoring changes and
+the analysis page. It is still label above value: a row per metric
+(`.ls-value`), and inside it a cell per config (`.lp-cell`) that names its config
+above the value, so three configs fit 375px with no header row to scroll away
+from. The cells share the row up to 11rem each and can shrink to nothing, so
+they neither overflow a phone nor stretch across a desktop. The better value
+gets a `--palm-light` border and the word "better", never colour alone; a tie at
+the precision shown, or two values inside a healthy band, marks neither.
+
 `.ls-value` and `.ls-card` both set `min-width: 0`, because grid items default
 to `min-width: auto` and a `1fr` track cannot shrink below an item's min-content
 width.
@@ -353,6 +363,7 @@ so a long list stays a list of summaries: 5,589px tall at 1280, not 17,472px.
 | Date | Decision | Rationale |
 |------|----------|-----------|
 | 2026-11-12 | Scoring changes: a breakdown for every season, in folds that start closed | The league asked to see why points move for every replayed season and for the current one, not only where the order changes. Each player gets the groups that moved them, rounded so the parts add up to the shown change. Open by default, those details made the page 17,472px tall at 1280, so the detail folds start closed on every screen (5,589px) while the section folds keep open on desktop, closed on phones. |
+| 2026-11-12 | How the league plays, on both scoring pages | The league could see what a scoring change does to standings but not how a season would play under it. One macro shows the simulator's metrics for today's scoring beside the proposal (or the previous season) on Scoring changes, and beside the newest recommendation on the analysis page, as label-above-value rows with a cell per config rather than a table, closed on phones like the other long sections. |
 | 2026-11-12 | Season admin page by task | One long column of data sections made the common jobs hard to find, and opening a scoring vote took five steps. The page now leads with the vote (a starting point, a closing time, Propose), then the pick windows, the scoring readout, the season data and the danger zone, with the components and the castaway table folded away. |
 | 2026-11-11 | Scoring changes page, and the analysis keeps its history | The league needed to see what changed and why without a long message. The page compares the season's stored config with the previous season's, lists the league's rules with their values, and replays standings both ways from real picks, so it cannot disagree with the scores. Earlier analysis runs stay downloadable from the analysis page, and each season names the version it played under (`app/scoring/history.py`). Values and replays are label-above-value rows, not tables, as on every League page. A proposal put to a vote turns the page into current-versus-proposed with a ballot; names and comments show to everyone, since the league is small and the comments are the discussion. |
 | 2026-10-02 | Rules page became League settings | It was already a configuration readout wearing the wrong name: it rendered `num_players`, `tribal_base` and `finale_size` and listed which components were active, inside ten accordions. Accordions suit prose you read; that page was values you look up, which is why the sections never fit them. Hub of cards plus label-above-value detail pages instead, and the wide tables are gone. |
