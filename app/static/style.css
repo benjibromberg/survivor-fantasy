@@ -1295,6 +1295,12 @@ details.fold > summary .subsection-title {
     overflow-wrap: anywhere;
 }
 
+/* A one-button form beside the title (a season's active switch) */
+.admin-card-head > form {
+    flex-shrink: 0;
+    margin: 0;
+}
+
 /* "Active", "Admin": a short tag beside a card's title. Sentence case, as
    the journey badges are. */
 .admin-tag {
@@ -1314,7 +1320,17 @@ details.fold > summary .subsection-title {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem 1.5rem;
-    margin: 0;
+    margin: 0 0 0.75rem;
+}
+
+/* The chosen one of a row of switch buttons ("Team names for season").
+   Pico paints a [role=button] carrying aria-current in its own hover
+   colours, a blue this palette never themed; this keeps it the site's
+   filled button. (0,3,1) to beat Pico's (0,3,0) rule for that state. */
+a.admin-btn-sm[role="button"][aria-current="page"] {
+    background-color: var(--fire-bright);
+    border-color: var(--fire-bright);
+    color: #fff;
 }
 
 /* One field whose button shares its line: a label above, then the input
@@ -1349,6 +1365,12 @@ details.fold > summary .subsection-title {
     padding: 0;
     font-size: max(var(--fs-floor), 0.85rem);
     color: var(--text-dim);
+}
+
+/* The fieldset's margin already spaces the draft grid from what follows;
+   the grid's own 1.5rem doubled it. */
+.admin-fieldset > .survivor-grid {
+    margin-bottom: 0;
 }
 
 /* A player's Sole Survivor picks in the editor, one row each */

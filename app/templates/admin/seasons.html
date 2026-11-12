@@ -21,7 +21,16 @@
         {% for season in seasons %}
         {% set label = season.name or 'Season ' ~ season.number %}
         <li class="admin-card{% if season.is_active %} admin-card-active{% endif %}">
-            <h3 class="subsection-title admin-card-title"><a href="{{ url_for('main.admin_season_detail', season_id=season.id) }}">{{ label }}</a></h3>
+            {# The switch sits beside the name rather than with Picks and Team
+               names: at 1280px all three did not fit one line of a card, and
+               it wrapped onto a line of its own. #}
+            <div class="admin-card-head">
+                <h3 class="subsection-title admin-card-title"><a href="{{ url_for('main.admin_season_detail', season_id=season.id) }}">{{ label }}</a></h3>
+                <form method="POST" action="{{ url_for('main.admin_toggle_active', season_id=season.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="outline secondary admin-btn-sm">{{ 'Deactivate' if season.is_active else 'Make active' }}<span class="visually-hidden"> {{ label }}</span></button>
+                </form>
+            </div>
             <dl class="admin-facts">
                 {% if season.name and season.name != 'Season ' ~ season.number %}
                 <div class="ls-value"><dt>Season</dt><dd>{{ season.number }}</dd></div>
@@ -36,10 +45,6 @@
             <div class="admin-toolbar">
                 <a href="{{ url_for('main.admin_picks', season_id=season.id) }}" role="button" class="outline admin-btn-sm">Picks<span class="visually-hidden"> for {{ label }}</span></a>
                 <a href="{{ url_for('main.admin_players', season_id=season.id) }}" role="button" class="outline admin-btn-sm">Team names<span class="visually-hidden"> for {{ label }}</span></a>
-                <form method="POST" action="{{ url_for('main.admin_toggle_active', season_id=season.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="outline secondary admin-btn-sm">{{ 'Deactivate' if season.is_active else 'Make active' }}<span class="visually-hidden"> {{ label }}</span></button>
-                </form>
             </div>
         </li>
         {% endfor %}
@@ -76,7 +81,7 @@
         <div class="ls-value"><dt>Can log in</dt><dd>{{ linked_count }}</dd></div>
     </dl>
     <div class="admin-toolbar">
-        <a href="{{ url_for('main.admin_players') }}" role="button" class="outline admin-btn-sm">Manage players</a>
+        <a href="{{ url_for('main.admin_players') }}" role="button" class="outline">Manage players</a>
     </div>
 </section>
 
