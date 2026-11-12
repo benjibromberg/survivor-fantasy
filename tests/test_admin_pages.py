@@ -559,6 +559,145 @@ class TestEnterAPick:
         ]
 
 
+# ── The players list (/admin/players, /admin/players/<season_id>) ────────
+
+
+class TestPlayersList:
+    def test_each_player_is_a_card_whose_name_opens_their_page(self, league):
+        _login(league.c)
+        page = _page(league, "/admin/players")
+
+        for player in (league.pat, league.sam):
+            card = _card(page, f'href="/admin/player/{player.id}"')
+            assert f">{player.display_name}</a>" in card
+
+    def test_a_login_email_is_linked_from_the_card(self, league):
+        _login(league.c)
+        page = _page(league, "/admin/players")
+
+        sam = _card(page, f'href="/admin/player/{league.sam.id}"')
+        resp = league.c.post(
+            f"/admin/players/{league.sam.id}/email", data={"email": "sam@example.com"}
+        )
+
+        assert f'action="/admin/players/{league.sam.id}/email"' in sam
+        assert 'name="email"' in sam and 'name="season_id"' not in sam
+        assert resp.headers["Location"].endswith("/admin/players")
+        assert league.sam.email == "sam@example.com"
+
+    def test_team_names_appear_only_for_a_season(self, league):
+        _login(league.c)
+
+        plain = _page(league, "/admin/players")
+        for_season = _page(league, f"/admin/players/{league.s61.id}")
+
+        assert 'name="team_name"' not in plain
+        sam = _card(for_season, f'href="/admin/player/{league.sam.id}"')
+        team = f'action="/admin/players/{league.sam.id}/team-name/{league.s61.id}"'
+        assert team in sam
+        assert f'name="season_id" value="{league.s61.id}"' in sam
+
+    def test_a_team_name_set_for_a_season_returns_to_that_season(self, league):
+        from app.models import TeamName
+
+        _login(league.c)
+
+        resp = league.c.post(
+            f"/admin/players/{league.sam.id}/team-name/{league.s61.id}",
+            data={"team_name": "Sam's Squad"},
+        )
+
+        assert resp.headers["Location"].endswith(f"/admin/players/{league.s61.id}")
+        assert TeamName.for_season(league.s61.id)[league.sam.id] == "Sam's Squad"
+
+    def test_every_season_is_one_press_from_its_team_names(self, league):
+        _login(league.c)
+
+        page = _page(league, "/admin/players")
+
+        for season in (league.s60, league.s61):
+            assert f'href="/admin/players/{season.id}"' in page
+
+    def test_the_season_shown_is_marked_current(self, league):
+        _login(league.c)
+
+        page = _page(league, f"/admin/players/{league.s61.id}")
+
+        current = f'href="/admin/players/{league.s61.id}" role="button" class="admin-btn-sm" aria-current="page"'
+        assert current in page
+        assert 'aria-current="page"' not in _page(league, "/admin/players")
+
+    def test_delete_is_on_the_player_page_not_the_list(self, league):
+        _login(league.c)
+        delete = f"/admin/players/{league.sam.id}/delete"
+
+        assert delete not in _page(league, "/admin/players")
+        assert delete in _page(league, f"/admin/player/{league.sam.id}")
+
+    def test_add_a_player_comes_after_the_list(self, league):
+        _login(league.c)
+        page = _page(league, "/admin/players")
+
+        assert page.index('<section id="logins"') < page.index(
+            '<section id="add-player"'
+        )
+        assert 'id="new-player-name" name="name"' in page
+
+
+# ── One player's page (/admin/player/<id>) ───────────────────────────────
+
+
+class TestPlayerPage:
+    def test_sections_come_in_task_order(self, league):
+        _login(league.c)
+        page = _page(league, f"/admin/player/{league.sam.id}")
+
+        ids = ["details", "seasons", "danger-zone"]
+        found = [page.index(f'<section id="{i}"') for i in ids]
+
+        assert found == sorted(found)
+
+    def test_each_season_is_a_card_with_its_team_name_and_picks(self, league):
+        _login(league.c)
+        page = _page(league, f"/admin/player/{league.sam.id}")
+
+        card = _card(page, f'href="/admin/season/{league.s61.id}"')
+
+        assert 'data-draft="1"' in card
+        assert (
+            f'action="/admin/players/{league.sam.id}/team-name/{league.s61.id}"' in card
+        )
+        assert 'name="back" value="player"' in card
+        picks = f"/admin/picks/{league.s61.id}?user={league.sam.id}#change-picks"
+        assert picks in card
+
+    def test_merge_and_delete_sit_in_the_danger_zone_with_their_confirms(self, league):
+        _login(league.c)
+        page = _page(league, f"/admin/player/{league.sam.id}")
+
+        danger = page.split('<section id="danger-zone"', 1)[1]
+        before = page.split('<section id="danger-zone"', 1)[0]
+
+        for action in (
+            f"/admin/player/{league.sam.id}/merge",
+            f"/admin/players/{league.sam.id}/delete",
+        ):
+            assert action in danger and action not in before
+        assert danger.count("return confirm(") == 2
+
+    def test_your_own_row_offers_no_merge_or_delete(self, league):
+        from app.models import User
+
+        _login(league.c)
+        admin = User.query.filter_by(username=ADMIN_EMAIL).one()
+
+        page = _page(league, f"/admin/player/{admin.id}")
+
+        assert f"/admin/player/{admin.id}/merge" not in page
+        assert f"/admin/players/{admin.id}/delete" not in page
+        assert "cannot be merged away or deleted" in page
+
+
 # ── Every page ───────────────────────────────────────────────────────────
 
 
@@ -566,6 +705,9 @@ def _admin_urls(league):
     return [
         "/admin/seasons",
         f"/admin/picks/{league.s61.id}",
+        "/admin/players",
+        f"/admin/players/{league.s61.id}",
+        f"/admin/player/{league.sam.id}",
     ]
 
 
