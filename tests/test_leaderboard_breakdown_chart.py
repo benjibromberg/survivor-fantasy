@@ -148,3 +148,88 @@ def test_keeps_the_chart_keys_and_the_sole_survivor_streak(season):
     # An eight-episode streak on the winner, at 1 point an episode
     assert chart["Pat"]["sole_survivor_streak"] == pytest.approx(8)
     assert chart["Sam"]["sole_survivor_streak"] == 0
+
+
+# ── The compare page's breakdown chart ─────────────────────────────────────
+
+
+@pytest.fixture()
+def early_season(client):
+    """Episode 1 has not finished: nobody is out, so wildcards do not count
+    yet and the merge is unknown, so replacements do not either. Pat's
+    wildcard holds points (advantages and an idol play) that must stay off
+    the chart until it counts."""
+    _, db = client
+    from app.models import Pick, Season, Survivor, User
+    from app.scoring.classic import DEFAULT_CONFIG
+
+    s = Season(
+        number=52,
+        name="Season 52",
+        num_players=8,
+        num_episodes=13,
+        is_active=True,
+        scoring_config=json.dumps(dict(DEFAULT_CONFIG)),
+    )
+    db.session.add(s)
+    db.session.flush()
+    cast = [
+        Survivor(
+            season_id=s.id,
+            name=f"E{i + 1}",
+            voted_out_order=0,
+            advantages_found=2 if i in (1, 2) else (1 if i == 0 else 0),
+            idols_played=1 if i in (1, 2) else 0,
+        )
+        for i in range(8)
+    ]
+    pat = User(username="pat", display_name="Pat")
+    sam = User(username="sam", display_name="Sam")
+    db.session.add_all([*cast, pat, sam])
+    db.session.flush()
+
+    def pick(user, castaway, kind):
+        return Pick(
+            user_id=user.id, season_id=s.id, survivor_id=castaway.id, pick_type=kind
+        )
+
+    db.session.add_all(
+        [
+            pick(pat, cast[0], "draft"),
+            pick(pat, cast[1], "wildcard"),
+            pick(sam, cast[3], "draft"),
+            pick(sam, cast[2], "pmr_d"),
+        ]
+    )
+    db.session.commit()
+    return s
+
+
+def test_compare_bars_add_up_to_each_presets_totals(early_season):
+    """Every preset's bars match its own standings: the picks that do not
+    count yet are left off both, not only off the totals."""
+    from app.routes import _build_compare_data
+
+    for preset in _build_compare_data(early_season)["comparisons"]:
+        totals = {e["user"].display_name: e["total_points"] for e in preset["entries"]}
+        for row in preset["breakdown"]:
+            assert sum(row["breakdown"].values()) == pytest.approx(
+                totals[row["name"]]
+            ), (preset["name"], row)
+
+
+def test_the_early_season_has_points_that_must_not_count_yet(early_season):
+    """The check above is not vacuous: the wildcard and the replacement hold
+    points under the current scoring, which the totals leave out."""
+    from app.models import Pick
+    from app.scoring import get_scoring_system
+
+    scoring = get_scoring_system("Classic", early_season.get_scoring_config())
+    waiting = Pick.query.filter(
+        Pick.season_id == early_season.id, Pick.pick_type.in_(("wildcard", "pmr_d"))
+    ).all()
+
+    assert len(waiting) == 2
+    for pick in waiting:
+        _, breakdown = scoring.score_pick(pick.survivor, early_season, "draft")
+        assert breakdown.total > 0, pick.pick_type
