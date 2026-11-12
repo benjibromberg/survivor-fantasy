@@ -60,7 +60,7 @@
     {% for label, old, new in changes %}
     <div class="ls-value">
         <dt>{{ label }}</dt>
-        <dd>{{ num(new) }} <small>{% if proposal %}now {{ num(old) }}{% else %}was {{ num(old) }}{% endif %}</small></dd>
+        <dd>{{ num(new) }} <small>{% if proposal %}currently {{ num(old) }}{% else %}was {{ num(old) }}{% endif %}</small></dd>
     </div>
     {% endfor %}
 </dl>
@@ -79,7 +79,7 @@
     {% for row in standings %}
     <div class="ls-value">
         <dt>{{ ordinal(row.rank) }} &middot; {{ row.name }}</dt>
-        <dd>{{ '%.1f'|format(row.points) }} pts <small>{% if proposal %}now {% else %}was {% endif %}{{ '%.1f'|format(row.old_points) }} pts, {{ ordinal(row.old_rank) }}</small></dd>
+        <dd>{{ '%.1f'|format(row.points) }} pts <small>{% if proposal %}currently {% else %}was {% endif %}{{ '%.1f'|format(row.old_points) }} pts, {{ ordinal(row.old_rank) }}</small></dd>
     </div>
     {% endfor %}
 </dl>
