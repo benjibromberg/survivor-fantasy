@@ -1048,6 +1048,7 @@ def _replays(season, old_config, new_config):
         past.append(
             {
                 "label": _season_label(other),
+                "number": other.number,
                 "winner": own_top[0],
                 "new_winner": replay_top[0],
                 "new_margin": (

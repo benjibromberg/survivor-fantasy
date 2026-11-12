@@ -208,7 +208,7 @@
                    seasons stays scannable. Labelled by what it answers. #}
                 {% if row.points_changed %}
                 <details class="fold ls-replay" open data-mobile-collapsed>
-                    <summary><span class="ls-replay-toggle">{{ 'Why the order changes' if row.order_changed else 'How the points change' }}<span class="visually-hidden"> in {{ row.label }}</span></span></summary>
+                    <summary><span class="ls-replay-toggle">{{ 'Why the order changes' if row.order_changed else 'How the points change' }}<span class="visually-hidden"> in Season {{ row.number }}</span></span></summary>
                     {{ replay_players(row.players) }}
                 </details>
                 {% endif %}
