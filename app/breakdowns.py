@@ -9,6 +9,12 @@ modified points, and a player's components to their total. The one exception
 is a pick with no base points, which has nothing to scale: a replacement
 scored by flat deduction can still come out negative there.
 
+Components roll up into the league's own categories (COMPONENT_GROUPS):
+"surviving tribals" rather than three tribal keys. A change is explained by
+group, because a scoring change spreads across sibling keys (flat versus
+progressive tribals moves all three), and ranking raw keys then lists three
+pieces of one reason while the rest piles into a remainder.
+
 Pure functions over the plain dicts `_build_leaderboard` returns; the results
 hold only plain values, so they are safe to cache past the request.
 """
@@ -35,12 +41,57 @@ COMPONENT_LABELS = {
     "sole_survivor_streak": "Sole Survivor pick",
 }
 
+# The league owner's categories: group key -> label and the breakdown keys in
+# it. Every key in routes.BREAKDOWN_LABELS sits in exactly one group (tested).
+COMPONENT_GROUPS = {
+    "tribals": {
+        "label": "surviving tribals",
+        "keys": ("pre_merge_tribal", "post_merge_tribal", "finale_tribal"),
+    },
+    "jury": {"label": "making the jury", "keys": ("jury",)},
+    "final_tribal_placement": {
+        "label": "Final Tribal and placement",
+        "keys": ("final_tribal", "placement"),
+    },
+    "immunity": {
+        "label": "immunity wins",
+        "keys": ("individual_immunity", "tribal_immunity"),
+    },
+    "idols": {"label": "idols", "keys": ("idols_found", "idol_plays")},
+    "advantages": {
+        "label": "advantages",
+        "keys": ("advantages_found", "advantage_plays"),
+    },
+    "fire_win": {"label": "fire-making win", "keys": ("fire_win",)},
+    "merge": {"label": "making the merge", "keys": ("merge",)},
+    "sole_survivor": {
+        "label": "Sole Survivor pick",
+        "keys": ("sole_survivor_streak",),
+    },
+}
+
+_GROUP_OF = {
+    key: group for group, spec in COMPONENT_GROUPS.items() for key in spec["keys"]
+}
+
 # Below this a change is float noise: it would display as 0.00.
 _NOISE = 0.005
 
 
 def component_label(key):
     return COMPONENT_LABELS.get(key, key.replace("_", " "))
+
+
+def group_of(key):
+    """The group a breakdown key belongs to. A key no group lists (a new
+    component nobody has filed yet) stands as a group of its own rather than
+    vanishing from the totals."""
+    return _GROUP_OF.get(key, key)
+
+
+def group_label(group):
+    spec = COMPONENT_GROUPS.get(group)
+    return spec["label"] if spec else component_label(group)
 
 
 def _scale(pick):
@@ -81,13 +132,22 @@ def component_totals(entry):
     return totals
 
 
+def group_totals(entry):
+    """{group key: points} for one entry: component_totals rolled up by group."""
+    totals = {}
+    for key, value in component_totals(entry).items():
+        group = group_of(key)
+        totals[group] = totals.get(group, 0) + value
+    return totals
+
+
 def _by_castaway(entry):
-    """{component: {castaway: points}}. Summed, since one castaway can be both
-    a drafted pick and the Sole Survivor pick."""
+    """{group: {castaway: points}}. Summed, since one castaway can be both a
+    drafted pick and the Sole Survivor pick, and a group holds several keys."""
     out = {}
     for pick in pick_contributions(entry):
         for key, value in pick["components"].items():
-            people = out.setdefault(key, {})
+            people = out.setdefault(group_of(key), {})
             people[pick["survivor"]] = people.get(pick["survivor"], 0) + value
     return out
 
@@ -97,15 +157,16 @@ def explain_change(before, after, limit=3, castaway_limit=3):
 
     `before` and `after` are the same player's leaderboard entry under each
     scoring. Returns {"delta", "reasons", "other", "rest"}: the change in
-    total; the `limit` components that moved it most (largest first, each
-    with the castaways behind it, largest first); whatever those reasons do
-    not account for, so the parts always add up to the change; and the
-    components that make up that remainder, so it is not a mystery number.
+    total; the `limit` component groups that moved it most, by their net
+    change (largest first, each with the castaways behind it, largest
+    first); whatever those reasons do not account for, so the parts always
+    add up to the change; and the groups that make up that remainder, so it
+    is not a mystery number.
     """
     old, new = _by_castaway(before), _by_castaway(after)
     reasons = []
-    for key in old.keys() | new.keys():
-        people_old, people_new = old.get(key, {}), new.get(key, {})
+    for group in old.keys() | new.keys():
+        people_old, people_new = old.get(group, {}), new.get(group, {})
         delta = sum(people_new.values()) - sum(people_old.values())
         if abs(delta) < _NOISE:
             continue
@@ -117,8 +178,8 @@ def explain_change(before, after, limit=3, castaway_limit=3):
         castaways.sort(key=lambda c: (-abs(c["delta"]), c["name"]))
         reasons.append(
             {
-                "key": key,
-                "label": component_label(key),
+                "key": group,
+                "label": group_label(group),
                 "delta": delta,
                 "castaways": castaways[:castaway_limit],
             }
