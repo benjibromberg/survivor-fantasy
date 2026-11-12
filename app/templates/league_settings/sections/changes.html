@@ -32,6 +32,7 @@
 {% if proposal %}
 <p class="ls-proposal"><strong>Proposed scoring for {{ this_season }}.</strong>
 {{ this_season }} keeps its current scoring until the league decides.{% if closes_label %} Voting {{ 'closes' if vote and vote.open else 'closed' }} {{ closes_label }}.{% endif %}</p>
+{% if vote and vote.open %}<p><a class="ls-jump" href="#vote">Go to the vote</a></p>{% endif %}
 {% endif %}
 
 {% if version %}

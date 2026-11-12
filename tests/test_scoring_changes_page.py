@@ -410,6 +410,17 @@ class TestProposalPage:
         for later in ('id="why"', 'id="rules"', 'id="past-seasons"', 'id="history"'):
             assert ballot < page.index(later), later
 
+    def test_the_banner_links_straight_to_the_ballot(self, proposal):
+        page = _page(proposal)
+
+        assert 'class="ls-jump" href="#vote"' in page
+        assert page.index('class="ls-jump"') < page.index('id="what-changed"')
+
+    def test_no_jump_link_once_voting_closes(self, proposal):
+        proposal.at(CLOSES.replace(tzinfo=UTC))
+
+        assert 'class="ls-jump"' not in _page(proposal)
+
     def test_long_sections_start_closed_on_phones(self, proposal):
         page = _page(proposal)
 
