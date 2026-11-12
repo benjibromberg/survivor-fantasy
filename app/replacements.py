@@ -123,6 +123,26 @@ def scoring_start(season):
     return (len(days) if days else len(out)), merge_episode
 
 
+def counts_yet(pick_type, tribals, merge_elim):
+    """Whether a pick scores yet, `tribals` into the season.
+
+    The one rule for every page that totals picks (the leaderboard, its
+    progression line, the compare page). Wildcards are picked after episode
+    1, so they count from the first boot. Replacements count once `tribals`
+    reaches `merge_elim` (the first value from scoring_start), and not at all
+    while it is unknown. Draft picks always count.
+
+    `tribals` is Season.current_tribal_count, taken on the season as shown
+    (after _apply_as_of for a past step): distinct elimination days, so a
+    same-day double boot counts once, as CLAUDE.md's tribal counting rule says.
+    """
+    if pick_type == "wildcard":
+        return tribals > 0
+    if pick_type in TYPES:
+        return merge_elim is not None and tribals >= merge_elim
+    return True
+
+
 # ── The window ────────────────────────────────────────────────────────────
 
 
