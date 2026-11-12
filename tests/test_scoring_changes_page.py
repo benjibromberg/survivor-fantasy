@@ -93,7 +93,7 @@ def league(client):
     """Season 49 (legacy), 50 (run 6) finished; 51 active on the new config."""
     c, db = client
     from app.models import Pick, User
-    from app.routes import _compare_cache
+    from app.routes import _changes_cache, _compare_cache
     from app.scoring.classic import DEFAULT_CONFIG, LEGACY_CONFIG
     from app.scoring.history import SCORING_VERSIONS
 
@@ -124,6 +124,7 @@ def league(client):
         draft(sam, survivors, (5, 6))  # 3rd and 2nd place
     db.session.commit()
     _compare_cache.clear()
+    _changes_cache.clear()
 
     class League:
         pass
@@ -140,6 +141,13 @@ def _page(league, season=None):
     resp = league.c.get(f"/league-settings/{season.id}/changes")
     assert resp.status_code == 200
     return resp.data.decode()
+
+
+def _block(page, block_id):
+    """The markup of one section, whether an open <section> or a <details> fold."""
+    rest = page.split(f'id="{block_id}"', 1)[1]
+    ends = [i for i in (rest.find("</section>"), rest.find("</details>")) if i != -1]
+    return rest[: min(ends)]
 
 
 def _board(season, config=None):
@@ -173,20 +181,20 @@ class TestWhatChanged:
 
     def test_leaves_out_values_that_did_not_change(self, league):
         page = _page(league)
-        changed = page.split('id="what-changed"', 1)[1].split("</section>")[0]
+        changed = _block(page, "what-changed")
 
         assert "Jury Bonus" not in changed
 
     def test_shows_each_rule_and_whether_it_holds(self, league):
         page = _page(league)
-        rules = page.split('id="rules"', 1)[1].split("</section>")[0]
+        rules = _block(page, "rules")
 
         assert rules.count("ls-rule-holds") == 3
         assert "ls-rule-broken" not in rules
 
     def test_rules_that_break_are_marked(self, league):
         page = _page(league, league.s50)
-        rules = page.split('id="rules"', 1)[1].split("</section>")[0]
+        rules = _block(page, "rules")
 
         assert "ls-rule-broken" in rules
 
@@ -194,7 +202,7 @@ class TestWhatChanged:
 class TestStandingsBothWays:
     def test_current_standings_under_old_and_new_scoring(self, league):
         page = _page(league)
-        table = page.split('id="standings"', 1)[1].split("</section>")[0]
+        table = _block(page, "standings")
         old = _board(league.s51, league.s50.get_scoring_config())
         new = _board(league.s51)
 
@@ -204,32 +212,16 @@ class TestStandingsBothWays:
 
     def test_past_seasons_are_replayed_under_the_new_scoring(self, league):
         page = _page(league)
-        past = page.split('id="past-seasons"', 1)[1].split("</section>")[0]
+        past = _block(page, "past-seasons")
 
         assert "Season 50" in past and "Season 49" in past
         assert "Pat" in past or "Sam" in past
-
-    def test_replays_are_cached(self, league, monkeypatch):
-        from app import routes
-
-        _page(league)
-        calls = []
-        real = routes._build_leaderboard
-        monkeypatch.setattr(
-            routes,
-            "_build_leaderboard",
-            lambda *a, **k: calls.append(1) or real(*a, **k),
-        )
-
-        _page(league)
-
-        assert calls == []
 
 
 class TestHistory:
     def test_each_season_names_its_scoring_version(self, league):
         page = _page(league)
-        history = page.split('id="history"', 1)[1].split("</section>")[0]
+        history = _block(page, "history")
 
         assert re.search(r"Season 49.*Legacy", history, re.S)
         assert re.search(r"Season 50.*Run 6", history, re.S)
@@ -338,19 +330,32 @@ def _login(c, email):
 
 
 @pytest.fixture()
-def proposal(league, monkeypatch):
+def clock(monkeypatch):
+    """The league clock (wildcards.now_utc), two days before voting closes."""
+    from app import wildcards
+
+    now = {"t": CLOSES.replace(tzinfo=UTC) - timedelta(days=2)}
+    monkeypatch.setattr(wildcards, "now_utc", lambda: now["t"])
+    return lambda moment: now.__setitem__("t", moment)
+
+
+@pytest.fixture()
+def proposal(league, clock):
     """Season 51 on the current scoring, with a proposal open for a vote."""
     from app import proposals
     from app.scoring.classic import DEFAULT_CONFIG
 
     league.s51.scoring_config = json.dumps(dict(DEFAULT_CONFIG))
-    league.s51.proposed_scoring_config = json.dumps({**DEFAULT_CONFIG, **NEW})
-    league.s51.proposal_closes_at = CLOSES
     league.db.session.commit()
-    clock = {"now": CLOSES.replace(tzinfo=UTC) - timedelta(days=2)}
-    monkeypatch.setattr(proposals, "now_utc", lambda: clock["now"])
-    league.at = lambda moment: clock.__setitem__("now", moment)
+    assert proposals.propose(league.s51, {**DEFAULT_CONFIG, **NEW}, CLOSES) is None
+    league.at = clock
     return league
+
+
+def _open(league):
+    from app import proposals
+
+    return proposals.open_proposal(league.s51)
 
 
 def _vote(league, email, choice, comment=""):
@@ -363,13 +368,12 @@ def _vote(league, email, choice, comment=""):
     return resp
 
 
-def _votes(league):
-    from app.models import ScoringVote
-
-    return {
-        v.user.username: (v.choice, v.comment)
-        for v in ScoringVote.query.filter_by(season_id=league.s51.id)
-    }
+def _votes(league, proposal=None):
+    """{username: (choice, comment)} on a proposal (the open one by default)."""
+    proposal = proposal or _open(league)
+    if proposal is None:
+        return {}
+    return {v.user.username: (v.choice, v.comment) for v in proposal.votes}
 
 
 class TestProposalPage:
@@ -378,14 +382,13 @@ class TestProposalPage:
 
         assert "Proposed scoring for Season 51" in page
         assert "Wed Nov 18, 7:45 PM ET" in page
-        changed = page.split('id="what-changed"', 1)[1].split("</section>")[0]
-        assert "Final Tribal Bonus" in changed
+        assert "Final Tribal Bonus" in _block(page, "what-changed")
 
     def test_standings_are_current_against_proposed(self, proposal):
         page = _page(proposal)
-        table = page.split('id="standings"', 1)[1].split("</section>")[0]
+        table = _block(page, "standings")
         current = _board(proposal.s51)
-        proposed = _board(proposal.s51, proposal.s51.get_proposed_config())
+        proposed = _board(proposal.s51, _open(proposal).get_config())
 
         for user in ("pat", "sam"):
             assert f"{current[user]:.1f}" in table
@@ -397,6 +400,22 @@ class TestProposalPage:
         _page(proposal)
 
         assert proposal.s51.get_scoring_config() == DEFAULT_CONFIG
+
+    def test_the_ballot_comes_before_the_long_sections(self, proposal):
+        """Most players open this on a phone: the vote must not be at the bottom."""
+        _login(proposal.c, "pat@example.com")
+        page = _page(proposal)
+
+        ballot = page.index('class="ls-vote-form"')
+        for later in ('id="why"', 'id="rules"', 'id="past-seasons"', 'id="history"'):
+            assert ballot < page.index(later), later
+
+    def test_long_sections_start_closed_on_phones(self, proposal):
+        page = _page(proposal)
+
+        for block in ("why", "rules", "past-seasons", "history"):
+            tag = page.split(f'id="{block}"', 1)[0].rsplit("<", 1)[1]
+            assert tag.startswith("details") and "data-mobile-collapsed" in tag, block
 
 
 class TestVoting:
@@ -410,8 +429,7 @@ class TestVoting:
         _vote(proposal, "pat@example.com", "now", "Love it")
         _vote(proposal, "sam@example.com", "keep")
 
-        page = _page(proposal)
-        votes = page.split('id="vote"', 1)[1].split("</section>")[0]
+        votes = _block(_page(proposal), "vote")
         assert "2 of 2 players have voted" in votes
         assert "Pat" in votes and "Love it" in votes and "Sam" in votes
 
@@ -452,6 +470,52 @@ class TestVoting:
 
         assert _votes(league) == {}
 
+    def test_a_new_proposal_starts_with_no_votes(self, proposal):
+        """Votes belong to one proposal; a re-proposal must not inherit them."""
+        from app import proposals
+        from app.scoring.classic import DEFAULT_CONFIG
+
+        _vote(proposal, "pat@example.com", "keep")
+        first = _open(proposal)
+        proposals.withdraw(proposal.s51)
+
+        proposals.propose(
+            proposal.s51, {**DEFAULT_CONFIG, **NEW, "fire_win_val": 0.5}, CLOSES
+        )
+
+        assert _votes(proposal) == {}
+        assert _votes(proposal, first) == {"pat": ("keep", "")}
+        _login(proposal.c, "pat@example.com")
+        assert " checked" not in _block(_page(proposal), "vote")
+
+
+class TestProposing:
+    def test_a_closing_time_is_required(self, league, clock):
+        from app import proposals
+
+        assert proposals.propose(league.s51, dict(NEW), None) is not None
+        assert proposals.open_proposal(league.s51) is None
+
+    def test_the_closing_time_must_be_in_the_future(self, league, clock):
+        from app import proposals
+
+        clock(CLOSES.replace(tzinfo=UTC) + timedelta(minutes=1))
+
+        assert proposals.propose(league.s51, dict(NEW), CLOSES) is not None
+        assert proposals.open_proposal(league.s51) is None
+
+    def test_proposing_again_replaces_the_open_one(self, proposal):
+        from app import proposals
+        from app.scoring.classic import DEFAULT_CONFIG
+
+        first = _open(proposal)
+        proposals.propose(
+            proposal.s51, {**DEFAULT_CONFIG, **NEW, "fire_win_val": 0.5}, CLOSES
+        )
+
+        assert first.status == "withdrawn"
+        assert _open(proposal).get_config()["fire_win_val"] == 0.5
+
 
 class TestAdminProposal:
     def _settings(self, league, **extra):
@@ -463,7 +527,7 @@ class TestAdminProposal:
         _login(league.c, ADMIN_EMAIL)
         return league.c.post(f"/admin/season/{league.s51.id}/settings", data=data)
 
-    def test_proposing_saves_the_config_beside_the_season(self, league):
+    def test_proposing_saves_the_config_beside_the_season(self, league, clock):
         from app.scoring.classic import DEFAULT_CONFIG
 
         league.s51.scoring_config = json.dumps(dict(DEFAULT_CONFIG))
@@ -472,34 +536,61 @@ class TestAdminProposal:
         self._settings(league, propose="on", proposal_closes_at="2026-11-18T19:45")
 
         assert league.s51.get_scoring_config() == DEFAULT_CONFIG
-        assert league.s51.get_proposed_config()["final_tribal_val"] == 4
-        assert league.s51.get_proposed_config()["advantage_found_val"] == 0.25
-        assert league.s51.proposal_closes_at == CLOSES
+        assert _open(league).get_config()["final_tribal_val"] == 4
+        assert _open(league).get_config()["advantage_found_val"] == 0.25
+        assert _open(league).closes_at == CLOSES
+
+    def test_proposing_without_a_closing_time_is_refused(self, league, clock):
+        self._settings(league, propose="on", proposal_closes_at="")
+
+        assert _open(league) is None
+
+    @pytest.mark.parametrize("bad", ["abc", "nan", "inf", "-inf"])
+    def test_a_value_that_is_not_a_number_is_refused(self, league, bad):
+        stored = league.s51.scoring_config
+
+        resp = self._settings(league, scoring_jury_val=bad)
+
+        assert resp.status_code == 302
+        assert league.s51.scoring_config == stored
+
+    def test_the_closing_time_is_pre_filled_from_the_open_proposal(self, proposal):
+        _login(proposal.c, ADMIN_EMAIL)
+
+        page = proposal.c.get(f"/admin/season/{proposal.s51.id}").data.decode()
+
+        assert 'value="2026-11-18T19:45"' in page
 
     def test_adopting_applies_it_and_keeps_the_votes(self, proposal):
         _vote(proposal, "pat@example.com", "now")
+        adopted = _open(proposal)
         _login(proposal.c, ADMIN_EMAIL)
 
         proposal.c.post(f"/admin/season/{proposal.s51.id}/proposal/adopt")
 
         assert proposal.s51.get_scoring_config()["final_tribal_val"] == 4
-        assert proposal.s51.proposed_scoring_config is None
-        assert _votes(proposal) == {"pat": ("now", "")}
+        assert _open(proposal) is None
+        assert adopted.status == "adopted"
+        assert _votes(proposal, adopted) == {"pat": ("now", "")}
 
-    def test_withdrawing_clears_it(self, proposal):
+    def test_withdrawing_closes_it_and_keeps_the_season_scoring(self, proposal):
+        from app.scoring.classic import DEFAULT_CONFIG
+
+        withdrawn = _open(proposal)
         _login(proposal.c, ADMIN_EMAIL)
 
         proposal.c.post(f"/admin/season/{proposal.s51.id}/proposal/withdraw")
 
-        assert proposal.s51.proposed_scoring_config is None
-        assert proposal.s51.proposal_closes_at is None
+        assert _open(proposal) is None
+        assert withdrawn.status == "withdrawn"
+        assert proposal.s51.get_scoring_config() == DEFAULT_CONFIG
 
     def test_a_player_cannot_adopt(self, proposal):
         _login(proposal.c, "pat@example.com")
 
         proposal.c.post(f"/admin/season/{proposal.s51.id}/proposal/adopt")
 
-        assert proposal.s51.proposed_scoring_config is not None
+        assert _open(proposal) is not None
 
     def test_after_adoption_the_page_keeps_the_vote_record(self, proposal):
         _vote(proposal, "pat@example.com", "now", "Love it")
@@ -509,8 +600,21 @@ class TestAdminProposal:
 
         page = _page(proposal)
 
-        assert "Love it" in page
+        assert "Love it" in _block(page, "vote")
         assert "Proposed scoring" not in page
+
+    def test_history_shows_the_switch_and_the_vote(self, proposal):
+        """Adopting mid-season must not rewrite what the season played under before."""
+        _vote(proposal, "pat@example.com", "now")
+        _login(proposal.c, ADMIN_EMAIL)
+        proposal.c.post(f"/admin/season/{proposal.s51.id}/proposal/adopt")
+        proposal.c.get("/logout")
+
+        history = _block(_page(proposal), "history")
+        s51 = history.split("Season 51", 1)[1].split("Season 50", 1)[0]
+
+        assert "Run 6" in s51 and "until" in s51
+        assert "league vote" in s51
 
     def test_scoring_inputs_accept_values_finer_than_a_quarter(self, league):
         _login(league.c, ADMIN_EMAIL)
@@ -518,3 +622,53 @@ class TestAdminProposal:
         page = league.c.get(f"/admin/season/{league.s51.id}").data.decode()
 
         assert 'step="0.25"' not in page
+
+
+class TestReplayCache:
+    def test_a_stat_change_without_a_boot_shows_within_the_cache_lifetime(
+        self, league, monkeypatch
+    ):
+        """The replays expire: a refresh that only adds immunity wins must show."""
+        from app import routes
+
+        now = {"t": 1000.0}
+        monkeypatch.setattr(routes, "_changes_cache_clock", lambda: now["t"])
+        before = _block(_page(league), "standings")
+        star = next(s for s in league.s51.survivors if s.name == "S51C8")
+        star.individual_immunity_wins = 5
+        league.db.session.commit()
+
+        now["t"] += routes._CHANGES_CACHE_TTL + 1
+
+        assert _block(_page(league), "standings") != before
+
+    def test_a_cache_hit_builds_nothing(self, league, monkeypatch):
+        from app import routes
+
+        _page(league)
+        calls = []
+        for name in ("_build_leaderboard", "_compare_cache_key"):
+            real = getattr(routes, name)
+            monkeypatch.setattr(
+                routes, name, lambda *a, _r=real, **k: calls.append(1) or _r(*a, **k)
+            )
+
+        _page(league)
+
+        assert calls == []
+
+
+class TestHistoryGrouping:
+    def test_seasons_on_the_same_version_share_one_row(self, league):
+        from app.models import Season
+
+        s48 = Season(
+            number=48, name="Season 48", scoring_config=league.s49.scoring_config
+        )
+        league.db.session.add(s48)
+        league.db.session.commit()
+
+        history = _block(_page(league), "history")
+
+        assert "Seasons 48 and 49" in history
+        assert history.count("Legacy") == 1

@@ -8,6 +8,9 @@
 {% macro ordinal(n) -%}
 {{ n }}{{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n if n < 20 else n % 10, 'th') }}
 {%- endmacro %}
+{% macro tally_line(tally, choices) -%}
+{%- for key, label in choices.items() %}{{ tally.get(key, 0) }} {{ {'now': 'switch now', 'next': 'next season', 'keep': 'keep'}[key] }}{{ ', ' if not loop.last }}{% endfor -%}
+{%- endmacro %}
 {# Sentences name seasons by number: a season's name ("In the Hands of the Fans")
    does not read as one in running text. Row labels keep the name. #}
 {% set this_season = 'Season ' ~ season.number %}
@@ -21,46 +24,30 @@
 {% set old_label = last_season ~ "'s scoring" %}
 {% set new_label = this_season ~ "'s" %}
 {% endif %}
+{# Layout is phone first, since that is how the league opens it: what
+   changes, the standings and the ballot come first; the long reference
+   sections follow as folds that start closed on phones (data-mobile-collapsed,
+   base.html) and open on wider screens. #}
 
 {% if proposal %}
 <p class="ls-proposal"><strong>Proposed scoring for {{ this_season }}.</strong>
-{{ this_season }} keeps its current scoring until the league decides.{% if closes_label %} Voting closes {{ closes_label }}.{% endif %}
-<a href="#vote">Vote</a></p>
+{{ this_season }} keeps its current scoring until the league decides.{% if closes_label %} Voting {{ 'closes' if vote and vote.open else 'closed' }} {{ closes_label }}.{% endif %}</p>
 {% endif %}
 
 {% if version %}
-<p>{% if proposal %}The proposal is{% else %}{{ this_season }} plays under{% endif %} <strong>{{ version.name }}</strong>{% if version.date %} ({{ version.date }}){% endif %}{% if version_diffs %}, with {{ version_diffs|length }} value{{ 's' if version_diffs|length != 1 }} changed from it{% endif %}.
+<p>{% if proposal %}The proposal is{% else %}{{ this_season }} plays under{% endif %} <strong>{{ version.name }}</strong>{% if version_diffs %}, with {{ version_diffs|length }} value{{ 's' if version_diffs|length != 1 }} changed from it{% endif %}.
 {% if version.analysis %}<a href="{{ url_for('main.scoring_analysis') }}">How the numbers were picked</a>.{% endif %}</p>
-{# Why this version exists: prose kept beside the version, keyed by its
-   registry key (app/scoring/history.py), never by anything from the URL. #}
-{% include "league_settings/versions/" ~ version.key ~ ".html" ignore missing %}
 {% endif %}
-
-<section id="rules" aria-labelledby="rules-heading">
-<h2 id="rules-heading">The league's rules</h2>
-<p>Every scoring setup the league adopts has to keep these. Each line shows {% if proposal %}the proposal's{% else %}{{ this_season }}'s{% endif %} values.</p>
-<dl class="ls-values ls-values-wide">
-    {% for rule in rules %}
-    <div class="ls-value">
-        <dt>{% for name, value in rule.steps %}{{ name }}{{ ' > ' if not loop.last }}{% endfor %}{% if rule.floor is not none %} > {{ num(rule.floor) }}{% endif %}</dt>
-        <dd class="{{ 'ls-rule-holds' if rule.holds else 'ls-rule-broken' }}">
-            {% for name, value in rule.steps %}{{ num(value) }}{{ ' > ' if not loop.last }}{% endfor %}{% if rule.floor is not none %} > {{ num(rule.floor) }}{% endif %}
-            <span class="ls-rule-status">{{ 'Holds' if rule.holds else 'Broken' }}</span>
-        </dd>
-    </div>
-    {% endfor %}
-</dl>
-</section>
 
 {% if proposal or previous %}
 <section id="what-changed" aria-labelledby="what-changed-heading">
 <h2 id="what-changed-heading">{% if proposal %}What would change{% else %}What changed since {{ last_season }}{% endif %}</h2>
 {% if changes %}
-<dl class="ls-values ls-values-wide">
+<dl class="ls-values ls-values-wide ls-changes">
     {% for label, old, new in changes %}
     <div class="ls-value">
         <dt>{{ label }}</dt>
-        <dd>{{ num(new) }} <small>{% if proposal %}currently {{ num(old) }}{% else %}was {{ num(old) }}{% endif %}</small></dd>
+        <dd>{{ num(old) }} &rarr; <strong>{{ num(new) }}</strong></dd>
     </div>
     {% endfor %}
 </dl>
@@ -74,50 +61,23 @@
 {% if standings %}
 <section id="standings" aria-labelledby="standings-heading">
 <h2 id="standings-heading">{{ this_season }} standings, both ways</h2>
-<p>Everyone's picks scored with {{ old_label }} and with {{ new_label }}. Updated with every refresh.</p>
+<p>Everyone's picks scored with {{ old_label }} and with {{ new_label }}. Updated within five minutes of any change.</p>
 <dl class="ls-values ls-values-wide">
     {% for row in standings %}
     <div class="ls-value">
         <dt>{{ ordinal(row.rank) }} &middot; {{ row.name }}</dt>
-        <dd>{{ '%.1f'|format(row.points) }} pts <small>{% if proposal %}currently {% else %}was {% endif %}{{ '%.1f'|format(row.old_points) }} pts, {{ ordinal(row.old_rank) }}</small></dd>
+        <dd>{{ '%.1f'|format(row.points) }} pts <small>{% if proposal %}currently{% else %}was{% endif %} {{ '%.1f'|format(row.old_points) }}, {{ ordinal(row.old_rank) }}</small></dd>
     </div>
     {% endfor %}
 </dl>
 </section>
 {% endif %}
-
-{% if past %}
-<section id="past-seasons" aria-labelledby="past-seasons-heading">
-<h2 id="past-seasons-heading">Earlier seasons under {{ new_label if proposal else this_season ~ "'s scoring" }}</h2>
-<p>A what-if: each earlier season keeps the scoring it was played with.</p>
-<dl class="ls-values ls-values-wide">
-    {% for row in past %}
-    <div class="ls-value">
-        <dt>{{ row.season.name or 'Season ' ~ row.season.number }}</dt>
-        <dd>{% if row.new_winner == row.winner %}{{ row.winner }} still wins{% else %}{{ row.new_winner }} would win, not {{ row.winner }}{% endif %}
-            <small>{% if row.order_changed %}New order: {{ row.new_order|join(', ') }}{% else %}Same finishing order{% endif %}{% if row.new_margin is not none %}; winning margin {{ '%.1f'|format(row.new_margin) }} pts{% endif %}</small>
-        </dd>
-    </div>
-    {% endfor %}
-</dl>
-</section>
-{% endif %}
-{% else %}
-<p>No earlier season to compare with.</p>
 {% endif %}
 
 {% if vote and (proposal or vote.voted) %}
 <section id="vote" aria-labelledby="vote-heading">
 <h2 id="vote-heading">{% if proposal %}Vote{% else %}How the league voted{% endif %}</h2>
-<p>{{ vote.voted }} of {{ vote.voters }} players have voted{% if proposal and closes_label %}; voting {{ 'closes' if vote.open else 'closed' }} {{ closes_label }}{% endif %}.</p>
-<dl class="ls-values">
-    {% for key, label in vote.choices.items() %}
-    <div class="ls-value">
-        <dt>{{ label }}</dt>
-        <dd>{{ vote.tally[key] }}</dd>
-    </div>
-    {% endfor %}
-</dl>
+<p>{{ vote.voted }} of {{ vote.voters }} players have voted: {{ tally_line(vote.tally, vote.choices) }}.</p>
 
 {% if proposal and not vote.blocked %}
 <form method="POST" action="{{ url_for('main.scoring_vote', season_id=season.id) }}" class="ls-vote-form">
@@ -125,7 +85,7 @@
     <fieldset>
         <legend>Your vote</legend>
         {% for key, label in vote.choices.items() %}
-        <label><input type="radio" name="choice" value="{{ key }}" required{% if vote.mine and vote.mine.choice == key %} checked{% endif %}> {{ label }}</label>
+        <label class="ls-choice"><input type="radio" name="choice" value="{{ key }}" required{% if vote.mine and vote.mine.choice == key %} checked{% endif %}> {{ label }}</label>
         {% endfor %}
     </fieldset>
     <label for="vote-comment">Comment <small>(optional, shown with your name)</small></label>
@@ -150,16 +110,73 @@
 </section>
 {% endif %}
 
-<section id="history" aria-labelledby="history-heading">
-<h2 id="history-heading">Scoring by season</h2>
-<dl class="ls-values ls-values-wide">
-    {% for row in history|reverse %}
-    <div class="ls-value">
-        <dt>{{ row.season.name or 'Season ' ~ row.season.number }}</dt>
-        <dd>{{ row.version.name }}{% if row.version.date %} <small>{{ row.version.date }}</small>{% endif %}
-            <small>{% if row.diffs %}Changed from it: {% for label, a, b in row.diffs %}{{ label }} {{ num(a) }} &rarr; {{ num(b) }}{{ '; ' if not loop.last }}{% endfor %}{% else %}{{ row.version.note }}{% endif %}</small>
-        </dd>
+{# Why this version exists: prose kept beside the version, keyed by its
+   registry key (app/scoring/history.py), never by anything from the URL. #}
+{% if version %}
+{% set why %}{% include "league_settings/versions/" ~ version.key ~ ".html" ignore missing %}{% endset %}
+{% if why|trim %}
+<details class="fold" open data-mobile-collapsed id="why">
+    <summary><h2 id="why-heading">{{ 'Why change it' if proposal else 'Why it changed' }}</h2></summary>
+    <div class="fold-body">{{ why }}</div>
+</details>
+{% endif %}
+{% endif %}
+
+<details class="fold" open data-mobile-collapsed id="rules">
+    <summary><h2 id="rules-heading">The league's rules</h2></summary>
+    <div class="fold-body">
+    <p>Every scoring setup the league adopts has to keep these. Each line shows {% if proposal %}the proposal's{% else %}{{ this_season }}'s{% endif %} values.</p>
+    <dl class="ls-values ls-values-wide">
+        {% for rule in rules %}
+        <div class="ls-value">
+            <dt>{% for name, value in rule.steps %}{{ name }}{{ ' > ' if not loop.last }}{% endfor %}{% if rule.floor is not none %} > {{ num(rule.floor) }}{% endif %}</dt>
+            <dd class="{{ 'ls-rule-holds' if rule.holds else 'ls-rule-broken' }}">
+                {% for name, value in rule.steps %}{{ num(value) }}{{ ' > ' if not loop.last }}{% endfor %}{% if rule.floor is not none %} > {{ num(rule.floor) }}{% endif %}
+                <span class="ls-rule-status">{{ 'Holds' if rule.holds else 'Broken' }}</span>
+            </dd>
+        </div>
+        {% endfor %}
+    </dl>
     </div>
-    {% endfor %}
-</dl>
-</section>
+</details>
+
+{% if (proposal or previous) and past %}
+<details class="fold" open data-mobile-collapsed id="past-seasons">
+    <summary><h2 id="past-seasons-heading">Earlier seasons under {{ new_label if proposal else this_season ~ "'s scoring" }}</h2></summary>
+    <div class="fold-body">
+    <p>These seasons were played under their own scoring. This is how they would have finished under {{ new_label if proposal else this_season ~ "'s" }}, as a what-if.</p>
+    <dl class="ls-values ls-values-wide">
+        {% for row in past %}
+        <div class="ls-value">
+            <dt>{{ row.label }}</dt>
+            <dd>{% if row.new_winner == row.winner %}{{ row.winner }} still wins{% else %}{{ row.new_winner }} would win, not {{ row.winner }}{% endif %}
+                <small>{% if row.order_changed %}New order: {{ row.new_order|join(', ') }}{% else %}Same finishing order{% endif %}{% if row.new_margin is not none %}; winning margin {{ '%.1f'|format(row.new_margin) }} pts{% endif %}</small>
+            </dd>
+        </div>
+        {% endfor %}
+    </dl>
+    </div>
+</details>
+{% endif %}
+
+{% if not (proposal or previous) %}
+<p>No earlier season to compare with.</p>
+{% endif %}
+
+<details class="fold" open data-mobile-collapsed id="history">
+    <summary><h2 id="history-heading">Scoring by season</h2></summary>
+    <div class="fold-body">
+    <dl class="ls-values ls-values-wide">
+        {% for row in history %}
+        <div class="ls-value">
+            <dt>{{ row.label }}</dt>
+            <dd>{% for p in row.periods %}{% if not loop.first %}, then {% endif %}{{ p.version.name }}{% if p.until %} until {{ p.until }}{% endif %}{% endfor %}
+                {% for p in row.periods %}{% if p.tally %}<small>Changed by league vote: {{ tally_line(p.tally, choices) }}.</small>{% endif %}{% endfor %}
+                {% set last = row.periods|last %}
+                <small>{% if last.diffs %}Changed from {{ last.version.name }}: {% for label, a, b in last.diffs %}{{ label }} {{ num(a) }} &rarr; {{ num(b) }}{{ '; ' if not loop.last }}{% endfor %}{% else %}{{ last.version.note }}{% endif %}</small>
+            </dd>
+        </div>
+        {% endfor %}
+    </dl>
+    </div>
+</details>
