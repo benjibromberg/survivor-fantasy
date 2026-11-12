@@ -305,6 +305,35 @@ what is rarely touched (the components, the castaway table) sits in a closed
 `details.fold`. Adopt and Withdraw stay outside any fold while a proposal is
 open.
 
+The other admin pages follow it. The admin home (`/admin/seasons`) is
+Seasons, Players, Backups, with Create a season in a closed fold. Picks is
+Enter a pick (one pick for one player, leaving the rest alone), then Picks by
+player; the editor that replaces all of a player's picks is a closed fold that
+a card's Change picks link opens on that player. Players is Logins (and team
+names, for a season), then Add a player. A player's page is Name and login,
+Seasons, Danger zone. Deleting a season or a player happens only on its own
+page, in its Danger zone, never from a list.
+
+- `.admin-cards` / `.admin-card` -- one card per season, player or team,
+  where a table row used to be. At 375px a table put a row's actions past the
+  right edge, reachable only by scrolling it sideways. The card's head
+  (`.admin-card-head`) holds the title (`.admin-card-title`, whose link opens
+  the season or player) and at most one tag (`.admin-tag`, sentence case) or
+  one-button form beside it. `.admin-card-active` marks the active season
+  with the fire-bright left edge `.ls-proposal` uses.
+- `.admin-facts` -- a card's label-above-value facts, as `.ls-value` pairs
+  that size to their content and wrap. A card is too narrow for
+  `.ls-values`' 10rem columns, and its values are a number or a name.
+- `.admin-line` -- one field with its Save on the same line at every width,
+  inside an `.admin-field` that carries the label. In a card,
+  `.admin-fields-row` would give the field the row on phones and push Save
+  onto a line of its own.
+- `.admin-fieldset` -- a labelled group of checkboxes (the draft grid).
+- A row of switch buttons marks the chosen one with `aria-current="page"`.
+  Pico paints that state in its own hover blue, which this palette never
+  themed, so `a.admin-btn-sm[role="button"][aria-current="page"]` keeps it
+  the filled fire-bright button.
+
 Admin tables are wrapped in `.table-scroll`. They already scrolled without it,
 via `article > table, section > table`, but only `.table-scroll` paints the
 edge-shadow gradients, so nothing told you the content continued. The wrapper
@@ -364,6 +393,7 @@ so a long list stays a list of summaries: 5,589px tall at 1280, not 17,472px.
 |------|----------|-----------|
 | 2026-11-12 | Scoring changes: a breakdown for every season, in folds that start closed | The league asked to see why points move for every replayed season and for the current one, not only where the order changes. Each player gets the groups that moved them, rounded so the parts add up to the shown change. Open by default, those details made the page 17,472px tall at 1280, so the detail folds start closed on every screen (5,589px) while the section folds keep open on desktop, closed on phones. |
 | 2026-11-12 | How the league plays, on both scoring pages | The league could see what a scoring change does to standings but not how a season would play under it. One macro shows the simulator's metrics for today's scoring beside the proposal (or the previous season) on Scoring changes, and beside the newest recommendation on the analysis page, as label-above-value rows with a cell per config rather than a table, closed on phones like the other long sections. |
+| 2026-11-12 | Every admin page by task, lists as cards | The league owner found the admin pages confusing, and at 375px the seasons, players and player-season tables hid their actions past the right edge. Each list is now a card per item with the name as the link, facts label above value and its controls underneath, and each page leads with its common job: open a season, enter a missing pick, link a login. Entering one pick no longer means re-saving every pick a player has, and Delete moved off the lists to the Danger zone of the season or player it removes. |
 | 2026-11-12 | Season admin page by task | One long column of data sections made the common jobs hard to find, and opening a scoring vote took five steps. The page now leads with the vote (a starting point, a closing time, Propose), then the pick windows, the scoring readout, the season data and the danger zone, with the components and the castaway table folded away. |
 | 2026-11-11 | Scoring changes page, and the analysis keeps its history | The league needed to see what changed and why without a long message. The page compares the season's stored config with the previous season's, lists the league's rules with their values, and replays standings both ways from real picks, so it cannot disagree with the scores. Earlier analysis runs stay downloadable from the analysis page, and each season names the version it played under (`app/scoring/history.py`). Values and replays are label-above-value rows, not tables, as on every League page. A proposal put to a vote turns the page into current-versus-proposed with a ballot; names and comments show to everyone, since the league is small and the comments are the discussion. |
 | 2026-10-02 | Rules page became League settings | It was already a configuration readout wearing the wrong name: it rendered `num_players`, `tribal_base` and `finale_size` and listed which components were active, inside ten accordions. Accordions suit prose you read; that page was values you look up, which is why the sections never fit them. Hub of cards plus label-above-value detail pages instead, and the wide tables are gone. |
