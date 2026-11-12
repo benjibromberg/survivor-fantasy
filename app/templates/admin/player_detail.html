@@ -41,11 +41,21 @@
                 <h3 class="subsection-title admin-card-title"><a href="{{ url_for('main.admin_season_detail', season_id=row.season.id) }}">{{ label }}</a></h3>
                 {% if row.season.is_active %}<span class="admin-tag">Active</span>{% endif %}
             </div>
+            {# The castaways by name, as the picks page's cards show them; the
+               data attributes keep each kind's count. #}
             <dl class="admin-facts">
-                <div class="ls-value"><dt>Draft picks</dt><dd data-draft="{{ row.draft }}">{{ row.draft }}</dd></div>
-                <div class="ls-value"><dt>Wildcard</dt><dd>{{ row.wildcard }}</dd></div>
-                <div class="ls-value"><dt>Replacement</dt><dd>{{ row.replacement }}</dd></div>
-                <div class="ls-value"><dt>Sole Survivor</dt><dd data-sole-survivor="{{ row.sole_survivor }}">{{ row.sole_survivor }}</dd></div>
+                <div class="ls-value"><dt>Draft</dt><dd data-draft="{{ row.draft|length }}">{{ row.draft|join(', ') or 'None' }}</dd></div>
+                <div class="ls-value"><dt>Wildcard</dt><dd data-wildcard="{{ row.wildcard|length }}">{{ row.wildcard|join(', ') or 'None' }}</dd></div>
+                <div class="ls-value">
+                    <dt>Replacement</dt>
+                    <dd data-replacement="{{ row.replacements|length }}">{% for name, kind in row.replacements %}{{ name }}<small>{{ kind }}</small>{% else %}None{% endfor %}</dd>
+                </div>
+                {% if row.show_ss %}
+                <div class="ls-value">
+                    <dt>Sole Survivor</dt>
+                    <dd data-sole-survivor="{{ row.sole_survivor|length }}">{% for name, episode in row.sole_survivor %}{{ name }}<small>from episode {{ episode }}</small>{% else %}None{% endfor %}</dd>
+                </div>
+                {% endif %}
             </dl>
             <form method="POST" action="{{ url_for('main.admin_player_team_name', user_id=player.id, season_id=row.season.id) }}" class="admin-field">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

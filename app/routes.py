@@ -2452,23 +2452,29 @@ def admin_player_detail(user_id):
 
     player = db.get_or_404(User, user_id)
 
-    counts = {}  # {season_id: {pick_type: n}}
-    for season_id, pick_type, n in (
-        db.session.query(Pick.season_id, Pick.pick_type, db.func.count())
+    # The castaways themselves, by season and kind of pick, in two queries
+    picks = {}  # {season_id: {pick_type: [castaway names]}}
+    for season_id, pick_type, name in (
+        db.session.query(Pick.season_id, Pick.pick_type, Survivor.name)
+        .join(Survivor, Survivor.id == Pick.survivor_id)
         .filter(Pick.user_id == player.id)
-        .group_by(Pick.season_id, Pick.pick_type)
+        .order_by(Pick.pick_order, Pick.id)
     ):
-        counts.setdefault(season_id, {})[pick_type] = n
-    ss_counts = dict(
-        db.session.query(SoleSurvivorPick.season_id, db.func.count())
+        picks.setdefault(season_id, {}).setdefault(pick_type, []).append(name)
+    sole_survivor = {}  # {season_id: [(castaway name, from episode)]}
+    for season_id, name, episode in (
+        db.session.query(
+            SoleSurvivorPick.season_id, Survivor.name, SoleSurvivorPick.episode
+        )
+        .join(Survivor, Survivor.id == SoleSurvivorPick.survivor_id)
         .filter(SoleSurvivorPick.user_id == player.id)
-        .group_by(SoleSurvivorPick.season_id)
-        .all()
-    )
+        .order_by(SoleSurvivorPick.episode)
+    ):
+        sole_survivor.setdefault(season_id, []).append((name, episode))
     team_names = {
         row.season_id: row.name for row in TeamName.query.filter_by(user_id=player.id)
     }
-    season_ids = set(counts) | set(ss_counts) | set(team_names)
+    season_ids = set(picks) | set(sole_survivor) | set(team_names)
     seasons = (
         Season.query.filter(Season.id.in_(season_ids))
         .order_by(Season.number.desc())
@@ -2476,18 +2482,28 @@ def admin_player_detail(user_id):
         if season_ids
         else []
     )
-    rows = [
-        {
-            "season": s,
-            "draft": counts.get(s.id, {}).get("draft", 0),
-            "wildcard": counts.get(s.id, {}).get("wildcard", 0),
-            "replacement": counts.get(s.id, {}).get("pmr_w", 0)
-            + counts.get(s.id, {}).get("pmr_d", 0),
-            "sole_survivor": ss_counts.get(s.id, 0),
-            "team_name": team_names.get(s.id, ""),
-        }
-        for s in seasons
-    ]
+    rows = []
+    for s in seasons:
+        held = picks.get(s.id, {})
+        config = {**DEFAULT_CONFIG, **s.get_scoring_config()}
+        rows.append(
+            {
+                "season": s,
+                "draft": held.get("draft", []),
+                "wildcard": held.get("wildcard", []),
+                "replacements": [
+                    (name, label)
+                    for kind, label in replacements.KIND_LABELS.items()
+                    for name in held.get(kind, [])
+                ],
+                "sole_survivor": sole_survivor.get(s.id, []),
+                # As on the picks page: where the season scores it, or
+                # where there is a pick to see
+                "show_ss": bool(config.get("sole_survivor_val"))
+                or s.id in sole_survivor,
+                "team_name": team_names.get(s.id, ""),
+            }
+        )
     others = (
         User.query.filter(User.id != player.id)
         .order_by(db.func.lower(User.display_name))
