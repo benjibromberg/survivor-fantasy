@@ -329,6 +329,13 @@ page, in its Danger zone, never from a list.
   `.admin-fields-row` would give the field the row on phones and push Save
   onto a line of its own.
 - `.admin-fieldset` -- a labelled group of checkboxes (the draft grid).
+- `form[data-arm]` / `.admin-arm-confirm` -- an action confirmed by a second
+  tap in place, for switching the active season. The first tap shows the
+  question ("Make Season 49 active?") and a confirm button for five seconds;
+  the confirm button submits the same form. Never a `confirm()` pop-up here:
+  a browser dialog blocks the automation that drives these pages. Without
+  scripting the first button submits directly. The older destructive actions
+  (deleting a season, player or castaway, merging) keep their dialogs.
 - A row of switch buttons marks the chosen one with `aria-current="page"`.
   Pico paints that state in its own hover blue, which this palette never
   themed, so `a.admin-btn-sm[role="button"][aria-current="page"]` keeps it
