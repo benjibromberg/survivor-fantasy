@@ -2444,6 +2444,12 @@ details.lb-champion[open] > summary.lb-row {
     padding-bottom: 0.85rem;
 }
 
+/* Scoring changes: a proposal open for the league's vote */
+.ls-proposal {
+    border-left: 3px solid var(--fire-bright);
+    padding-left: 0.75rem;
+}
+
 /* Scoring changes: whether a league rule holds for the season's values */
 .ls-rule-status {
     margin-left: 0.5rem;

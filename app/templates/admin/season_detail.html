@@ -103,13 +103,39 @@
 <!-- Scoring -->
 <section>
     <h2 class="section-title">Scoring Components</h2>
+    {% if proposal %}
+    <div class="admin-proposal">
+        <p><strong>A scoring proposal is open</strong>{% if proposal_closes_label %} until {{ proposal_closes_label }}{% endif %}:
+        {{ proposal.voted }} of {{ proposal.voters }} players have voted
+        ({% for key, label in proposal.choices.items() %}{{ label }}: {{ proposal.tally[key] }}{{ '; ' if not loop.last }}{% endfor %}).
+        <a href="{{ url_for('main.league_settings_detail', slug='changes', season_id=season.id) }}">See the page and the votes</a>.</p>
+        <div class="admin-toolbar">
+            <form method="POST" action="{{ url_for('main.admin_scoring_proposal', season_id=season.id, action='adopt') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="admin-btn-sm">Adopt proposal</button>
+            </form>
+            <form method="POST" action="{{ url_for('main.admin_scoring_proposal', season_id=season.id, action='withdraw') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="outline secondary admin-btn-sm">Withdraw proposal</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
     <form method="POST" action="{{ url_for('main.admin_season_settings', season_id=season.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <p><small>Set a value to 0 to disable a component. Changes apply immediately to the leaderboard.</small></p>
+        <p><small>Set a value to 0 to disable a component. Saving applies the values to the leaderboard straight away, unless you tick Propose: then they go to the league for a vote on the Scoring changes page, and the season keeps its scoring until you adopt them.</small></p>
+        <label class="admin-check">
+            <input type="checkbox" name="propose">
+            Propose to the league instead of applying
+        </label>
+        <label for="proposal_closes_at">Voting closes (Eastern)</label>
+        <input type="datetime-local" id="proposal_closes_at" name="proposal_closes_at">
         <div class="admin-toolbar">
             <button type="submit" class="admin-btn-sm">Save Settings</button>
             <button type="button" class="outline" onclick="loadDefaults()" class="admin-btn-sm">Load Default</button>
-            <button type="button" class="outline secondary" onclick="loadLegacy()" class="admin-btn-sm">Load Legacy</button>
+            {% for v in scoring_versions %}
+            <button type="button" class="outline secondary admin-btn-sm" onclick='loadConfig({{ v.config | tojson }})'>Load {{ v.name }}</button>
+            {% endfor %}
         </div>
         <table class="scoring-table">
             <thead><tr><th>Component</th><th>Value</th><th>Description</th></tr></thead>
@@ -117,7 +143,7 @@
                 {% for key, (label, desc) in config_labels.items() %}
                 <tr>
                     <td><strong>{{ label }}</strong></td>
-                    <td><input type="number" name="scoring_{{ key }}" id="scoring_{{ key }}" value="{{ current_config.get(key, 0) }}" step="0.25"></td>
+                    <td><input type="number" name="scoring_{{ key }}" id="scoring_{{ key }}" value="{{ current_config.get(key, 0) }}" step="any"></td>
                     <td><small>{{ desc }}</small></td>
                 </tr>
                 {% endfor %}
@@ -126,15 +152,14 @@
 
         <script>
         const DEFAULTS = {{ default_config | tojson }};
-        const LEGACY = {{ legacy_config | tojson }};
         function loadConfig(cfg) {
             for (const [key, val] of Object.entries(cfg)) {
                 const el = document.getElementById('scoring_' + key);
-                if (el) el.value = val;
+                // Booleans (replacement deduction) have no number input value
+                if (el && typeof val !== 'boolean') el.value = val;
             }
         }
         function loadDefaults() { loadConfig(DEFAULTS); }
-        function loadLegacy() { loadConfig(LEGACY); }
         </script>
     </form>
 </section>
