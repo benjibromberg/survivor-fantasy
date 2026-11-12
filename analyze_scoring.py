@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import itertools
 import json
 import multiprocessing as mp
 import os
@@ -69,10 +70,12 @@ PARAM_GRID = {
     # Bonus categories
     "individual_immunity_val": [0, 0.5, 1, 1.5, 2],
     "tribal_immunity_val": [0, 0.25, 0.5, 1, 1.5],
-    "idol_found_val": [0, 0.25, 0.5, 1],
-    "advantage_found_val": [0, 0.5, 1],
-    "idol_play_val": [0, 0.5, 1, 1.5, 2],
-    "advantage_play_val": [0, 0.5, 1],
+    # Finer steps: idol played > idol found > advantage played > advantage
+    # found > 0 needs four distinct positive values (see ORDERINGS)
+    "idol_found_val": [0, 0.25, 0.5, 0.75, 1, 1.5],
+    "advantage_found_val": [0, 0.1, 0.25, 0.5],
+    "idol_play_val": [0, 0.5, 1, 1.5, 2, 3],
+    "advantage_play_val": [0, 0.25, 0.5, 0.75, 1],
     # Pick type modifiers
     "wildcard_multiplier": [0, 0.5],
     "draft_replacement_multiplier": [0, 0.5, 1],
@@ -1081,51 +1084,62 @@ def stratified_random_sample(param_grid, n_samples, seed=42):
     return [{key: value_sequences[key][i] for key in keys} for i in range(n_samples)]
 
 
-# Benji's orderings (2026-11-11), each strict: reaching Final Tribal is worth
-# more than making the jury; playing an idol more than finding one, and
-# finding one more than nothing; an individual immunity win more than a
-# tribal one, and a tribal one more than nothing. (higher, lower, floor):
-# `lower` must also exceed `floor` unless it is None.
+# Benji's orderings (2026-11-11). Each chain is strictly decreasing, and its
+# last value must exceed `floor` unless that is None:
+# - reaching Final Tribal is worth more than making the jury;
+# - an individual immunity win more than a tribal one, a tribal one more than
+#   nothing;
+# - an idol played more than an idol found, more than an advantage played,
+#   more than an advantage found, more than nothing.
 ORDERINGS = (
-    ("final_tribal_val", "jury_val", None),
-    ("idol_play_val", "idol_found_val", 0),
-    ("individual_immunity_val", "tribal_immunity_val", 0),
+    (("final_tribal_val", "jury_val"), None),
+    (("individual_immunity_val", "tribal_immunity_val"), 0),
+    (
+        (
+            "idol_play_val",
+            "idol_found_val",
+            "advantage_play_val",
+            "advantage_found_val",
+        ),
+        0,
+    ),
 )
 
 
+def _chain_holds(values, floor):
+    """True if `values` is strictly decreasing and its last exceeds `floor`."""
+    if any(a <= b for a, b in zip(values, values[1:], strict=False)):
+        return False
+    return floor is None or values[-1] > floor
+
+
 def satisfies_orderings(config):
-    """True if `config` keeps every ordering in ORDERINGS."""
-    for higher, lower, floor in ORDERINGS:
-        if not config[higher] > config[lower]:
-            return False
-        if floor is not None and not config[lower] > floor:
-            return False
-    return True
+    """True if `config` keeps every chain in ORDERINGS."""
+    return all(
+        _chain_holds([config[k] for k in chain], floor) for chain, floor in ORDERINGS
+    )
 
 
 def constrained_sample(param_grid, n_samples, seed=42):
     """stratified_random_sample over the part of the grid that keeps ORDERINGS.
 
-    Each ordered pair is drawn jointly from its valid combinations, so every
-    sample is usable; filtering free samples afterwards would discard about
-    nine in ten.
+    Each chain is drawn jointly from its valid combinations, so every sample
+    is usable; filtering free samples afterwards would discard almost all.
     """
     grid = dict(param_grid)
-    pair_keys = []
-    for higher, lower, floor in ORDERINGS:
-        highs, lows = grid.pop(higher), grid.pop(lower)
-        key = f"{higher}|{lower}"
+    chain_keys = []
+    for chain, floor in ORDERINGS:
+        key = "|".join(chain)
         grid[key] = [
-            (h, lo)
-            for h in highs
-            for lo in lows
-            if h > lo and (floor is None or lo > floor)
+            combo
+            for combo in itertools.product(*(grid.pop(k) for k in chain))
+            if _chain_holds(combo, floor)
         ]
-        pair_keys.append((key, higher, lower))
+        chain_keys.append((key, chain))
     samples = stratified_random_sample(grid, n_samples, seed)
     for sample in samples:
-        for key, higher, lower in pair_keys:
-            sample[higher], sample[lower] = sample.pop(key)
+        for key, chain in chain_keys:
+            sample.update(zip(chain, sample.pop(key), strict=True))
     return samples
 
 
@@ -1739,7 +1753,8 @@ def print_metrics(metrics):
     )
     print(
         f"  Orderings hold:       {'yes' if metrics.get('orderings_ok', 1) else 'NO'}"
-        f"  (FTC > jury, idol play > found > 0, indiv > tribal immunity > 0)"
+        f"  (FTC > jury; indiv > tribal immunity > 0;"
+        f" idol play > idol found > adv play > adv found > 0)"
     )
     if "composite_unconstrained" in metrics:
         print(

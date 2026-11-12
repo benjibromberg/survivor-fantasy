@@ -1565,8 +1565,10 @@ def ordered_base_config(**overrides):
     config.update(
         jury_val=0,
         final_tribal_val=1,
-        idol_found_val=0.5,
         idol_play_val=1,
+        idol_found_val=0.5,
+        advantage_play_val=0.25,
+        advantage_found_val=0.1,
         tribal_immunity_val=0.25,
         individual_immunity_val=0.5,
     )
@@ -1585,6 +1587,9 @@ class TestOrderings:
             {"final_tribal_val": 2, "jury_val": 3},  # FTC below jury
             {"idol_play_val": 0.5, "idol_found_val": 0.5},  # play equal to found
             {"idol_found_val": 0, "idol_play_val": 1},  # finding scores nothing
+            {"advantage_play_val": 0.5},  # advantage played equal to idol found
+            {"advantage_found_val": 0.25},  # advantage found equal to played
+            {"advantage_found_val": 0},  # finding an advantage scores nothing
             {"individual_immunity_val": 0.5, "tribal_immunity_val": 0.5},
             {"tribal_immunity_val": 0, "individual_immunity_val": 1},
         ],
@@ -1614,7 +1619,10 @@ class TestConstrainedSample:
 
         assert {c["final_tribal_val"] for c in samples} == {1, 2, 3, 4, 5}
         assert {c["tribal_immunity_val"] for c in samples} == {0.25, 0.5, 1, 1.5}
-        assert {c["idol_found_val"] for c in samples} == {0.25, 0.5, 1}
+        # idol found > advantage played > advantage found > 0 starts at 0.5
+        assert {c["idol_found_val"] for c in samples} == {0.5, 0.75, 1, 1.5}
+        assert {c["advantage_play_val"] for c in samples} == {0.25, 0.5, 0.75, 1}
+        assert {c["advantage_found_val"] for c in samples} == {0.1, 0.25, 0.5}
 
 
 class TestOrderingsInComposite:
