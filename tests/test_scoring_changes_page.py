@@ -39,6 +39,7 @@ def client(tmp_path, monkeypatch):
 
     application = create_app()
     application.config["TESTING"] = True
+    application.config["WTF_CSRF_ENABLED"] = False
     with application.app_context():
         yield application.test_client(), db
         db.session.remove()
@@ -101,9 +102,10 @@ def league(client):
     s50, c50 = _season(db, 50, dict(run6))
     s51, c51 = _season(db, 51, {**DEFAULT_CONFIG, **NEW}, active=True, finished=False)
 
-    pat = User(username="pat", display_name="Pat")
-    sam = User(username="sam", display_name="Sam")
-    db.session.add_all([pat, sam])
+    pat = User(username="pat", display_name="Pat", email="pat@example.com")
+    sam = User(username="sam", display_name="Sam", email="sam@example.com")
+    fan = User(username="fan", display_name="Fan", email="fan@example.com")
+    db.session.add_all([pat, sam, fan])
     db.session.flush()
 
     def draft(user, survivors, idxs):
@@ -129,6 +131,7 @@ def league(client):
     league = League()
     league.c, league.db = c, db
     league.s49, league.s50, league.s51 = s49, s50, s51
+    league.pat, league.sam, league.fan = pat, sam, fan
     return league
 
 
@@ -320,3 +323,198 @@ class TestRunSeven:
 
         assert runs.index("Run 7") < runs.index("Run 6")
         assert "103,179" in runs
+
+
+# ── Proposals and the league vote ──────────────────────────────────────────
+
+from datetime import UTC, datetime, timedelta  # noqa: E402
+
+ACCESS_HEADER = "Cf-Access-Authenticated-User-Email"
+CLOSES = datetime(2026, 11, 19, 0, 45)  # Wed Nov 18, 7:45 PM ET, naive UTC
+
+
+def _login(c, email):
+    assert c.get("/login", headers={ACCESS_HEADER: email}).status_code == 302
+
+
+@pytest.fixture()
+def proposal(league, monkeypatch):
+    """Season 51 on the current scoring, with a proposal open for a vote."""
+    from app import proposals
+    from app.scoring.classic import DEFAULT_CONFIG
+
+    league.s51.scoring_config = json.dumps(dict(DEFAULT_CONFIG))
+    league.s51.proposed_scoring_config = json.dumps({**DEFAULT_CONFIG, **NEW})
+    league.s51.proposal_closes_at = CLOSES
+    league.db.session.commit()
+    clock = {"now": CLOSES.replace(tzinfo=UTC) - timedelta(days=2)}
+    monkeypatch.setattr(proposals, "now_utc", lambda: clock["now"])
+    league.at = lambda moment: clock.__setitem__("now", moment)
+    return league
+
+
+def _vote(league, email, choice, comment=""):
+    _login(league.c, email)
+    resp = league.c.post(
+        f"/league-settings/{league.s51.id}/vote",
+        data={"choice": choice, "comment": comment},
+    )
+    league.c.get("/logout")
+    return resp
+
+
+def _votes(league):
+    from app.models import ScoringVote
+
+    return {
+        v.user.username: (v.choice, v.comment)
+        for v in ScoringVote.query.filter_by(season_id=league.s51.id)
+    }
+
+
+class TestProposalPage:
+    def test_compares_current_scoring_with_the_proposal(self, proposal):
+        page = _page(proposal)
+
+        assert "Proposed scoring for Season 51" in page
+        assert "Wed Nov 18, 7:45 PM ET" in page
+        changed = page.split('id="what-changed"', 1)[1].split("</section>")[0]
+        assert "Final Tribal Bonus" in changed
+
+    def test_standings_are_current_against_proposed(self, proposal):
+        page = _page(proposal)
+        table = page.split('id="standings"', 1)[1].split("</section>")[0]
+        current = _board(proposal.s51)
+        proposed = _board(proposal.s51, proposal.s51.get_proposed_config())
+
+        for user in ("pat", "sam"):
+            assert f"{current[user]:.1f}" in table
+            assert f"{proposed[user]:.1f}" in table
+
+    def test_the_season_keeps_its_own_scoring_until_adopted(self, proposal):
+        from app.scoring.classic import DEFAULT_CONFIG
+
+        _page(proposal)
+
+        assert proposal.s51.get_scoring_config() == DEFAULT_CONFIG
+
+
+class TestVoting:
+    def test_a_player_votes_and_can_change_it(self, proposal):
+        _vote(proposal, "pat@example.com", "now", "Love it")
+        _vote(proposal, "pat@example.com", "next")
+
+        assert _votes(proposal) == {"pat": ("next", "")}
+
+    def test_votes_and_comments_show_with_names(self, proposal):
+        _vote(proposal, "pat@example.com", "now", "Love it")
+        _vote(proposal, "sam@example.com", "keep")
+
+        page = _page(proposal)
+        votes = page.split('id="vote"', 1)[1].split("</section>")[0]
+        assert "2 of 2 players have voted" in votes
+        assert "Pat" in votes and "Love it" in votes and "Sam" in votes
+
+    @pytest.mark.parametrize("choice", ["", "maybe", "NOW"])
+    def test_an_unknown_choice_is_refused(self, proposal, choice):
+        _vote(proposal, "pat@example.com", choice)
+
+        assert _votes(proposal) == {}
+
+    def test_someone_without_picks_cannot_vote(self, proposal):
+        _vote(proposal, "fan@example.com", "now")
+
+        assert _votes(proposal) == {}
+
+    def test_signing_in_is_required(self, proposal):
+        resp = proposal.c.post(
+            f"/league-settings/{proposal.s51.id}/vote", data={"choice": "now"}
+        )
+
+        assert resp.status_code == 302
+        assert _votes(proposal) == {}
+
+    def test_voting_closes_at_the_deadline(self, proposal):
+        proposal.at(CLOSES.replace(tzinfo=UTC))
+        _vote(proposal, "pat@example.com", "now")
+
+        assert _votes(proposal) == {}
+
+    def test_a_long_comment_is_cut_to_the_limit(self, proposal):
+        from app.proposals import COMMENT_MAX_LENGTH
+
+        _vote(proposal, "pat@example.com", "now", "x" * (COMMENT_MAX_LENGTH + 50))
+
+        assert len(_votes(proposal)["pat"][1]) == COMMENT_MAX_LENGTH
+
+    def test_no_vote_without_a_proposal(self, league):
+        _vote(league, "pat@example.com", "now")
+
+        assert _votes(league) == {}
+
+
+class TestAdminProposal:
+    def _settings(self, league, **extra):
+        from app.scoring.classic import DEFAULT_CONFIG
+
+        data = {f"scoring_{k}": v for k, v in {**DEFAULT_CONFIG, **NEW}.items()}
+        data = {k: ("1" if v is True else v) for k, v in data.items()}
+        data.update(extra)
+        _login(league.c, ADMIN_EMAIL)
+        return league.c.post(f"/admin/season/{league.s51.id}/settings", data=data)
+
+    def test_proposing_saves_the_config_beside_the_season(self, league):
+        from app.scoring.classic import DEFAULT_CONFIG
+
+        league.s51.scoring_config = json.dumps(dict(DEFAULT_CONFIG))
+        league.db.session.commit()
+
+        self._settings(league, propose="on", proposal_closes_at="2026-11-18T19:45")
+
+        assert league.s51.get_scoring_config() == DEFAULT_CONFIG
+        assert league.s51.get_proposed_config()["final_tribal_val"] == 4
+        assert league.s51.get_proposed_config()["advantage_found_val"] == 0.25
+        assert league.s51.proposal_closes_at == CLOSES
+
+    def test_adopting_applies_it_and_keeps_the_votes(self, proposal):
+        _vote(proposal, "pat@example.com", "now")
+        _login(proposal.c, ADMIN_EMAIL)
+
+        proposal.c.post(f"/admin/season/{proposal.s51.id}/proposal/adopt")
+
+        assert proposal.s51.get_scoring_config()["final_tribal_val"] == 4
+        assert proposal.s51.proposed_scoring_config is None
+        assert _votes(proposal) == {"pat": ("now", "")}
+
+    def test_withdrawing_clears_it(self, proposal):
+        _login(proposal.c, ADMIN_EMAIL)
+
+        proposal.c.post(f"/admin/season/{proposal.s51.id}/proposal/withdraw")
+
+        assert proposal.s51.proposed_scoring_config is None
+        assert proposal.s51.proposal_closes_at is None
+
+    def test_a_player_cannot_adopt(self, proposal):
+        _login(proposal.c, "pat@example.com")
+
+        proposal.c.post(f"/admin/season/{proposal.s51.id}/proposal/adopt")
+
+        assert proposal.s51.proposed_scoring_config is not None
+
+    def test_after_adoption_the_page_keeps_the_vote_record(self, proposal):
+        _vote(proposal, "pat@example.com", "now", "Love it")
+        _login(proposal.c, ADMIN_EMAIL)
+        proposal.c.post(f"/admin/season/{proposal.s51.id}/proposal/adopt")
+        proposal.c.get("/logout")
+
+        page = _page(proposal)
+
+        assert "Love it" in page
+        assert "Proposed scoring" not in page
+
+    def test_scoring_inputs_accept_values_finer_than_a_quarter(self, league):
+        _login(league.c, ADMIN_EMAIL)
+
+        page = league.c.get(f"/admin/season/{league.s51.id}").data.decode()
+
+        assert 'step="0.25"' not in page

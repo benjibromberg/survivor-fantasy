@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import date
+from datetime import UTC, date
 
 from flask import (
     Blueprint,
@@ -15,7 +15,7 @@ from flask import (
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
-from . import replacements, schedule, wildcards
+from . import proposals, replacements, schedule, wildcards
 from .data import (
     download_survivor_data,
     export_all_picks,
@@ -40,7 +40,7 @@ from .models import (
 from .predictions import calculate_win_probabilities, season_structure_known
 from .scoring import SCORING_SYSTEMS, compute_stat_overrides, get_scoring_system
 from .scoring.classic import CONFIG_LABELS, DEFAULT_CONFIG, LEGACY_CONFIG
-from .scoring.history import analysis_runs, describe_config
+from .scoring.history import SCORING_VERSIONS, analysis_runs, describe_config
 from .scoring.rules import rule_readout
 
 logger = logging.getLogger(__name__)
@@ -899,6 +899,30 @@ def league_settings_detail(slug, season_id):
     )
 
 
+@main_bp.route("/league-settings/<int:season_id>/vote", methods=["POST"])
+@login_required
+def scoring_vote(season_id):
+    """A player votes, or changes their vote, on the season's scoring proposal."""
+    season = db.get_or_404(Season, season_id)
+    error = proposals.cast_vote(
+        season,
+        current_user,
+        request.form.get("choice", ""),
+        request.form.get("comment", ""),
+    )
+    flash(error or "Vote saved.", "error" if error else "success")
+    return redirect(
+        url_for("main.league_settings_detail", slug="changes", season_id=season.id)
+    )
+
+
+def _league_time_label(naive_utc):
+    """A stored naive-UTC time as e.g. 'Wed Nov 18, 7:45 PM ET', or None."""
+    if naive_utc is None:
+        return None
+    return wildcards.format_league_time(naive_utc.replace(tzinfo=UTC))
+
+
 _changes_cache = {}  # {key: replays}, keyed on every involved season's state
 _CHANGES_CACHE_MAX = 32
 
@@ -1009,23 +1033,41 @@ def _labelled_diffs(diffs):
 
 
 def _changes_context(season):
-    """What the Scoring changes page shows for a season."""
+    """What the Scoring changes page shows for a season.
+
+    With a proposal open it compares the season's scoring with the proposal
+    and carries the vote; otherwise it compares the season with the one
+    before it, and shows how the league voted if it did.
+    """
     if season is None:
         return {}
     current = {**DEFAULT_CONFIG, **season.get_scoring_config()}
-    version, diffs = describe_config(current)
+    proposed = season.get_proposed_config()
+    shown = {**DEFAULT_CONFIG, **proposed} if proposed is not None else current
+    version, diffs = describe_config(shown)
     history = []
     for s in Season.query.order_by(Season.number).all():
         v, d = describe_config(s.get_scoring_config())
         history.append({"season": s, "version": v, "diffs": _labelled_diffs(d)})
     context = {
-        "rules": rule_readout(current, CONFIG_LABELS),
+        "rules": rule_readout(shown, CONFIG_LABELS),
         "version": version,
         "version_diffs": _labelled_diffs(diffs),
         "history": history,
         "previous": None,
         "changes": [],
+        "proposal": proposed is not None,
+        "closes_label": _league_time_label(season.proposal_closes_at),
+        "vote": proposals.results(season, current_user),
     }
+    if proposed is not None:
+        context["changes"] = [
+            (label, current.get(k), shown.get(k))
+            for k, (label, _desc) in CONFIG_LABELS.items()
+            if current.get(k) != shown.get(k)
+        ]
+        context.update(_replays(season, current, shown))
+        return context
     previous = (
         Season.query.filter(Season.number < season.number)
         .order_by(Season.number.desc())
@@ -2428,6 +2470,9 @@ def admin_season_detail(season_id):
         current_config=current_config,
         default_config=DEFAULT_CONFIG,
         legacy_config=LEGACY_CONFIG,
+        scoring_versions=SCORING_VERSIONS,
+        proposal=(proposals.results(season) if season.get_proposed_config() else None),
+        proposal_closes_label=_league_time_label(season.proposal_closes_at),
         wildcard=wildcards.admin_view(season),
         replacement=replacements.admin_view(season),
     )
@@ -2554,6 +2599,8 @@ def admin_season_settings(season_id):
 
     season = Season.query.get_or_404(season_id)
 
+    back = redirect(url_for("main.admin_season_detail", season_id=season.id))
+
     # Build scoring config from individual toggle inputs
     scoring_config = {}
     for key in DEFAULT_CONFIG:
@@ -2562,10 +2609,54 @@ def admin_season_settings(season_id):
             scoring_config[key] = float(form_val)
         else:
             scoring_config[key] = DEFAULT_CONFIG[key]
-    season.scoring_config = json.dumps(scoring_config)
 
-    db.session.commit()
-    flash("Settings updated!", "success")
+    proposing = "propose" in request.form
+    if proposing:
+        # Put to the league instead of applying (app/proposals.py)
+        try:
+            closes = wildcards.parse_league_time(request.form.get("proposal_closes_at"))
+        except ValueError:
+            flash("Enter when voting closes as a date and time.", "error")
+            return back
+    try:
+        if proposing:
+            season.proposed_scoring_config = json.dumps(scoring_config)
+            season.proposal_closes_at = closes
+        else:
+            season.scoring_config = json.dumps(scoring_config)
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception("Saving scoring settings failed (season %s)", season.id)
+        flash("Could not save the scoring settings.", "error")
+        return back
+    if proposing:
+        flash(
+            "Proposal saved. Players can vote on it under League, Scoring changes.",
+            "success",
+        )
+    else:
+        flash("Settings updated!", "success")
+    return back
+
+
+@main_bp.route("/admin/season/<int:season_id>/proposal/<action>", methods=["POST"])
+@login_required
+def admin_scoring_proposal(season_id, action):
+    """Adopt the season's scoring proposal, or withdraw it."""
+    denied = _require_admin()
+    if denied:
+        return denied
+    season = db.get_or_404(Season, season_id)
+    if action == "adopt":
+        error = proposals.adopt(season)
+        done = "Proposal adopted: it is now this season's scoring."
+    elif action == "withdraw":
+        error = proposals.withdraw(season)
+        done = "Proposal withdrawn; the season keeps its scoring."
+    else:
+        abort(404)
+    flash(error or done, "error" if error else "success")
     return redirect(url_for("main.admin_season_detail", season_id=season.id))
 
 
