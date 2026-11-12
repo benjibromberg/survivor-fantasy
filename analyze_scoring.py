@@ -53,7 +53,9 @@ PARAM_GRID = {
     # Milestone bonuses (test at 0 — likely redundant with progressive tribals)
     "jury_val": [0, 1, 2, 3],
     "merge_val": [0, 1, 2, 3],
-    "final_tribal_val": [0, 1, 2, 3],
+    # Up to 5 so the final-tribal bonus alone can clear the jury bonus: a
+    # finalist is not a juror, so below that 4th place can outscore them
+    "final_tribal_val": [0, 1, 2, 3, 4, 5],
     "fire_win_val": [0, 1, 2, 3],
     # Placement
     "first_val": [5, 8, 10, 15, 20],
@@ -64,9 +66,9 @@ PARAM_GRID = {
         (0.60, 0.30),  # moderate drop
         (0.70, 0.40),  # gentle (e.g. 10:7:4)
     ],
-    # Bonus categories (test at low values — likely redundant with longevity)
-    "individual_immunity_val": [0, 0.5, 1],
-    "tribal_immunity_val": [0, 0.5, 1],
+    # Bonus categories
+    "individual_immunity_val": [0, 0.5, 1, 1.5, 2],
+    "tribal_immunity_val": [0, 0.25, 0.5, 1, 1.5],
     "idol_found_val": [0, 0.5, 1],
     "advantage_found_val": [0, 0.5, 1],
     "idol_play_val": [0, 0.5, 1],
@@ -80,6 +82,16 @@ PARAM_GRID = {
     # sole_survivor_val excluded from optimization — tuned separately as a
     # fun bonus that shouldn't distort scoring balance.  Locked at 0 during
     # the sweep so it can't inflate comeback/suspense/non-draft metrics.
+}
+
+
+# The baselines as the sweep sees them: only the parameters it tunes. Find
+# them in results with find_config_rank, which matches on these.
+DEFAULT_PARAMS = {k: DEFAULT_CONFIG.get(k) for k in PARAM_GRID if k in DEFAULT_CONFIG}
+LEGACY_PARAMS = {
+    k: LEGACY_CONFIG.get(k, DEFAULT_CONFIG.get(k))
+    for k in PARAM_GRID
+    if k in LEGACY_CONFIG or k in DEFAULT_CONFIG
 }
 
 
@@ -1024,6 +1036,19 @@ def calculate_leaderboard(
     return results
 
 
+def find_config_rank(results, params):
+    """Return (1-based rank, metrics) of the result whose config is `params`, or None.
+
+    Matched on the swept parameters themselves. Matching an expanded config
+    against DEFAULT_CONFIG never succeeds: expansion drops the flat tribal
+    keys in progressive mode, and the sweep leaves out keys it does not tune.
+    """
+    for i, (config, metrics) in enumerate(results):
+        if config == params:
+            return i + 1, metrics
+    return None
+
+
 def rank_users(results):
     return sorted(results.keys(), key=lambda uid: results[uid], reverse=True)
 
@@ -1048,14 +1073,100 @@ def stratified_random_sample(param_grid, n_samples, seed=42):
 # ── Evaluation ──────────────────────────────────────────────────────────────
 
 
+# ── Placement order ─────────────────────────────────────────────────────────
+
+# Subtracted from the composite of any config that lets 4th place outscore a
+# finalist in some season: large enough that no such config can rank above
+# one that passes, which makes the check a filter that still sorts.
+PLACEMENT_ORDER_PENALTY = 100.0
+
+
+def _structural_points(config, tribal_table, season, survivor, placement, won_fire):
+    """Points a castaway earns for how far they went, with no performance stats.
+
+    Tribals, jury, merge, placement, final tribal and fire. Immunity, idol
+    and advantage points are left out: a castaway who earns more of those
+    may fairly outscore one who placed higher.
+    """
+    total = tribal_table[season.compute_tribals_survived(survivor)][0]
+    if config["jury_val"] and survivor.made_jury:
+        total += config["jury_val"]
+    if config["merge_val"] and survivor.voted_out_order > season.merge_threshold:
+        total += config["merge_val"]
+    placement_vals = {1: "first_val", 2: "second_val", 3: "third_val"}
+    if placement in placement_vals:
+        total += config[placement_vals[placement]] + config["final_tribal_val"]
+    if won_fire:
+        total += config.get("fire_win_val", 0)
+    return total
+
+
+def placement_order(config, season):
+    """Return (finalists_ok, third_beats_second) for a full scoring config.
+
+    finalists_ok: on structural points, every finalist scores at least as
+    much as 4th place, whichever finalist wins fire (each of the three is
+    tried). Required: a config failing it in any season is penalised.
+
+    third_beats_second: in some fire outcome 3rd outscores 2nd. Reported
+    only; a 3rd-place finalist lifted by winning fire is acceptable.
+
+    A season without a complete final four is not judged: (True, False).
+    """
+    n = season.num_players
+    by_order = {s.voted_out_order: s for s in season.survivors if s.voted_out_order}
+    final_four = [by_order.get(n - place + 1) for place in (1, 2, 3, 4)]
+    if any(s is None for s in final_four) or season.merge_threshold is None:
+        return True, False
+
+    table = _build_tribal_table(config, season)
+    finalists_ok = True
+    third_beats_second = False
+    for fire_place in (1, 2, 3):
+        pts = {
+            place: _structural_points(
+                config, table, season, final_four[place - 1], place, place == fire_place
+            )
+            for place in (1, 2, 3, 4)
+        }
+        if min(pts[1], pts[2], pts[3]) < pts[4]:
+            finalists_ok = False
+        if pts[3] > pts[2]:
+            third_beats_second = True
+    return finalists_ok, third_beats_second
+
+
+def _longevity_score(longevity):
+    """Composite credit for the share of points that comes from tribals.
+
+    Linear up to 50%, flat across 50-80%, then falling. Flat in the healthy
+    band so a point from immunity costs nothing against a point from a
+    tribal there; the old linear reward up to 80% made every non-tribal
+    point a loss, which is why immunity always optimised to 0.
+    """
+    if longevity < 0.5:
+        return longevity
+    if longevity <= 0.8:
+        return 0.5
+    return 0.5 - (longevity - 0.8) * 2.0
+
+
 def evaluate_config(config, scenarios):
     """Evaluate a scoring config across all pre-generated draft scenarios."""
     expanded = expand_config(config)
     scoring = ClassicScoring(**expanded)
     fast_config = scoring.config  # has all DEFAULT_CONFIG keys merged
     metrics = defaultdict(list)
+    order_by_season = {}  # one placement-order check per season, not per draft
 
     for season, survivors, picks_by_user, _ss_streaks, max_elim, n_players in scenarios:
+        # Before the timeline below zeroes every castaway to replay the season
+        if id(season) not in order_by_season:
+            order_by_season[id(season)] = placement_order(fast_config, season)
+        finalists_ok, third_beats_second = order_by_season[id(season)]
+        metrics["placement_order_ok"].append(1.0 if finalists_ok else 0.0)
+        metrics["third_beats_second"].append(1.0 if third_beats_second else 0.0)
+
         # Precompute elim→episode mapping once per scenario
         elim_to_ep = _build_elim_to_episode(survivors)
         merge_ep = elim_to_ep.get(season.merge_threshold, 0)
@@ -1389,12 +1500,9 @@ def evaluate_config(config, scenarios):
     longevity = result.get("longevity_share", 0)
     non_draft = result.get("non_draft_pct", 0)
 
-    # Longevity: reward 50-80%, penalize outside that range
+    # Longevity: reward up to 50%, flat across 50-80%, penalize beyond.
     # Prevents degenerate "tribals are everything" configs
-    if longevity <= 0.8:
-        longevity_score = longevity  # linear reward up to 0.8
-    else:
-        longevity_score = 0.8 - (longevity - 0.8) * 2.0  # penalize excess
+    longevity_score = _longevity_score(longevity)
 
     # Non-draft floor: wildcards/SS should contribute at least ~15%
     # Prevents optimizer from zeroing out engagement mechanics
@@ -1427,6 +1535,12 @@ def evaluate_config(config, scenarios):
         - result.get("blowout_rate", 0) * 1.0  # penalize frequent blowouts
         + non_draft_score * 1.5  # wildcards/SS picks matter
         - consistency_penalty  # prefer reliable outcomes
+    )
+    # Kept so a penalised config (the current default, say) can still be
+    # compared with the passing ones on the same metrics
+    result["composite_unconstrained"] = result["composite"]
+    result["composite"] -= PLACEMENT_ORDER_PENALTY * (
+        1 - result.get("placement_order_ok", 1.0)
     )
     return result
 
@@ -1484,6 +1598,19 @@ def print_metrics(metrics):
     print(
         f"  Non-draft impact:     {metrics.get('non_draft_pct', 0):.0%}  (pts from wildcard/SS)"
     )
+    print(
+        f"  Finalists >= 4th:     {metrics.get('placement_order_ok', 1):.0%}"
+        f"  (seasons where no finalist scores below 4th, required)"
+    )
+    print(
+        f"  3rd can beat 2nd:     {metrics.get('third_beats_second', 0):.0%}"
+        f"  (seasons where a fire win lifts 3rd over 2nd, reported)"
+    )
+    if "composite_unconstrained" in metrics:
+        print(
+            f"  Composite before placement check: "
+            f"{metrics['composite_unconstrained']:.3f}"
+        )
     # Consistency (std devs)
     cb_std = metrics.get("comeback_rate_std", 0)
     su_std = metrics.get("suspense_std", 0)
@@ -2074,29 +2201,18 @@ def build_chart_data(
             }
         )
 
-    # Default rank + composite
-    default_rank = None
-    default_composite = None
-    for i, (config, metrics) in enumerate(results):
-        expanded = expand_config(config)
-        if all(expanded.get(k) == DEFAULT_CONFIG.get(k) for k in DEFAULT_CONFIG):
-            default_rank = i + 1
-            default_composite = round(metrics["composite"], 3)
-            break
+    # Default and legacy rank + composite
+    default_rank = default_composite = None
+    found = find_config_rank(results, DEFAULT_PARAMS)
+    if found:
+        default_rank, metrics = found
+        default_composite = round(metrics["composite"], 3)
 
-    # Legacy rank + composite
-    legacy_rank = None
-    legacy_composite = None
-    for i, (config, metrics) in enumerate(results):
-        expanded = expand_config(config)
-        if all(
-            expanded.get(k) == LEGACY_CONFIG.get(k)
-            for k in LEGACY_CONFIG
-            if k in expanded
-        ):
-            legacy_rank = i + 1
-            legacy_composite = round(metrics["composite"], 3)
-            break
+    legacy_rank = legacy_composite = None
+    found = find_config_rank(results, LEGACY_PARAMS)
+    if found:
+        legacy_rank, metrics = found
+        legacy_composite = round(metrics["composite"], 3)
 
     return {
         "total_configs": len(results),
@@ -2197,12 +2313,7 @@ def main():
         drafts_per = 3 if args.quick else DRAFTS_PER_PLAYER_COUNT
         scenarios = generate_scenarios(seasons, drafts_per=drafts_per)
         health = build_season_health_stats(results[0][0], scenarios)
-        legacy_cfg = {
-            k: LEGACY_CONFIG.get(k, DEFAULT_CONFIG.get(k))
-            for k in PARAM_GRID
-            if k in LEGACY_CONFIG or k in DEFAULT_CONFIG
-        }
-        leg_health = build_season_health_stats(legacy_cfg, scenarios)
+        leg_health = build_season_health_stats(dict(LEGACY_PARAMS), scenarios)
 
         export = build_chart_data(
             results,
@@ -2251,18 +2362,9 @@ def main():
     print(f"{'=' * 80}")
 
     configs = stratified_random_sample(PARAM_GRID, n_samples)
-    # Always include default config
-    configs.append(
-        {k: DEFAULT_CONFIG.get(k) for k in PARAM_GRID if k in DEFAULT_CONFIG}
-    )
-    # Always include legacy (pre-site) config
-    configs.append(
-        {
-            k: LEGACY_CONFIG.get(k, DEFAULT_CONFIG.get(k))
-            for k in PARAM_GRID
-            if k in LEGACY_CONFIG or k in DEFAULT_CONFIG
-        }
-    )
+    # Always include the default and legacy (pre-site) configs
+    configs.append(dict(DEFAULT_PARAMS))
+    configs.append(dict(LEGACY_PARAMS))
 
     n_workers = args.cores if args.cores else max(1, mp.cpu_count() - 2)
     n_workers = max(1, min(n_workers, mp.cpu_count()))
@@ -2365,29 +2467,20 @@ def main():
     for i, (config, metrics) in enumerate(results[:10]):
         print_config_result(i + 1, config, metrics)
 
-    # Default rank
-    for i, (config, metrics) in enumerate(results):
-        expanded = expand_config(config)
-        if all(expanded.get(k) == DEFAULT_CONFIG.get(k) for k in DEFAULT_CONFIG):
-            print(f"\n{'=' * 80}")
-            print(f"CURRENT DEFAULT — Rank #{i + 1} of {len(results)}")
-            print_metrics(metrics)
-            print(f"  Composite: {metrics['composite']:.3f}")
-            break
-
-    # Legacy rank
-    for i, (config, metrics) in enumerate(results):
-        expanded = expand_config(config)
-        if all(
-            expanded.get(k) == LEGACY_CONFIG.get(k)
-            for k in LEGACY_CONFIG
-            if k in expanded
-        ):
-            print(f"\n{'=' * 80}")
-            print(f"LEGACY (PRE-SITE) — Rank #{i + 1} of {len(results)}")
-            print_metrics(metrics)
-            print(f"  Composite: {metrics['composite']:.3f}")
-            break
+    # Baselines, printed beside the top 10 on the same metrics
+    for label, params in (
+        ("CURRENT DEFAULT", DEFAULT_PARAMS),
+        ("LEGACY (PRE-SITE)", LEGACY_PARAMS),
+    ):
+        found = find_config_rank(results, params)
+        print(f"\n{'=' * 80}")
+        if found is None:
+            print(f"{label} — not among the evaluated configs")
+            continue
+        rank, metrics = found
+        print(f"{label} — Rank #{rank} of {len(results)}")
+        print_metrics(metrics)
+        print(f"  Composite: {metrics['composite']:.3f}")
 
     # ── Pick type impact ─────────────────────────────────────────────
     print(f"\n\n{'=' * 80}")
@@ -2457,12 +2550,7 @@ def main():
 
         print("Computing per-season health stats...")
         health = build_season_health_stats(best_config, scenarios)
-        legacy_cfg = {
-            k: LEGACY_CONFIG.get(k, DEFAULT_CONFIG.get(k))
-            for k in PARAM_GRID
-            if k in LEGACY_CONFIG or k in DEFAULT_CONFIG
-        }
-        leg_health = build_season_health_stats(legacy_cfg, scenarios)
+        leg_health = build_season_health_stats(dict(LEGACY_PARAMS), scenarios)
 
         export = build_chart_data(
             results,
