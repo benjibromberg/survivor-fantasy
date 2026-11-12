@@ -1733,3 +1733,122 @@ def test_expanded_configs_score_no_sole_survivor_points():
     """The chart builders score expanded configs; the league has Sole Survivor off."""
     assert expand_config({"first_val": 5})["sole_survivor_val"] == 0
     assert expand_config({"sole_survivor_val": 2})["sole_survivor_val"] == 2
+
+
+# ── --metrics-for: one config's metrics, for the site ──────────────────────
+
+
+def _small_scenarios():
+    season = make_season(num_players=10, left_at_jury=5, n_finalists=3)
+    users = [101, 102, 103, 104]
+    picks = make_picks(season.survivors, users, picks_per_user=2)
+    ss = {uid: 0 for uid in users}
+    return [(season, season.survivors, picks, ss, season.num_players, len(users))]
+
+
+class TestMetricsForCli:
+    def test_a_config_argument_must_be_a_json_object(self):
+        from analyze_scoring import parse_metrics_config
+
+        assert parse_metrics_config('{"jury_val": 2}') == {"jury_val": 2}
+        for bad in ("[1, 2]", "jury_val=2", "3"):
+            with pytest.raises(ValueError):
+                parse_metrics_config(bad)
+
+    def test_the_record_is_evaluate_configs_metrics_with_its_inputs(self):
+        from analyze_scoring import config_metrics_record
+
+        scenarios = _small_scenarios()
+        config = dict(DEFAULT_CONFIG)
+
+        record = config_metrics_record(config, scenarios, [41, 42], 50)
+
+        assert record["metrics"] == evaluate_config(config, scenarios)
+        assert record["config"] == config
+        assert record["seasons"] == [41, 42]
+        assert record["drafts_per"] == 50
+        assert record["n_scenarios"] == 1
+
+    def test_the_record_is_written_whole_and_reads_back(self, tmp_path):
+        from analyze_scoring import write_metrics_record
+
+        path = tmp_path / "nested" / "abc.json"
+        write_metrics_record(str(path), {"metrics": {"composite": 1.5}})
+
+        assert json.loads(path.read_text()) == {"metrics": {"composite": 1.5}}
+        # Nothing left beside it: the temporary file was renamed into place
+        assert [p.name for p in path.parent.iterdir()] == ["abc.json"]
+
+    def test_each_config_is_written_to_its_own_path(self, tmp_path, monkeypatch):
+        import analyze_scoring
+
+        scenarios = _small_scenarios()
+        monkeypatch.setattr(analyze_scoring, "load_all_seasons", lambda numbers: [])
+        monkeypatch.setattr(
+            analyze_scoring, "generate_scenarios", lambda seasons, drafts_per: scenarios
+        )
+        first, second = tmp_path / "a.json", tmp_path / "b.json"
+
+        analyze_scoring.run_metrics_jobs(
+            [{"jury_val": 0}, {"jury_val": 3}], [str(first), str(second)], [41], 50
+        )
+
+        assert json.loads(first.read_text())["config"] == {"jury_val": 0}
+        assert json.loads(second.read_text())["config"] == {"jury_val": 3}
+
+    def _main(self, monkeypatch, argv):
+        import analyze_scoring
+
+        calls = []
+        monkeypatch.setattr(
+            analyze_scoring, "run_metrics_jobs", lambda *a: calls.append(a)
+        )
+        monkeypatch.setattr("sys.argv", ["analyze_scoring.py", *argv])
+        analyze_scoring.main()
+        return calls
+
+    def test_main_runs_the_jobs_on_the_standard_scenarios(self, monkeypatch, tmp_path):
+        from analyze_scoring import DEFAULT_SEASONS, DRAFTS_PER_PLAYER_COUNT
+
+        out = tmp_path / "x.json"
+        calls = self._main(
+            monkeypatch, ["--metrics-for", '{"jury_val": 2}', "--metrics-out", str(out)]
+        )
+
+        assert calls == [
+            ([{"jury_val": 2}], [str(out)], DEFAULT_SEASONS, DRAFTS_PER_PLAYER_COUNT)
+        ]
+
+    @pytest.mark.parametrize(
+        "argv",
+        [
+            ["--metrics-for", "{}"],
+            ["--metrics-out", "x.json"],
+            ["--metrics-for", "{}", "--metrics-for", "{}", "--metrics-out", "x.json"],
+            ["--metrics-for", "[1]", "--metrics-out", "x.json"],
+        ],
+    )
+    def test_main_refuses_unpaired_or_bad_arguments(self, monkeypatch, argv):
+        with pytest.raises(SystemExit) as exit_info:
+            self._main(monkeypatch, argv)
+
+        assert exit_info.value.code == 2
+
+
+class TestCompositeHelpers:
+    def test_non_draft_credit_rises_to_35_percent_then_stops(self):
+        from analyze_scoring import _non_draft_score
+
+        assert _non_draft_score(0.2) < _non_draft_score(0.3) < _non_draft_score(0.35)
+        assert _non_draft_score(0.35) == _non_draft_score(0.6)
+
+    def test_non_draft_below_10_percent_is_penalised(self):
+        from analyze_scoring import _non_draft_score
+
+        assert _non_draft_score(0.05) == pytest.approx(0.05 - 0.05 * 2.0)
+
+    def test_volatility_credit_is_capped(self):
+        from analyze_scoring import _volatility_score
+
+        assert _volatility_score(1.0) == 0.5
+        assert _volatility_score(3.0) == 1.0
