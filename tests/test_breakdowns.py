@@ -14,6 +14,7 @@ from app.breakdowns import (
     explain_change,
     group_totals,
     pick_contributions,
+    shown_cents,
 )
 
 
@@ -274,6 +275,121 @@ class TestGroupTotals:
         totals = group_totals(_entry(_pick("Kyle", "Draft", {"jury": 3, "new": 2})))
 
         assert totals == {"jury": 3, "new": 2}
+
+
+def _cents(points):
+    return round(points * 100)
+
+
+class TestShownAmountsAddUp:
+    """What a player reads must add up: the reasons plus "everything else"
+    make the change, and the change is the printed new total minus the old."""
+
+    def _owen(self):
+        """Owen's numbers: immunity +1.875 and advantages -0.8, from 15.25 to
+        16.325, which prints as 16.32."""
+        before = _entry(
+            _pick(
+                "Brady", "Draft", {"pre_merge_tribal": 14.25, "advantages_found": 1.0}
+            )
+        )
+        after = _entry(
+            _pick(
+                "Brady",
+                "Draft",
+                {
+                    "pre_merge_tribal": 14.25,
+                    "advantages_found": 0.2,
+                    "tribal_immunity": 1.875,
+                },
+            )
+        )
+        return before, after
+
+    def test_owens_parts_add_up_to_the_shown_change(self):
+        before, after = self._owen()
+
+        change = explain_change(before, after)
+
+        printed = float(f"{after['total_points']:.2f}") - float(
+            f"{before['total_points']:.2f}"
+        )
+        assert _cents(change["delta"]) == _cents(printed) == 107
+        assert [r["delta"] for r in change["reasons"]] == [1.87, -0.8]
+        assert change["other"] == 0
+        parts = [r["delta"] for r in change["reasons"]] + [change["other"]]
+        assert sum(_cents(v) for v in parts) == _cents(change["delta"])
+
+    def test_owens_parts_rounded_one_by_one_would_not(self):
+        """The defect the league saw: +1.88 and -0.8 against +1.07."""
+        before, after = self._owen()
+        change = explain_change(before, after)
+        raw = {"immunity": 1.875, "advantages": -0.8}
+
+        one_by_one = sum(_cents(round(v, 2)) for v in raw.values())
+
+        assert one_by_one == 108 != _cents(change["delta"])
+
+    def test_a_sum_plain_rounding_breaks_is_kept(self):
+        """Three groups of 0.335: one by one they print 0.34 each, which is
+        1.02, against a total of 1.005 printed as 1.01."""
+        before = _entry(_pick("Kyle", "Draft", {}))
+        after = _entry(
+            _pick("Kyle", "Draft", {"jury": 0.335, "merge": 0.335, "fire_win": 0.335})
+        )
+
+        change = explain_change(before, after)
+
+        shown = [r["delta"] for r in change["reasons"]]
+        assert sum(_cents(round(0.335, 2)) for _ in range(3)) == 102
+        assert _cents(change["delta"]) == 101
+        assert sum(_cents(v) for v in shown) + _cents(change["other"]) == 101
+        assert sorted(shown) == [0.33, 0.34, 0.34]
+
+    def test_rounding_leaves_the_order_and_labels_alone(self):
+        before = _entry(_pick("Kyle", "Draft", {}))
+        after = _entry(
+            _pick("Kyle", "Draft", {"jury": 0.335, "merge": 0.335, "fire_win": 0.335})
+        )
+
+        reasons = explain_change(before, after)["reasons"]
+
+        # Equal amounts rank by key, as before rounding
+        assert [r["key"] for r in reasons] == ["fire_win", "jury", "merge"]
+        assert [r["label"] for r in reasons] == [
+            "fire-making win",
+            "making the jury",
+            "making the merge",
+        ]
+
+    def test_a_remainder_with_nothing_in_it_rounds_to_zero(self):
+        """0.004 from a group too small to list: no remainder, no rest."""
+        before = _entry(_pick("Kyle", "Draft", {"jury": 3.0}))
+        after = _entry(_pick("Kyle", "Draft", {"jury": 6.0, "merge": 0.004}))
+
+        change = explain_change(before, after)
+
+        assert change["other"] == 0 and change["rest"] == []
+        assert [r["delta"] for r in change["reasons"]] == [3.0]
+
+    def test_a_remainder_that_nets_out_keeps_its_groups(self):
+        """+0.5 and -0.5 make a remainder of 0, but there is something to name."""
+        before = _entry(_pick("Kyle", "Draft", {}))
+        after = _entry(
+            _pick("Kyle", "Draft", {"jury": 3.0, "merge": 0.5, "fire_win": -0.5})
+        )
+
+        change = explain_change(before, after, limit=1)
+
+        assert change["other"] == 0
+        assert {r["key"]: r["delta"] for r in change["rest"]} == {
+            "merge": 0.5,
+            "fire_win": -0.5,
+        }
+
+    def test_shown_cents_rounds_as_the_page_prints(self):
+        for points in (16.325, 1.875, 1.005, 0.125, -0.8, 15.25, 2.675):
+            assert shown_cents(points) == round(float(f"{points:.2f}") * 100), points
 
 
 def test_every_breakdown_key_has_a_plain_label_and_no_label_is_spare():

@@ -32,7 +32,7 @@
         <dt>{{ ordinal(p.rank) }} &middot; {{ p.name }}</dt>
         <dd>{{ pts(p.points) }} pts
             <small>{{ then }} {{ pts(p.old_points) }}, {{ ordinal(p.old_rank) }} &middot; {% if p.delta|abs < 0.005 %}same points{% else %}{{ signed(p.delta) }} pts{% endif %}{% if p.moved > 0 %}, up {{ places(p.moved) }}{% elif p.moved < 0 %}, down {{ places(-p.moved) }}{% endif %}</small>
-            {% if p.reasons or p.other %}
+            {% if p.reasons or p.other or p.rest %}
             <ul class="ls-replay-why">
                 {% for r in p.reasons %}
                 {# A lone castaway who accounts for the whole change needs no amount of their own. #}
@@ -40,8 +40,11 @@
                 <li><span class="ls-replay-delta {{ 'ls-replay-up' if r.delta > 0 else 'ls-replay-down' }}">{{ signed(r.delta) }}</span>
                     <span class="ls-replay-what">{{ r.label }}{% if r.castaways %}<span class="ls-replay-who">{% for c in r.castaways %}{{ c.name }}{% if not whole %}&nbsp;{{ signed(c.delta) }}{% endif %}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}</span></li>
                 {% endfor %}
-                {% if p.other %}
-                <li><span class="ls-replay-delta {{ 'ls-replay-up' if p.other > 0 else 'ls-replay-down' }}">{{ signed(p.other) }}</span>
+                {# Amounts arrive rounded so they add up (breakdowns.explain_change).
+                   A remainder that rounds to nothing is dropped, unless it
+                   nets out groups worth naming. #}
+                {% if p.other or p.rest %}
+                <li><span class="ls-replay-delta {{ 'ls-replay-up' if p.other > 0 else ('ls-replay-down' if p.other < 0 else '') }}">{{ signed(p.other) }}</span>
                     <span class="ls-replay-what">everything else{% if p.rest %}<span class="ls-replay-who">{% for r in p.rest %}{{ r.label }}&nbsp;{{ signed(r.delta) }}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}</span></li>
                 {% endif %}
             </ul>

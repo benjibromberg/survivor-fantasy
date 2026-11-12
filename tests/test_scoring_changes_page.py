@@ -473,6 +473,80 @@ class TestCurrentSeasonReasons:
         assert _standings_fold(page) is None
 
 
+_SIGNED = r"(0|\+[\d.]+|&minus;[\d.]+)"
+
+
+def _cents_of(printed):
+    """A signed amount as the page prints it (+1.5, &minus;0.8, 0), in cents."""
+    if printed == "0":
+        return 0
+    sign = -1 if printed.startswith("&minus;") else 1
+    return sign * round(float(printed.lstrip("+").removeprefix("&minus;")) * 100)
+
+
+def _printed_players(page):
+    """(new, old, change, parts) in cents, as printed, for every replay player."""
+    out = []
+    bodies = re.findall(
+        r'<dl class="ls-values ls-values-wide ls-replay-body">(.*?)</dl>', page, re.S
+    )
+    for body in bodies:
+        for player in body.split('<div class="ls-value">')[1:]:
+            new = re.search(r"<dd>([\d.]+) pts", player).group(1)
+            old = re.search(r"<small>(?:was|currently) ([\d.]+),", player).group(1)
+            moved = re.search(r"&middot; (same points|" + _SIGNED + " pts)", player)
+            change = 0 if moved.group(1) == "same points" else _cents_of(moved.group(2))
+            parts = re.findall(
+                r'class="ls-replay-delta[^"]*">' + _SIGNED + "</span>", player
+            )
+            out.append(
+                (
+                    round(float(new) * 100),
+                    round(float(old) * 100),
+                    change,
+                    [_cents_of(x) for x in parts],
+                )
+            )
+    return out
+
+
+class TestPrintedNumbersAddUp:
+    def test_every_players_parts_add_up_to_the_printed_change(self, league):
+        """A Season 51 wildcard puts Pat's parts in eighths: immunity +0.625,
+        idols +0.375, advantages -0.125, from 3.25 to 4.125 (printed 4.12).
+        Rounded one by one they print 0.88 against a change of 0.87."""
+        from app.models import Pick, Survivor
+
+        fifth = Survivor.query.filter_by(season_id=league.s51.id, name="S51C5").one()
+        fifth.advantages_found = 1
+        fifth.idols_found = 1
+        fifth.tribal_immunity_wins = 1
+        league.db.session.add(
+            Pick(
+                user_id=league.pat.id,
+                season_id=league.s51.id,
+                survivor_id=fifth.id,
+                pick_type="wildcard",
+            )
+        )
+        league.db.session.commit()
+
+        players = _printed_players(_page(league))
+
+        assert len(players) == 6  # two players each in Seasons 51, 50 and 49
+        for new, old, change, parts in players:
+            assert new - old == change, (new, old, change)
+            if parts:
+                assert sum(parts) == change, (parts, change)
+
+    def test_no_remainder_line_when_nothing_is_left(self, league):
+        """Sam's Season 50 change is all in its two listed groups."""
+        past = _block(_page(league), "past-seasons")
+        sam = _season_row(past, "Season 50").split("&middot; Pat</dt>")[0]
+
+        assert "everything else" not in sam
+
+
 class TestComponentTotalsOnRealEntries:
     def test_components_add_up_to_each_players_total(self, league):
         """Checked on _build_leaderboard's entries, with a wildcard in them."""
