@@ -2697,9 +2697,41 @@ def admin_replacement_window(season_id):
     return back
 
 
+def _scoring_from_form(prefix, base):
+    """A scoring config from the `<prefix><key>` fields of the posted form.
+
+    A blank field keeps `base`'s value. Returns (config, None), or
+    (None, label) naming the first value that is not a finite number, so the
+    caller stores nothing rather than a broken config.
+    """
+    config = {}
+    for key in DEFAULT_CONFIG:
+        form_val = request.form.get(f"{prefix}{key}", "").strip()
+        if not form_val:
+            config[key] = base[key]
+            continue
+        try:
+            value = float(form_val)
+        except ValueError:
+            value = None
+        if value is None or not math.isfinite(value):
+            return None, CONFIG_LABELS.get(key, (key,))[0]
+        config[key] = value
+    return config, None
+
+
 @main_bp.route("/admin/season/<int:season_id>/settings", methods=["POST"])
 @login_required
 def admin_season_settings(season_id):
+    """Save the season's scoring, or put a config to the league for a vote.
+
+    Two ways to say which config. The direct form posts every value as
+    `scoring_<key>` (blank means the default) and proposes only when
+    `propose` is ticked. The Scoring vote form posts `propose_from`, a key
+    from proposals.starting_points, plus `adjust_<key>` for any value typed
+    over the starting point's (blank keeps it); it always proposes, because
+    applying a config without a vote is what the direct form is for.
+    """
     denied = _require_admin()
     if denied:
         return denied
@@ -2708,25 +2740,20 @@ def admin_season_settings(season_id):
 
     back = redirect(url_for("main.admin_season_detail", season_id=season.id))
 
-    # Build scoring config from individual toggle inputs. Fail on the first
-    # value that is not a finite number rather than store a broken config.
-    scoring_config = {}
-    for key in DEFAULT_CONFIG:
-        form_val = request.form.get(f"scoring_{key}", "").strip()
-        if not form_val:
-            scoring_config[key] = DEFAULT_CONFIG[key]
-            continue
-        try:
-            value = float(form_val)
-        except ValueError:
-            value = None
-        if value is None or not math.isfinite(value):
-            label = CONFIG_LABELS.get(key, (key,))[0]
-            flash(f"{label} has to be a number.", "error")
+    start = request.form.get("propose_from")
+    if start is not None:
+        base = proposals.starting_config(season, start)
+        if base is None:
+            flash("Choose what to propose from the list.", "error")
             return back
-        scoring_config[key] = value
+        scoring_config, bad = _scoring_from_form("adjust_", base)
+    else:
+        scoring_config, bad = _scoring_from_form("scoring_", DEFAULT_CONFIG)
+    if bad:
+        flash(f"{bad} has to be a number.", "error")
+        return back
 
-    if "propose" in request.form:
+    if start is not None or "propose" in request.form:
         # Put to the league instead of applying (app/proposals.py)
         try:
             closes = wildcards.parse_league_time(request.form.get("proposal_closes_at"))
