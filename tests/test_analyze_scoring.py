@@ -26,11 +26,16 @@ from analyze_scoring import (
     evaluate_config,
     expand_config,
     find_config_rank,
+    load_shards,
+    parse_shard,
     placement_order,
     rank_users,
     satisfies_orderings,
+    shard_configs,
+    shard_path,
     snake_draft,
     stratified_random_sample,
+    write_shard,
 )
 from app.scoring.classic import DEFAULT_CONFIG, ClassicScoring
 
@@ -1639,3 +1644,54 @@ class TestOrderingsInComposite:
 
         assert result["orderings_ok"] == 1.0
         assert result["composite"] == pytest.approx(result["composite_unconstrained"])
+
+
+# ── Sharding the sweep across nodes ────────────────────────────────────────
+
+
+class TestSharding:
+    def test_parse_shard(self):
+        assert parse_shard("3/20") == (3, 20)
+
+    @pytest.mark.parametrize("bad", ["20/20", "-1/4", "3", "a/b", "0/0"])
+    def test_parse_shard_rejects_nonsense(self, bad):
+        with pytest.raises(ValueError):
+            parse_shard(bad)
+
+    def test_shards_split_the_configs_exactly(self):
+        configs = [{"i": i} for i in range(103)]
+        shards = [shard_configs(configs, k, 7) for k in range(7)]
+
+        merged = sorted(c["i"] for shard in shards for c in shard)
+        assert merged == list(range(103))
+        assert max(map(len, shards)) - min(map(len, shards)) <= 1
+
+    def _results(self, n):
+        return [
+            (
+                {"first_val": 5, "placement_ratio": (0.5, 0.25), "i": i},
+                {"composite": float(i)},
+            )
+            for i in range(n)
+        ]
+
+    def test_round_trip_restores_tuples(self, tmp_path):
+        """JSON turns tuples into lists; refinement looks values up by equality."""
+        write_shard(shard_path(tmp_path, 0, 1), self._results(3))
+
+        loaded = load_shards(tmp_path, 1, expected_total=3)
+
+        assert loaded[0][0]["placement_ratio"] == (0.5, 0.25)
+        assert isinstance(loaded[0][0]["placement_ratio"], tuple)
+
+    def test_a_missing_shard_fails_naming_it(self, tmp_path):
+        write_shard(shard_path(tmp_path, 0, 2), self._results(2))
+
+        with pytest.raises(ValueError, match="shard-001-of-002"):
+            load_shards(tmp_path, 2, expected_total=4)
+
+    def test_a_short_total_fails(self, tmp_path):
+        write_shard(shard_path(tmp_path, 0, 1), self._results(2))
+
+        with pytest.raises(ValueError, match="expected 3"):
+            load_shards(tmp_path, 1, expected_total=3)
