@@ -20,7 +20,7 @@
 <nav class="ls-siblings" aria-label="Other {{ group|lower }} settings">
     <h2 class="ls-group-label">More in {{ group|lower }}</h2>
     <ul>
-        {% for slug, title, blurb in entries %}{% if slug != section.slug %}
+        {% for slug, title, blurb in entries %}{% if slug != section.slug and slug not in hidden_sections %}
         <li><a href="{{ detail_url(slug, season_id) }}">{{ title }}</a></li>
         {% endif %}{% endfor %}
     </ul>
