@@ -1036,6 +1036,17 @@ def calculate_leaderboard(
     return results
 
 
+def impact_params(candidates):
+    """Keep only the (param, label, unit) rows whose param the sweep varies.
+
+    Grouping results by a parameter the sweep never varies puts every config
+    in one group, which the report then printed as "tested at that value":
+    the Sole Survivor bonus read as tested at 1 in every config when it was
+    never scored at all.
+    """
+    return [row for row in candidates if row[0] in PARAM_GRID]
+
+
 def find_config_rank(results, params):
     """Return (1-based rank, metrics) of the result whose config is `params`, or None.
 
@@ -1716,7 +1727,7 @@ def print_metrics(metrics):
         f"  Blowout rate:         {metrics.get('blowout_rate', 0):.0%}  (1st > 2x last)"
     )
     print(
-        f"  Non-draft impact:     {metrics.get('non_draft_pct', 0):.0%}  (pts from wildcard/SS)"
+        f"  Non-draft impact:     {metrics.get('non_draft_pct', 0):.0%}  (pts from wildcards and replacements)"
     )
     print(
         f"  Finalists >= 4th:     {metrics.get('placement_order_ok', 1):.0%}"
@@ -2647,29 +2658,35 @@ def main():
     print(f"\n\n{'=' * 80}")
     print("PICK TYPE IMPACT ANALYSIS")
     print(f"{'=' * 80}")
+    print(
+        "  Sole Survivor is not part of the search: every config is scored"
+        " with no Sole Survivor points."
+    )
 
-    for param, label, unit in [
-        (
-            "wildcard_multiplier",
-            "Wildcard multiplier",
-            "e.g. 0.5 = wildcards earn half points",
-        ),
-        (
-            "draft_replacement_multiplier",
-            "Draft replacement multiplier",
-            "e.g. 0.5 = draft replacements earn half points",
-        ),
-        (
-            "wc_replacement_multiplier",
-            "Wildcard replacement multiplier",
-            "e.g. 0.5 = wildcard replacements earn half points",
-        ),
-        (
-            "sole_survivor_val",
-            "Sole Survivor bonus",
-            "points per episode in streak (0 = disabled)",
-        ),
-    ]:
+    for param, label, unit in impact_params(
+        [
+            (
+                "wildcard_multiplier",
+                "Wildcard multiplier",
+                "e.g. 0.5 = wildcards earn half points",
+            ),
+            (
+                "draft_replacement_multiplier",
+                "Draft replacement multiplier",
+                "e.g. 0.5 = draft replacements earn half points",
+            ),
+            (
+                "wc_replacement_multiplier",
+                "Wildcard replacement multiplier",
+                "e.g. 0.5 = wildcard replacements earn half points",
+            ),
+            (
+                "sole_survivor_val",
+                "Sole Survivor bonus",
+                "points per episode in streak (0 = disabled)",
+            ),
+        ]
+    ):
         groups = defaultdict(list)
         for config, metrics in results:
             groups[config.get(param, DEFAULT_CONFIG.get(param))].append(
