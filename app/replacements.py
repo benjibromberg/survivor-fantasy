@@ -28,7 +28,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
 from . import wildcards
-from .models import Pick, Survivor, User, db
+from .models import Pick, Survivor, User, count_tribals, db
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +88,13 @@ def _entitled_and_picked(season):
 
 
 def scoring_start(season):
-    """When replacements start counting: (elimination count, baseline episode).
+    """When replacements start counting: (tribal count, baseline episode).
 
-    A replacement is left off the scores until the season has had that many
-    eliminations, and then scores only what happens after the baseline
-    episode.
+    A replacement is left off the scores until the season's tribal count
+    (Season.current_tribal_count, distinct elimination days) reaches the
+    first value, and then scores only what happens after the baseline
+    episode. Both branches count the merge point the same way (count_tribals),
+    so it is in the unit every page compares it with.
 
     A season in replacement self-service counts from the merge episode in
     Tribe Mapping: picks lock before the next episode, so that is exactly
@@ -114,23 +116,27 @@ def scoring_start(season):
             ),
             None,
         )
-        return merge_elim, episode
+        # merge_threshold counts boots; a same-day pair before the merge is
+        # two boots but one tribal. Until that many are out, each boot still
+        # to come adds at least a day, so the count is not reached early.
+        by_merge = [
+            s for s in season.survivors if 0 < (s.voted_out_order or 0) <= merge_elim
+        ]
+        return count_tribals(by_merge) + max(0, merge_elim - len(by_merge)), episode
     if merge_episode is None:
         return None, None
-    # Counted like Season.current_tribal_count: distinct elimination days
     out = [s for s in season.survivors if _lost_by_merge(s, merge_episode)]
-    days = {s.day_voted_out for s in out if s.day_voted_out}
-    return (len(days) if days else len(out)), merge_episode
+    return count_tribals(out), merge_episode
 
 
 def counts_yet(pick_type, tribals, merge_elim):
     """Whether a pick scores yet, `tribals` into the season.
 
-    The one rule for every page that totals picks (the leaderboard, its
-    progression line, the compare page). Wildcards are picked after episode
-    1, so they count from the first boot. Replacements count once `tribals`
-    reaches `merge_elim` (the first value from scoring_start), and not at all
-    while it is unknown. Draft picks always count.
+    The one rule for everything that totals picks (the leaderboard, its
+    progression line, the compare page, the win odds). Wildcards are picked
+    after episode 1, so they count from the first boot. Replacements count
+    once `tribals` reaches `merge_elim` (the first value from scoring_start),
+    and not at all while it is unknown. Draft picks always count.
 
     `tribals` is Season.current_tribal_count, taken on the season as shown
     (after _apply_as_of for a past step): distinct elimination days, so a

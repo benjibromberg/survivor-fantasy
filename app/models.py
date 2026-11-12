@@ -19,6 +19,20 @@ def normalize_email(value):
     return (value or "").strip().lower() or None
 
 
+def count_tribals(castaways):
+    """Tribal councils among `castaways` who are out: distinct elimination days.
+
+    The one count for "how far into the season": a same-day double boot is
+    one tribal, as CLAUDE.md's tribal counting rule says. Falls back to the
+    highest boot order among them when none has a day recorded.
+    """
+    out = [s for s in castaways if s.voted_out_order]
+    days = {s.day_voted_out for s in out if s.day_voted_out}
+    if days:
+        return len(days)
+    return max((s.voted_out_order for s in out), default=0)
+
+
 class User(UserMixin, db.Model):
     """A fantasy player, created by the admin.
 
@@ -104,16 +118,7 @@ class Season(db.Model):
 
         Falls back to max(voted_out_order) when day_voted_out data is unavailable.
         """
-        days = {
-            s.day_voted_out
-            for s in self.survivors
-            if s.voted_out_order and s.day_voted_out
-        }
-        if days:
-            return len(days)
-        # Fallback for seasons without day data
-        voted = [s.voted_out_order for s in self.survivors if s.voted_out_order]
-        return max(voted) if voted else 0
+        return count_tribals(self.survivors)
 
     def compute_tribals_survived(self, survivor):
         """Number of distinct elimination days before this survivor's elimination day.

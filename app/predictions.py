@@ -292,15 +292,16 @@ def _score_all_users(
     user_picks,
     surv_by_id,
     season,
-    current_elim_count,
+    tribals,
     replacements_from,
     at_merge_stats,
     user_ss_picks,
 ):
     """Score all users and return the winner's user_id.
 
-    replacements_from: elimination count before which replacements score
-        nothing (replacements.scoring_start).
+    tribals, replacements_from: which picks count yet, by
+        replacements.counts_yet: the season's tribal count now, and the
+        first value of replacements.scoring_start.
 
     at_merge_stats: dict {survivor_id: {attr: at_merge_val}} for replacement picks.
         Precomputed once to avoid repeated JSON parsing in the hot loop.
@@ -310,14 +311,7 @@ def _score_all_users(
     for user in users_with_picks:
         total = 0
         for pick in user_picks[user.id]:
-            # Wildcard timing: skip if no eliminations yet
-            if pick.pick_type == "wildcard" and current_elim_count == 0:
-                continue
-            # Replacement timing: skip if merge hasn't happened
-            if (
-                pick.pick_type in replacements.TYPES
-                and current_elim_count < replacements_from
-            ):
+            if not replacements.counts_yet(pick.pick_type, tribals, replacements_from):
                 continue
 
             survivor = surv_by_id[pick.survivor_id]
@@ -463,6 +457,10 @@ def calculate_win_probabilities(season):
         return empty
 
     current_max_vo = max((s.voted_out_order for s in eliminated), default=0)
+    # Which picks count yet, by day like the standings. Taken now, before the
+    # simulation renumbers anyone: with no day data the count falls back to
+    # the highest order, which a simulated finish would push to the end.
+    tribals_now = season.current_tribal_count
 
     users_with_picks = (
         User.query.join(Pick).filter(Pick.season_id == season.id).distinct().all()
@@ -577,7 +575,7 @@ def calculate_win_probabilities(season):
             user_picks,
             surv_by_id,
             season,
-            current_max_vo,
+            tribals_now,
             replacements_from,
             at_merge_stats,
             user_ss_picks,
@@ -630,7 +628,7 @@ def calculate_win_probabilities(season):
             user_picks,
             surv_by_id,
             season,
-            current_max_vo,
+            tribals_now,
             replacements_from,
             at_merge_stats,
             user_ss_picks,

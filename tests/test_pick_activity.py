@@ -120,8 +120,13 @@ def _season(db, number, boots):
 
 
 # Two boots on day 5 in episode 2, consecutive orders: three boots, two days,
-# and the merge comes after three boots.
+# and the merge comes after three boots, which is two elimination days.
 PAIR_AT_THE_MERGE = [(1, 2, 1), (2, 5, 2), (3, 5, 2)]
+# A double boot in episode 1, then the season stops: two boots on one day.
+# The merge is still a boot away, so at least two days: one so far, one to come.
+PAIR_BEFORE_THE_MERGE = [(1, 2, 1), (2, 2, 1)]
+# No pair at all: boots and days agree, so nothing about the merge moves.
+NO_PAIR = [(1, 2, 1), (2, 5, 2), (3, 8, 3)]
 # Season 51's shape: the pair comes after the merge (orders 4 and 5, day 10).
 PAIR_AFTER_THE_MERGE = [(1, 2, 1), (2, 5, 2), (3, 8, 3), (4, 10, 4), (5, 10, 4)]
 
@@ -156,7 +161,7 @@ def _leaderboard_lines(c, season):
 
 
 class TestPairAtTheMerge:
-    def test_the_fixture_is_survivors_shape_and_crosses_the_merge(self, client):
+    def test_the_fixture_is_survivors_shape_and_reaches_the_merge(self, client):
         _, db = client
         season, cast = _season(db, 61, PAIR_AT_THE_MERGE)
         first, second = cast[1], cast[2]
@@ -164,10 +169,28 @@ class TestPairAtTheMerge:
         assert (first.voted_out_order, second.voted_out_order) == (2, 3)
         assert first.day_voted_out == second.day_voted_out
         assert first.elimination_episode == second.elimination_episode
-        # Three boots reach the merge; two elimination days do not
+        # Three boots are the merge, and they took two elimination days
         assert season.merge_threshold == 3
         assert max(s.voted_out_order for s in cast) == 3
         assert season.current_tribal_count == 2
+
+    def test_the_merge_is_two_days_in(self, client):
+        from app.replacements import scoring_start
+
+        _, db = client
+        season, _ = _season(db, 61, PAIR_AT_THE_MERGE)
+
+        assert scoring_start(season) == (2, 2)
+
+    def test_the_pair_no_longer_holds_the_replacement_back(self, client):
+        """The merge has happened, so the replacement counts. It used to wait
+        a day: the merge point was the boot count (3) and the day count is 2."""
+        _, db = client
+        season, _ = _season(db, 61, PAIR_AT_THE_MERGE)
+        pat = _leaderboard(season)["pat"]
+
+        assert "pmr_d" in {p["pick_type_raw"] for p in pat["picks"]}
+        assert not counts_yet("pmr_d", season.current_tribal_count, 3)
 
     def test_the_compare_page_counts_picks_as_the_leaderboard_does(self, client):
         _, db = client
@@ -181,25 +204,6 @@ class TestPairAtTheMerge:
             assert bar == pytest.approx(entry["total_points"]), name
             assert line[-1] == pytest.approx(entry["total_points"]), name
 
-    def test_the_replacement_does_not_count_before_the_second_merge_day(self, client):
-        """And it would on the old boot count: it holds points, so the
-        totals above would differ by them."""
-        from app.replacements import scoring_start
-        from app.scoring import get_scoring_system
-
-        _, db = client
-        season, cast = _season(db, 61, PAIR_AT_THE_MERGE)
-        merge_elim, _ = scoring_start(season)
-        boots = max(s.voted_out_order for s in cast)
-        scoring = get_scoring_system("Classic", season.get_scoring_config())
-        held, _ = scoring.score_pick(cast[3], season, "pmr_d", {"advantages_found": 2})
-
-        assert held > 0
-        assert counts_yet("pmr_d", boots, merge_elim)
-        assert not counts_yet("pmr_d", season.current_tribal_count, merge_elim)
-        pat = _leaderboard(season)["pat"]
-        assert "pmr_d" not in {p["pick_type_raw"] for p in pat["picks"]}
-
     def test_the_leaderboard_line_ends_on_the_standings(self, client):
         c, db = client
         season, _ = _season(db, 61, PAIR_AT_THE_MERGE)
@@ -209,6 +213,100 @@ class TestPairAtTheMerge:
         for entry in board.values():
             name = entry["user"].display_name
             assert lines[name][-1] == pytest.approx(entry["total_points"]), name
+
+
+class TestPairBeforeTheMerge:
+    """Boots run ahead of days here and the merge is between them, so a page
+    counting boots would count the replacement and the leaderboard would not."""
+
+    def test_the_boot_count_reaches_the_merge_point_and_the_day_count_does_not(
+        self, client
+    ):
+        from app.replacements import scoring_start
+        from app.scoring import get_scoring_system
+
+        _, db = client
+        season, cast = _season(db, 64, PAIR_BEFORE_THE_MERGE)
+        merge_from, _ = scoring_start(season)
+        boots = max(s.voted_out_order for s in cast)
+        scoring = get_scoring_system("Classic", season.get_scoring_config())
+        held, _ = scoring.score_pick(cast[3], season, "pmr_d", {"advantages_found": 2})
+
+        assert (boots, season.current_tribal_count, merge_from) == (2, 1, 2)
+        assert held > 0
+        assert counts_yet("pmr_d", boots, merge_from)
+        assert not counts_yet("pmr_d", season.current_tribal_count, merge_from)
+        pat = _leaderboard(season)["pat"]
+        assert "pmr_d" not in {p["pick_type_raw"] for p in pat["picks"]}
+
+    def test_the_compare_page_counts_picks_as_the_leaderboard_does(self, client):
+        c, db = client
+        season, _ = _season(db, 64, PAIR_BEFORE_THE_MERGE)
+
+        board, compare = _leaderboard(season), _compare(season)
+        lines = _leaderboard_lines(c, season)
+
+        for name, entry in board.items():
+            total, bar, line = compare[name]
+            assert total == bar == pytest.approx(entry["total_points"]), name
+            assert line[-1] == pytest.approx(entry["total_points"]), name
+            display = entry["user"].display_name
+            assert lines[display][-1] == pytest.approx(entry["total_points"])
+
+
+class TestNoPair:
+    def test_the_merge_point_is_the_boot_count_as_before(self, client):
+        from app.replacements import scoring_start
+
+        _, db = client
+        season, _ = _season(db, 65, NO_PAIR)
+
+        assert scoring_start(season) == (3, 3) == (season.merge_threshold, 3)
+        assert "pmr_d" in {
+            p["pick_type_raw"] for p in _leaderboard(season)["pat"]["picks"]
+        }
+
+    def test_before_the_merge_it_is_not_reached_early(self, client):
+        """One boot of three: the merge point stays at three, as it was."""
+        from app.replacements import scoring_start
+
+        _, db = client
+        season, _ = _season(db, 66, NO_PAIR[:1])
+
+        assert scoring_start(season) == (3, None)
+        assert "pmr_d" not in {
+            p["pick_type_raw"] for p in _leaderboard(season)["pat"]["picks"]
+        }
+
+
+class TestWinOdds:
+    def test_the_odds_count_picks_by_day_like_the_standings(
+        self, client, monkeypatch, tmp_path
+    ):
+        """The win odds took the boot count; they now take the day count from
+        before the simulation renumbers anyone, and the same merge point."""
+        from app import predictions
+
+        _, db = client
+        monkeypatch.setattr(
+            predictions, "SURVIVOR_DATA_FILE", str(tmp_path / "missing.xlsx")
+        )
+        predictions.clear_cache()
+        season, _ = _season(db, 61, PAIR_AT_THE_MERGE)
+        seen = set()
+        real = predictions._score_all_users
+
+        def spy(scoring, users, user_picks, surv_by_id, season_, tribals, start, *rest):
+            seen.add((tribals, start))
+            return real(
+                scoring, users, user_picks, surv_by_id, season_, tribals, start, *rest
+            )
+
+        monkeypatch.setattr(predictions, "_score_all_users", spy)
+        predictions.calculate_win_probabilities(season)
+        predictions.clear_cache()
+
+        assert seen == {(2, 2)}  # two days in, merge two days in: it counts
 
 
 class TestPairAfterTheMerge:
