@@ -484,8 +484,37 @@ def _cents_of(printed):
     return sign * round(float(printed.lstrip("+").removeprefix("&minus;")) * 100)
 
 
+def _printed_reasons(player):
+    """Each listed reason in one player's markup, as printed: its amount, the
+    names on its castaway line, every amount on that line (the others'
+    included), and the others phrase as (count, amount). Amounts in cents."""
+    out = []
+    for item in player.split("<li>")[1:]:
+        if "everything else" in item:
+            continue
+        delta = re.search(r'class="ls-replay-delta[^"]*">' + _SIGNED + "</span>", item)
+        who = re.search(r'<span class="ls-replay-who">(.*?)</span>', item)
+        line = who.group(1) if who else ""
+        others = re.search(r", and (\d+) others?&nbsp;" + _SIGNED + "$", line)
+        named = line[: others.start()] if others else line
+        out.append(
+            {
+                "delta": _cents_of(delta.group(1)),
+                "names": [n.split("&nbsp;")[0] for n in named.split(", ") if n],
+                "amounts": [_cents_of(x) for x in re.findall("&nbsp;" + _SIGNED, line)],
+                "others": (
+                    (int(others.group(1)), _cents_of(others.group(2)))
+                    if others
+                    else None
+                ),
+            }
+        )
+    return out
+
+
 def _printed_players(page):
-    """(new, old, change, parts) in cents, as printed, for every replay player."""
+    """(new, old, change, parts, reasons) in cents, as printed, for every
+    replay player; reasons from _printed_reasons."""
     out = []
     bodies = re.findall(
         r'<dl class="ls-values ls-values-wide ls-replay-body">(.*?)</dl>', page, re.S
@@ -505,16 +534,37 @@ def _printed_players(page):
                     round(float(old) * 100),
                     change,
                     [_cents_of(x) for x in parts],
+                    _printed_reasons(player),
                 )
             )
     return out
+
+
+def _assert_castaways_add_up(reasons):
+    """Every reason's castaway line adds up to the reason's printed amount.
+    A lone castaway who is the whole reason prints no amount, so has none to
+    add; returns how many reasons had amounts to check."""
+    checked = 0
+    for reason in reasons:
+        if not reason["names"]:
+            continue
+        if not reason["amounts"]:
+            assert len(reason["names"]) == 1 and reason["others"] is None, reason
+            continue
+        expected = len(reason["names"]) + (1 if reason["others"] else 0)
+        assert len(reason["amounts"]) == expected, reason
+        assert sum(reason["amounts"]) == reason["delta"], reason
+        checked += 1
+    return checked
 
 
 class TestPrintedNumbersAddUp:
     def test_every_players_parts_add_up_to_the_printed_change(self, league):
         """A Season 51 wildcard puts Pat's parts in eighths: immunity +0.625,
         idols +0.375, advantages -0.125, from 3.25 to 4.125 (printed 4.12).
-        Rounded one by one they print 0.88 against a change of 0.87."""
+        Rounded one by one they print 0.88 against a change of 0.87. The
+        castaways behind immunity, S51C8 +0.5 and S51C5 +0.125, likewise
+        print +0.5 and +0.12 one by one under a reason of +0.63."""
         from app.models import Pick, Survivor
 
         fifth = Survivor.query.filter_by(season_id=league.s51.id, name="S51C5").one()
@@ -531,13 +581,73 @@ class TestPrintedNumbersAddUp:
         )
         league.db.session.commit()
 
-        players = _printed_players(_page(league))
+        page = _page(league)
+        players = _printed_players(page)
 
         assert len(players) == 6  # two players each in Seasons 51, 50 and 49
-        for new, old, change, parts in players:
+        checked = 0
+        for new, old, change, parts, reasons in players:
             assert new - old == change, (new, old, change)
             if parts:
                 assert sum(parts) == change, (parts, change)
+            checked += _assert_castaways_add_up(reasons)
+        assert checked  # not every line is a lone castaway
+        pat = _standings_fold(page).split("&middot; Pat</dt>")[1]
+        assert "S51C8&nbsp;+0.5, S51C5&nbsp;+0.13</span>" in pat
+        # S51C5 is the whole of idols (+0.375) and advantages (-0.125). Left
+        # unrounded those read "+0.37 idols: S51C5 +0.38" and "-0.13
+        # advantages: S51C5 -0.12"; rounded with the reason, the name alone
+        # says it.
+        assert 'idols<span class="ls-replay-who">S51C5</span>' in pat
+        assert 'advantages<span class="ls-replay-who">S51C5</span>' in pat
+        # No reason here has more than three castaways, so nothing says others
+        lists = re.findall(r'<ul class="ls-replay-why">(.*?)</ul>', page, re.S)
+        assert len(lists) == 6
+        assert not any(" other" in li for li in lists)
+
+    def test_castaways_past_the_third_are_counted_as_others(self, league):
+        """Pat drafts S51C2 and S51C3 and takes S51C5 as his wildcard; Sam
+        drafts S51C1 and S51C2. Each of those has won one tribal immunity,
+        worth 0.25 now and nothing under Run 6 (the wildcard half that). Pat's
+        immunity wins then come from five castaways (S51C8's individual win
+        +0.5, S51C1, S51C2 and S51C3 +0.25 each, S51C5 +0.125) and Sam's from
+        four (S51C6 and S51C7 +0.5 each, S51C1 and S51C2 +0.25 each)."""
+        from app.models import Pick, Survivor
+
+        cast = {s.name: s for s in Survivor.query.filter_by(season_id=league.s51.id)}
+        for name in ("S51C1", "S51C2", "S51C3", "S51C5"):
+            cast[name].tribal_immunity_wins = 1
+        for user, name, kind in (
+            (league.pat, "S51C2", "draft"),
+            (league.pat, "S51C3", "draft"),
+            (league.pat, "S51C5", "wildcard"),
+            (league.sam, "S51C1", "draft"),
+            (league.sam, "S51C2", "draft"),
+        ):
+            league.db.session.add(
+                Pick(
+                    user_id=user.id,
+                    season_id=league.s51.id,
+                    survivor_id=cast[name].id,
+                    pick_type=kind,
+                )
+            )
+        league.db.session.commit()
+
+        page = _page(league)
+        sam, pat = _standings_fold(page).split("&middot; Pat</dt>")
+
+        assert (
+            "S51C8&nbsp;+0.5, S51C1&nbsp;+0.25, S51C2&nbsp;+0.25,"
+            " and 2 others&nbsp;+0.38</span>" in pat
+        )
+        assert ", and 1 other&nbsp;+0.25</span>" in sam
+        reasons = [r for *_, rs in _printed_players(page) for r in rs]
+        assert sorted(r["others"] for r in reasons if r["others"]) == [
+            (1, 25),
+            (2, 38),
+        ]
+        assert _assert_castaways_add_up(reasons)
 
     def test_no_remainder_line_when_nothing_is_left(self, league):
         """Sam's Season 50 change is all in its two listed groups."""

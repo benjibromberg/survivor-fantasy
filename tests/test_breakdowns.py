@@ -392,6 +392,132 @@ class TestShownAmountsAddUp:
             assert shown_cents(points) == round(float(f"{points:.2f}") * 100), points
 
 
+# Jeremy's immunity wins: seven castaways behind +6.875, none of it scored
+# before (Run 6 scored immunity at nothing)
+JEREMY = {
+    "Aubry": 1.75,
+    "Chrissy": 1.25,
+    "Colby": 1.25,
+    "Genevieve": 1.25,
+    "Mike": 0.5,
+    "Rick": 0.5,
+    "Charlie": 0.375,
+}
+
+
+def _immunity_change(points, steady=None):
+    """Before and after entries where each castaway in `points` gains that
+    much from immunity. `steady` is a pick worth the same both ways, which
+    moves how the two totals round."""
+    extra = [_pick("Dee", "Draft", {"jury": steady})] if steady else []
+    before = _entry(*[_pick(n, "Draft", {}) for n in points], *extra)
+    after = _entry(
+        *[_pick(n, "Draft", {"individual_immunity": v}) for n, v in points.items()],
+        *extra,
+    )
+    return before, after
+
+
+def _line_cents(reason):
+    """The cents a reason's castaway line prints: names, then the others."""
+    parts = [c["delta"] for c in reason["castaways"]]
+    if reason["others"]:
+        parts.append(reason["others"]["delta"])
+    return sum(_cents(v) for v in parts)
+
+
+class TestOthers:
+    """A reason names its three largest castaways and the rest as "and N
+    others", so the amounts on its line add up to the reason's amount."""
+
+    def test_jeremys_seven_castaways_read_as_three_and_four_others(self):
+        """From 0.375 (printed 0.38) to 7.25: the change prints as +6.87,
+        as Jeremy's did."""
+        before, after = _immunity_change(JEREMY, steady=0.375)
+
+        (reason,) = explain_change(before, after)["reasons"]
+
+        assert reason["delta"] == 6.87
+        assert reason["castaways"] == [
+            {"name": "Aubry", "delta": 1.75},
+            {"name": "Chrissy", "delta": 1.25},
+            {"name": "Colby", "delta": 1.25},
+        ]
+        assert reason["others"] == {"count": 4, "delta": 2.62}
+        assert _line_cents(reason) == _cents(reason["delta"])
+
+    def test_the_line_adds_up_where_rounding_one_by_one_would_not(self):
+        """From 0 to 6.875, printed 6.88. Rounded one by one the line reads
+        1.75 + 1.25 + 1.25 + 2.62 = 6.87, a cent short."""
+        before, after = _immunity_change(JEREMY)
+
+        (reason,) = explain_change(before, after)["reasons"]
+
+        one_by_one = sum(_cents(round(v, 2)) for v in (1.75, 1.25, 1.25, 2.625))
+        assert one_by_one == 687 != _cents(reason["delta"]) == 688
+        assert _line_cents(reason) == 688
+        assert reason["others"] == {"count": 4, "delta": 2.63}
+
+    def test_three_castaways_or_fewer_have_no_others(self):
+        for n in (1, 2, 3):
+            names = dict(list(JEREMY.items())[:n])
+            before, after = _immunity_change(names)
+
+            (reason,) = explain_change(before, after)["reasons"]
+
+            assert len(reason["castaways"]) == n
+            assert reason["others"] is None, n
+
+    def test_a_fourth_castaway_is_one_other(self):
+        names = dict(list(JEREMY.items())[:4])
+        before, after = _immunity_change(names)
+
+        (reason,) = explain_change(before, after)["reasons"]
+
+        assert reason["others"] == {"count": 1, "delta": 1.25}
+
+    def test_named_castaways_add_up_without_others_too(self):
+        """+0.5 and +0.125 under a reason printed +0.63 (0.125 to 0.75).
+        One by one they would print +0.5 and +0.12."""
+        points = {"Kyle": 0.5, "Kenzie": 0.125}
+        before, after = _immunity_change(points, steady=0.125)
+
+        (reason,) = explain_change(before, after)["reasons"]
+
+        assert reason["delta"] == 0.63
+        assert [c["delta"] for c in reason["castaways"]] == [0.5, 0.13]
+        assert reason["others"] is None
+
+    def test_a_lone_castaway_carries_the_reason_as_shown(self):
+        """The page shows no amount beside a castaway who is the whole
+        reason, which needs the two to agree as printed: from 0.375 to
+        2.25 the reason is +1.87, and Kyle's 1.875 alone would print 1.88."""
+        before, after = _immunity_change({"Kyle": 1.875}, steady=0.375)
+
+        (reason,) = explain_change(before, after)["reasons"]
+
+        assert round(1.875, 2) == 1.88
+        assert reason["castaways"] == [{"name": "Kyle", "delta": 1.87}]
+        assert reason["delta"] == 1.87
+
+    def test_castaway_limit_sets_how_many_are_named(self):
+        before, after = _immunity_change(JEREMY)
+
+        (reason,) = explain_change(before, after, castaway_limit=2)["reasons"]
+
+        assert [c["name"] for c in reason["castaways"]] == ["Aubry", "Chrissy"]
+        assert reason["others"]["count"] == 5
+
+    def test_holds_only_plain_values(self):
+        """The Scoring changes page caches these past the request."""
+        before, after = _immunity_change(JEREMY)
+
+        (reason,) = explain_change(before, after)["reasons"]
+
+        assert isinstance(reason["others"]["count"], int)
+        assert isinstance(reason["others"]["delta"], float)
+
+
 def test_every_breakdown_key_has_a_plain_label_and_no_label_is_spare():
     from app.routes import BREAKDOWN_LABELS
 

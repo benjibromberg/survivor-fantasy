@@ -16,8 +16,9 @@ progressive tribals moves all three), and ranking raw keys then lists three
 pieces of one reason while the rest piles into a remainder.
 
 An explained change is rounded to hundredths here, once, so what a player
-reads adds up: the listed reasons plus "everything else" make the change, and
-the change is the shown new total minus the shown old total.
+reads adds up: the listed reasons plus "everything else" make the change, the
+change is the shown new total minus the shown old total, and each reason's
+named castaways plus "and N others" make the reason.
 
 Pure functions over the plain dicts `_build_leaderboard` returns; the results
 hold only plain values, so they are safe to cache past the request.
@@ -194,6 +195,20 @@ def _split_cents(values, target):
     return [c / 100 for c in cents]
 
 
+def _round_castaways(reason):
+    """Round a reason's castaways, and its others, to its shown amount.
+
+    Rounded one by one they need not add up: castaways of +0.5 and +0.125
+    print +0.5 and +0.12 under a reason shown as +0.63.
+    """
+    parts = reason["castaways"] + ([reason["others"]] if reason["others"] else [])
+    if not parts:
+        return
+    shown = _split_cents([p["delta"] for p in parts], round(reason["delta"] * 100))
+    for part, amount in zip(parts, shown, strict=True):
+        part["delta"] = amount
+
+
 def explain_change(before, after, limit=3, castaway_limit=3):
     """Why one player's total differs between two scorings of the same picks.
 
@@ -205,12 +220,17 @@ def explain_change(before, after, limit=3, castaway_limit=3):
     add up to the change; and the groups that make up that remainder, so it
     is not a mystery number.
 
+    A reason names its `castaway_limit` largest castaways. When more moved
+    it, `others` is {"count", "delta"} for the rest combined, so the named
+    castaways and the others make the whole reason; otherwise it is None.
+
     The change, the reasons and the remainder come back rounded to
     hundredths (_split_cents), and they add up exactly: the reasons plus the
     remainder equal the change, and the change equals the two totals as
-    printed (shown_cents). The remainder is 0 when it rounds to nothing. Ranks
-    and labels come from the unrounded amounts. Castaway amounts are a
-    capped list, not a breakdown, and are left as they are.
+    printed (shown_cents). Each reason's castaways and others are rounded
+    the same way to add up to the reason as shown. The remainder is 0 when
+    it rounds to nothing. Ranks, labels and which castaways are named come
+    from the unrounded amounts.
     """
     old, new = _by_castaway(before), _by_castaway(after)
     reasons = []
@@ -225,12 +245,21 @@ def explain_change(before, after, limit=3, castaway_limit=3):
             if abs(moved) >= _NOISE:
                 castaways.append({"name": name, "delta": moved})
         castaways.sort(key=lambda c: (-abs(c["delta"]), c["name"]))
+        named, unnamed = castaways[:castaway_limit], castaways[castaway_limit:]
+        others = None
+        if unnamed:
+            # The group less the named castaways, rather than the unnamed
+            # ones summed, so it also carries any castaway too small to
+            # count and the parts make the whole group
+            rest_delta = delta - sum(c["delta"] for c in named)
+            others = {"count": len(unnamed), "delta": rest_delta}
         reasons.append(
             {
                 "key": group,
                 "label": group_label(group),
                 "delta": delta,
-                "castaways": castaways[:castaway_limit],
+                "castaways": named,
+                "others": others,
             }
         )
     reasons.sort(key=lambda r: (-abs(r["delta"]), r["key"]))
@@ -244,6 +273,7 @@ def explain_change(before, after, limit=3, castaway_limit=3):
     *listed, other_shown = _split_cents([r["delta"] for r in reasons] + [other], change)
     for reason, shown in zip(reasons, listed, strict=True):
         reason["delta"] = shown
+        _round_castaways(reason)
 
     rest_raw = [r["delta"] for r in rest]
     if rest and abs(sum(rest_raw) - other) < _NOISE:
