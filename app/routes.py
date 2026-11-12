@@ -334,12 +334,8 @@ def _build_leaderboard(
         pick_details = []
 
         for pick in scored:
-            # Wildcards: skip if no eliminations yet (picked after ep 1)
-            if pick.pick_type == "wildcard" and current_elim_count == 0:
-                continue
-            # Replacements: skip if merge hasn't happened yet (or merge unknown)
-            if pick.pick_type in ("pmr_w", "pmr_d") and (
-                merge_elim is None or current_elim_count < merge_elim
+            if not replacements.counts_yet(
+                pick.pick_type, current_elim_count, merge_elim
             ):
                 continue
 
@@ -483,15 +479,11 @@ def _build_leaderboard(
             current_ss_eliminated = latest.survivor.voted_out_order > 0
 
         # Aggregate team stats (only include picks that are active)
-        def _pick_active(p):
-            if p.pick_type == "wildcard" and current_elim_count == 0:
-                return False
-            return not (
-                p.pick_type in ("pmr_w", "pmr_d")
-                and (merge_elim is None or current_elim_count < merge_elim)
-            )
-
-        team_survivors = [p.survivor for p in scored if _pick_active(p)]
+        team_survivors = [
+            p.survivor
+            for p in scored
+            if replacements.counts_yet(p.pick_type, current_elim_count, merge_elim)
+        ]
         team_stats = {}
         if team_survivors:
             total_conf = sum(s.confessional_count or 0 for s in team_survivors)
@@ -1407,14 +1399,13 @@ def leaderboard(season_id):
         for step in range(effective_as_of + 1):
             # Final step = current state — use raw DB values (same as leaderboard)
             r = _apply_as_of(season, step) if step < effective_as_of else lambda: None
+            # Counted by day on the rewound season, like the standings: a
+            # step that is the second of a same-day pair adds no tribal.
+            tribals = season.current_tribal_count
             for user in users:
                 total = 0
                 for pick in user_picks[user.id]:
-                    if pick.pick_type == "wildcard" and step == 0:
-                        continue
-                    if pick.pick_type in ("pmr_w", "pmr_d") and (
-                        prog_merge is None or step < prog_merge
-                    ):
+                    if not replacements.counts_yet(pick.pick_type, tribals, prog_merge):
                         continue
 
                     survivor = pick.survivor
@@ -1705,7 +1696,9 @@ def _build_compare_data(season):
         )
 
     cmp_merge, merge_episode = replacements.scoring_start(season)
-    current_elim_count = max_elim
+    # By elimination day, as the leaderboard counts: the number of boots
+    # (max_elim) runs ahead of it after a same-day double boot.
+    current_elim_count = season.current_tribal_count
 
     comparisons = []
     for preset_name, config in presets.items():
@@ -1726,10 +1719,8 @@ def _build_compare_data(season):
             total = 0
             counted = []
             for pick in user_picks[user.id]:
-                if pick.pick_type == "wildcard" and current_elim_count == 0:
-                    continue
-                if pick.pick_type in ("pmr_w", "pmr_d") and (
-                    cmp_merge is None or current_elim_count < cmp_merge
+                if not replacements.counts_yet(
+                    pick.pick_type, current_elim_count, cmp_merge
                 ):
                     continue
                 stat_overrides = None
@@ -1772,14 +1763,11 @@ def _build_compare_data(season):
         for step in range(max_elim + 1):
             # Final step = current state — use raw DB values
             restore = _apply_as_of(season, step) if step < max_elim else lambda: None
+            tribals = season.current_tribal_count  # by day, as above
             for user in users:
                 total = 0
                 for pick in user_picks[user.id]:
-                    if pick.pick_type == "wildcard" and step == 0:
-                        continue
-                    if pick.pick_type in ("pmr_w", "pmr_d") and (
-                        cmp_merge is None or step < cmp_merge
-                    ):
+                    if not replacements.counts_yet(pick.pick_type, tribals, cmp_merge):
                         continue
                     stat_overrides = None
                     if pick.pick_type in ("pmr_w", "pmr_d"):
