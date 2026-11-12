@@ -1473,15 +1473,14 @@ def leaderboard(season_id):
     breakdown_chart = []
     confessional_chart = []
     if leaderboard_data:
-        # Aggregate breakdowns across all picks per player
-        all_keys = list(breakdown_labels.keys())
+        # Each pick's components after its pick-type multiplier, so a
+        # player's bar adds up to their standings total. A pick's raw
+        # breakdown is before the multiplier: summing it counted wildcards
+        # and replacements at full value.
         for entry in leaderboard_data:
             name = entry["user"].display_name or entry["user"].username
-            agg = {k: 0 for k in all_keys}
-            for pick in entry["picks"]:
-                for k, v in pick.get("breakdown", {}).items():
-                    if k in agg:
-                        agg[k] += v
+            totals = breakdowns.component_totals(entry)
+            agg = {k: totals.get(k, 0) for k in breakdown_labels}
             breakdown_chart.append({"name": name, "breakdown": agg})
 
             conf = entry.get("team_stats", {}).get("Confessionals", 0)
