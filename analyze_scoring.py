@@ -107,6 +107,9 @@ def expand_config(config):
       ClassicScoring uses progressive mode.
     """
     expanded = dict(config)
+    # Sole Survivor is never swept and the league has it off; without this
+    # the chart builders would fill in ClassicScoring's default of 1
+    expanded.setdefault("sole_survivor_val", 0)
     ratio = expanded.pop("placement_ratio", None)
     if ratio:
         first = expanded.get("first_val", 10)
@@ -1726,7 +1729,7 @@ def print_metrics(metrics):
     )
     if "composite_unconstrained" in metrics:
         print(
-            f"  Composite before placement check: "
+            f"  Composite before constraint penalties: "
             f"{metrics['composite_unconstrained']:.3f}"
         )
     # Consistency (std devs)
@@ -2662,11 +2665,6 @@ def main():
                 "wc_replacement_multiplier",
                 "Wildcard replacement multiplier",
                 "e.g. 0.5 = wildcard replacements earn half points",
-            ),
-            (
-                "sole_survivor_val",
-                "Sole Survivor bonus",
-                "points per episode in streak (0 = disabled)",
             ),
         ]
     ):
