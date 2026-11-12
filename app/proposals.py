@@ -1,10 +1,12 @@
 """Scoring proposals put to the league, and the players' votes on them.
 
-The admin proposes a config for a season (scoring components form,
-"Propose"), with a time voting closes. Until then, anyone with picks in the
-season votes on the Scoring changes page: switch this season, start next
-season, or keep the current scoring, with an optional comment. A vote can
-be changed until voting closes, and every vote shows with its name.
+The admin proposes a config for a season, with a time voting closes. On
+the season admin page that is a starting point (starting_points: the last
+proposal, a recorded version or the current scoring) with any values
+adjusted by hand. Until voting closes, anyone with picks in the season
+votes on the Scoring changes page: switch this season, start next season,
+or keep the current scoring, with an optional comment. A vote can be
+changed until voting closes, and every vote shows with its name.
 
 The admin then adopts the proposal (it becomes the season's scoring, and the
 scoring it replaced is recorded) or withdraws it. Proposals are never
@@ -20,6 +22,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from . import wildcards
 from .models import Pick, ScoringProposal, ScoringVote, User, db
+from .scoring.classic import DEFAULT_CONFIG
+from .scoring.history import SCORING_VERSIONS, describe_config
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +66,104 @@ def is_open(proposal):
         and proposal.status == "open"
         and _now() < proposal.closes_at.replace(tzinfo=UTC)
     )
+
+
+def latest_proposal(season):
+    """The season's most recent proposal, whatever its status, or None."""
+    return (
+        ScoringProposal.query.filter_by(season_id=season.id)
+        .order_by(ScoringProposal.id.desc())
+        .first()
+    )
+
+
+def _effective(config):
+    """Every key the season form saves: the config's value, else the default.
+
+    The same key set admin_season_settings stores, so a proposal made from a
+    starting point has the shape of one typed in by hand. A key outside
+    DEFAULT_CONFIG (Legacy's old replacement_multiplier) is dropped; scoring
+    merges DEFAULT_CONFIG first, so its default already shadowed that key.
+    """
+    return {key: config.get(key, default) for key, default in DEFAULT_CONFIG.items()}
+
+
+def _version_label(config):
+    version, diffs = describe_config(config)
+    if not diffs:
+        return version["name"]
+    plural = "s" if len(diffs) != 1 else ""
+    return f"{version['name']}, {len(diffs)} value{plural} edited"
+
+
+def starting_points(season):
+    """Configs a new proposal can start from, and the key to select first.
+
+    Returns ([{"key", "label", "group", "config", "changes"}], default key).
+    `config` is complete (every DEFAULT_CONFIG key) and `changes` counts the
+    values it would change from the season's current scoring. The season's
+    latest proposal comes first, so a recorded version proposed with
+    adjustments can be put to the league again without typing them; then the
+    recorded versions, newest first; then the season's current scoring.
+
+    The latest proposal is selected first unless it was adopted (then it is
+    the current scoring already), else the newest recorded version.
+    """
+    current = _effective(season.get_scoring_config())
+
+    def point(key, label, group, config):
+        config = _effective(config)
+        changes = sum(1 for k in DEFAULT_CONFIG if config[k] != current[k])
+        return {
+            "key": key,
+            "label": label,
+            "group": group,
+            "config": config,
+            "changes": changes,
+        }
+
+    points = []
+    default = None
+    latest = latest_proposal(season)
+    if latest is not None:
+        config = latest.get_config()
+        if latest.status == "open":
+            label = f"The open proposal ({_version_label(config)})"
+        else:
+            label = f"Last proposal, {latest.status} ({_version_label(config)})"
+        points.append(point(f"proposal:{latest.id}", label, "Proposals", config))
+        if latest.status != "adopted":
+            default = points[-1]["key"]
+    for version in reversed(SCORING_VERSIONS):
+        points.append(
+            point(
+                f"version:{version['key']}",
+                version["name"],
+                "Recorded versions",
+                version["config"],
+            )
+        )
+    if default is None:
+        default = f"version:{SCORING_VERSIONS[-1]['key']}"
+    points.append(
+        point("current", "This season's current scoring", "This season", current)
+    )
+    return points, default
+
+
+def starting_config(season, key):
+    """The complete config a starting point names, or None if it is not offered.
+
+    Only what starting_points lists is accepted: a proposal key is honoured
+    only while it is still the season's latest, so a form left open while
+    another proposal was made cannot propose something the page no longer
+    shows.
+    """
+    points, _default = starting_points(season)
+    for p in points:
+        if p["key"] == key:
+            return dict(p["config"])
+    return None
 
 
 def propose(season, config, closes_at):
