@@ -1998,6 +1998,17 @@ def settings():
 
 # --- Admin: Picks ---
 
+# What the picks page's "Enter a pick" form can enter, by pick_type, in the
+# words the page and its messages use. Replacements take the names My Team
+# gives them: a draft replacement for a lost draft pick, a wildcard
+# replacement for a lost wildcard.
+ADMIN_PICK_KINDS = {
+    "draft": "draft pick",
+    "wildcard": "wildcard",
+    **replacements.KIND_LABELS,
+    "sole_survivor": "Sole Survivor pick",
+}
+
 
 @main_bp.route("/admin/picks/<int:season_id>", methods=["GET", "POST"])
 @login_required
@@ -2094,48 +2105,202 @@ def admin_picks(season_id):
             f"Picks saved for {target_user.display_name or target_user.username}!",
             "success",
         )
-        return redirect(url_for("main.admin_picks", season_id=season.id))
-
-    # Load current picks per user
-    picks_by_user = {}
-    ss_picks_by_user = {}
-    for user in users:
-        user_picks = Pick.query.filter_by(user_id=user.id, season_id=season.id).all()
-        picks_by_user[user.id] = {
-            "draft": [p.survivor_id for p in user_picks if p.pick_type == "draft"],
-            "wildcard": next(
-                (p.survivor_id for p in user_picks if p.pick_type == "wildcard"), None
-            ),
-            "pmr_w": next(
-                (p.survivor_id for p in user_picks if p.pick_type == "pmr_w"), None
-            ),
-            "pmr_d": next(
-                (p.survivor_id for p in user_picks if p.pick_type == "pmr_d"), None
-            ),
-        }
-        user_ss = (
-            SoleSurvivorPick.query.filter_by(user_id=user.id, season_id=season.id)
-            .order_by(SoleSurvivorPick.episode)
-            .all()
+        # Back to the editor on the same player: on draft night the next
+        # thing done is the next player's picks
+        return redirect(
+            url_for(
+                "main.admin_picks",
+                season_id=season.id,
+                user=target_user_id,
+                _anchor="change-picks",
+            )
         )
-        ss_picks_by_user[user.id] = [
+
+    # Every pick in the season in two queries, then grouped per player
+    survivors_by_id = {s.id: s for s in survivors}
+    picks_by_user = {
+        user.id: {"draft": [], "wildcard": None, "pmr_w": None, "pmr_d": None}
+        for user in users
+    }
+    for p in (
+        Pick.query.filter_by(season_id=season.id)
+        .order_by(Pick.pick_order, Pick.id)
+        .all()
+    ):
+        held = picks_by_user.get(p.user_id)
+        if held is None:
+            continue
+        if p.pick_type == "draft":
+            held["draft"].append(p.survivor_id)
+        elif p.pick_type in held and held[p.pick_type] is None:
+            held[p.pick_type] = p.survivor_id
+    ss_picks_by_user = {user.id: [] for user in users}
+    for p in (
+        SoleSurvivorPick.query.filter_by(season_id=season.id)
+        .order_by(SoleSurvivorPick.episode)
+        .all()
+    ):
+        if p.user_id not in ss_picks_by_user:
+            continue
+        castaway = survivors_by_id.get(p.survivor_id) or p.survivor
+        ss_picks_by_user[p.user_id].append(
             {
                 "id": p.id,
                 "survivor_id": p.survivor_id,
                 "episode": p.episode,
-                "survivor_name": p.survivor.name,
+                "survivor_name": castaway.name,
             }
-            for p in user_ss
-        ]
+        )
+
+    # Sole Survivor is offered where the season scores it, or where someone
+    # already has a pick to see or delete
+    config = {**DEFAULT_CONFIG, **season.get_scoring_config()}
+    show_ss = bool(config.get("sole_survivor_val")) or any(ss_picks_by_user.values())
+    kinds = {
+        k: v for k, v in ADMIN_PICK_KINDS.items() if show_ss or k != "sole_survivor"
+    }
+
+    # ?user= opens the editor on that player (the cards' Change links)
+    edit_user = request.args.get("user", type=int)
+    if edit_user not in picks_by_user:
+        edit_user = None
 
     return render_template(
         "admin/picks.html",
         season=season,
         survivors=survivors,
+        survivors_by_id=survivors_by_id,
         users=users,
         picks_by_user=picks_by_user,
         ss_picks_by_user=ss_picks_by_user,
+        show_ss=show_ss,
+        pick_kinds=kinds,
+        edit_user=edit_user,
     )
+
+
+@main_bp.route("/admin/picks/<int:season_id>/add", methods=["POST"])
+@login_required
+def admin_add_pick(season_id):
+    """Enter one pick for one player, leaving their other picks alone.
+
+    The editor's form replaces every pick a player has, which made entering
+    one missing wildcard mean re-ticking their whole draft. A draft pick is
+    added; a wildcard or replacement replaces the player's existing one of
+    that kind; a Sole Survivor pick is set from the given episode on, as the
+    editor sets it.
+    """
+    denied = _require_admin()
+    if denied:
+        return denied
+
+    season = db.get_or_404(Season, season_id)
+    back = redirect(url_for("main.admin_picks", season_id=season.id))
+    user = db.session.get(User, request.form.get("user_id", type=int) or 0)
+    kind = request.form.get("pick_type", "")
+    survivor = db.session.get(Survivor, request.form.get("survivor_id", type=int) or 0)
+    if user is None:
+        flash("Choose a player.", "error")
+        return back
+    if kind not in ADMIN_PICK_KINDS:
+        flash("Choose which kind of pick it is.", "error")
+        return back
+    # The castaway must belong to this season, not just exist
+    if survivor is None or survivor.season_id != season.id:
+        flash("Choose a castaway from this season.", "error")
+        return back
+
+    name, label = _player_label(user), ADMIN_PICK_KINDS[kind]
+    if kind == "sole_survivor":
+        episode = request.form.get("ss_episode", type=int)
+        if not episode or episode < 1:
+            flash("Enter the episode the Sole Survivor pick starts from.", "error")
+            return back
+        existing = SoleSurvivorPick.query.filter_by(
+            user_id=user.id, season_id=season.id, episode=episode
+        ).first()
+
+        def apply():
+            if existing is not None:
+                existing.survivor_id = survivor.id
+            else:
+                db.session.add(
+                    SoleSurvivorPick(
+                        user_id=user.id,
+                        season_id=season.id,
+                        survivor_id=survivor.id,
+                        episode=episode,
+                    )
+                )
+
+        message = (
+            f"{name}'s Sole Survivor pick is {survivor.name} from episode {episode}."
+        )
+    else:
+        # One castaway per player per season, whatever the kind of pick
+        # (uq_user_season_survivor), so a clash is refused rather than raised
+        held = Pick.query.filter_by(
+            user_id=user.id, season_id=season.id, survivor_id=survivor.id
+        ).first()
+        if held is not None:
+            held_label = ADMIN_PICK_KINDS.get(held.pick_type, held.pick_type)
+            if held.pick_type == kind:
+                flash(
+                    f"{name} already has {survivor.name} as their {label}.", "warning"
+                )
+            else:
+                flash(
+                    f"{name} already has {survivor.name} as their {held_label}. "
+                    "Change that pick first.",
+                    "error",
+                )
+            return back
+
+        existing, pick_order = None, None
+        if kind == "draft":
+            last = (
+                db.session.query(db.func.max(Pick.pick_order))
+                .filter_by(user_id=user.id, season_id=season.id, pick_type="draft")
+                .scalar()
+            )
+            pick_order = (last or 0) + 1
+            message = f"Added {survivor.name} to {name}'s draft picks."
+        else:
+            existing = Pick.query.filter_by(
+                user_id=user.id, season_id=season.id, pick_type=kind
+            ).first()
+            if existing is not None:
+                message = (
+                    f"{name}'s {label} is now {survivor.name}, "
+                    f"replacing {existing.survivor.name}."
+                )
+            else:
+                message = f"{name}'s {label} is {survivor.name}."
+
+        def apply():
+            if existing is not None:
+                existing.survivor_id = survivor.id
+            else:
+                db.session.add(
+                    Pick(
+                        user_id=user.id,
+                        season_id=season.id,
+                        survivor_id=survivor.id,
+                        pick_type=kind,
+                        pick_order=pick_order,
+                    )
+                )
+
+    try:
+        apply()
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception("Entering a %s for player %s failed", kind, user.id)
+        flash(f"Could not save the {label} for {name}.", "error")
+        return back
+    flash(message, "success")
+    return back
 
 
 @main_bp.route("/admin/picks/<int:season_id>/ss/<int:pick_id>/delete", methods=["POST"])
