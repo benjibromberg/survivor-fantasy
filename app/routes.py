@@ -1659,10 +1659,13 @@ def _build_compare_data(season):
                 user_id=user.id, season_id=season.id
             ).all()
 
-        # Final standings
+        # Final standings. Each pick that counts is kept as it was scored, so
+        # the breakdown chart below charts exactly the picks in the total.
         entries = []
+        scored_picks = {}
         for user in users:
             total = 0
+            counted = []
             for pick in user_picks[user.id]:
                 if pick.pick_type == "wildcard" and current_elim_count == 0:
                     continue
@@ -1679,8 +1682,29 @@ def _build_compare_data(season):
                     pick.survivor, season, pick.pick_type, stat_overrides
                 )
                 total += modified
+                counted.append(
+                    {
+                        "survivor": pick.survivor.name,
+                        "pick_type": pick.pick_type,
+                        "base_points": breakdown.total,
+                        "modified_points": modified,
+                        "breakdown": breakdown.items,
+                    }
+                )
             ss_streak = calculate_ss_streak(user_ss_picks[user.id], season)
-            total += scoring.calculate_sole_survivor_bonus(ss_streak)
+            ss_bonus = scoring.calculate_sole_survivor_bonus(ss_streak)
+            total += ss_bonus
+            if ss_bonus:
+                counted.append(
+                    {
+                        "survivor": "",
+                        "pick_type": "sole_survivor",
+                        "base_points": ss_bonus,
+                        "modified_points": ss_bonus,
+                        "breakdown": {"sole_survivor_streak": ss_bonus},
+                    }
+                )
+            scored_picks[user.id] = counted
             entries.append({"user": user, "total_points": total})
         entries.sort(key=lambda x: x["total_points"], reverse=True)
 
@@ -1723,29 +1747,15 @@ def _build_compare_data(season):
                 }
             )
 
-        # Build point breakdown per player (for stacked bar chart)
+        # Point breakdown per player (stacked bar chart), from the picks the
+        # standings counted. It used to rescore every visible pick, which
+        # charted a wildcard before the first boot and a replacement before
+        # the merge although neither was in the total.
         breakdown_data = []
         for entry in entries:
             uid = entry["user"].id
-            agg = {}
-            for pick in user_picks[uid]:
-                stat_overrides = None
-                if pick.pick_type in ("pmr_w", "pmr_d"):
-                    stat_overrides = compute_stat_overrides(
-                        pick.survivor, merge_episode
-                    )
-                modified, bd = scoring.score_pick(
-                    pick.survivor, season, pick.pick_type, stat_overrides
-                )
-                raw = bd.total
-                modifier = modified / raw if raw else 1
-                for k, v in bd.items.items():
-                    agg[k] = round(agg.get(k, 0) + v * modifier, 2)
-            # Add SS streak
-            ss_streak = calculate_ss_streak(user_ss_picks[uid], season)
-            ss_bonus = scoring.calculate_sole_survivor_bonus(ss_streak)
-            if ss_bonus:
-                agg["sole_survivor_streak"] = round(ss_bonus, 2)
+            totals = breakdowns.component_totals({"picks": scored_picks[uid]})
+            agg = {k: round(v, 2) for k, v in totals.items()}
             breakdown_data.append(
                 {
                     "name": entry["user"].display_name or entry["user"].username,
