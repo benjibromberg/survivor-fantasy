@@ -218,6 +218,37 @@ class TestStandingsBothWays:
         assert "Pat" in past or "Sam" in past
 
 
+class TestComponentTotalsOnRealEntries:
+    def test_components_add_up_to_each_players_total(self, league):
+        """Checked on _build_leaderboard's entries, with a wildcard in them."""
+        from app.breakdowns import component_totals, pick_contributions
+        from app.models import Pick, Survivor
+        from app.routes import _build_leaderboard
+
+        fifth = Survivor.query.filter_by(season_id=league.s50.id, name="S50C5").one()
+        league.db.session.add(
+            Pick(
+                user_id=league.sam.id,
+                season_id=league.s50.id,
+                survivor_id=fifth.id,
+                pick_type="wildcard",
+            )
+        )
+        league.db.session.commit()
+
+        entries, _ = _build_leaderboard(league.s50)
+
+        for entry in entries:
+            totals = component_totals(entry)
+            assert sum(totals.values()) == pytest.approx(entry["total_points"])
+        sam = next(e for e in entries if e["user"].username == "sam")
+        (wild,) = [p for p in pick_contributions(sam) if p["pick_type"] == "Wildcard"]
+        (raw,) = [p for p in sam["picks"] if p["pick_type_raw"] == "wildcard"]
+        assert sum(wild["components"].values()) == pytest.approx(
+            sum(raw["breakdown"].values()) / 2
+        )
+
+
 class TestHistory:
     def test_each_season_names_its_scoring_version(self, league):
         page = _page(league)
@@ -667,6 +698,27 @@ class TestReplayCache:
         _page(league)
 
         assert calls == []
+
+    def test_the_cached_replays_hold_only_plain_values(self, league):
+        """The cache outlives the request, so an ORM object in it would detach."""
+        from app.routes import _changes_cache
+
+        _page(league)
+
+        def walk(value):
+            if isinstance(value, dict):
+                for k, v in value.items():
+                    assert isinstance(k, str)
+                    walk(v)
+            elif isinstance(value, list):
+                for v in value:
+                    walk(v)
+            else:
+                assert value is None or isinstance(value, (str, int, float)), value
+
+        ((_stored, result),) = _changes_cache.values()
+        assert any(row["players"] for row in result["past"])
+        walk(result)
 
 
 class TestHistoryGrouping:

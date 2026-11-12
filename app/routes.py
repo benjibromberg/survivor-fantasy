@@ -17,7 +17,7 @@ from flask import (
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
-from . import proposals, replacements, schedule, wildcards
+from . import breakdowns, proposals, replacements, schedule, wildcards
 from .data import (
     download_survivor_data,
     export_all_picks,
@@ -964,6 +964,39 @@ def _names_by_rank(board):
     return [entry[0] for entry in sorted(board.values(), key=lambda entry: entry[2])]
 
 
+def _replay_players(own_entries, replay_entries):
+    """Each player's total and rank under a season's own scoring and the replay.
+
+    Best first under the replay, each with the components that moved their
+    total most and the castaways behind them (breakdowns.explain_change).
+    Plain values only: this goes into _changes_cache.
+    """
+    own, replay = _ranked(own_entries), _ranked(replay_entries)
+    before = {e["user"].id: e for e in own_entries}
+    rows = []
+    for entry in sorted(replay_entries, key=lambda e: replay[e["user"].id][2]):
+        uid = entry["user"].id
+        name, points, rank = replay[uid]
+        _, old_points, old_rank = own[uid]
+        change = breakdowns.explain_change(before[uid], entry)
+        rows.append(
+            {
+                "name": name,
+                "old_points": old_points,
+                "old_rank": old_rank,
+                "points": points,
+                "rank": rank,
+                # Places gained: positive moved up, negative moved down
+                "moved": old_rank - rank,
+                "delta": change["delta"],
+                "reasons": change["reasons"],
+                "other": change["other"],
+                "rest": change["rest"],
+            }
+        )
+    return rows
+
+
 def _replays(season, old_config, new_config):
     """This season under both configs, and each earlier season under the new one.
 
@@ -1005,26 +1038,29 @@ def _replays(season, old_config, new_config):
     for other in seasons:
         if other.number >= season.number:
             continue
-        own = _ranked(_build_leaderboard(other)[0])
-        replay = _ranked(_build_leaderboard(other, scoring_config=new_config)[0])
-        if not own:
+        own_entries = _build_leaderboard(other)[0]
+        if not own_entries:
             continue
+        replay_entries = _build_leaderboard(other, scoring_config=new_config)[0]
+        own, replay = _ranked(own_entries), _ranked(replay_entries)
         own_top, replay_top = _names_by_rank(own), _names_by_rank(replay)
         replay_points = sorted((v[1] for v in replay.values()), reverse=True)
-        past.append(
-            {
-                "label": _season_label(other),
-                "winner": own_top[0],
-                "new_winner": replay_top[0],
-                "new_margin": (
-                    replay_points[0] - replay_points[1]
-                    if len(replay_points) > 1
-                    else None
-                ),
-                "order_changed": own_top != replay_top,
-                "new_order": replay_top,
-            }
-        )
+        row = {
+            "label": _season_label(other),
+            "winner": own_top[0],
+            "new_winner": replay_top[0],
+            "new_margin": (
+                replay_points[0] - replay_points[1] if len(replay_points) > 1 else None
+            ),
+            "order_changed": own_top != replay_top,
+            "new_order": replay_top,
+            "players": [],
+        }
+        # Only a season whose order changes gets the why; one that finishes
+        # the same way keeps its one-line summary.
+        if row["order_changed"]:
+            row["players"] = _replay_players(own_entries, replay_entries)
+        past.append(row)
 
     result = {"standings": standings, "past": past}
     if len(_changes_cache) >= _CHANGES_CACHE_MAX:
