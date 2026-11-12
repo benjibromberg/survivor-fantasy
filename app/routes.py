@@ -997,6 +997,12 @@ def _replay_players(own_entries, replay_entries):
     return rows
 
 
+def _points_changed(players):
+    """True when any _replay_players row has a reason, so there is something
+    to explain. A season scored the same both ways has none."""
+    return any(p["reasons"] or p["other"] for p in players)
+
+
 def _replays(season, old_config, new_config):
     """This season under both configs, and each earlier season under the new one.
 
@@ -1045,22 +1051,23 @@ def _replays(season, old_config, new_config):
         own, replay = _ranked(own_entries), _ranked(replay_entries)
         own_top, replay_top = _names_by_rank(own), _names_by_rank(replay)
         replay_points = sorted((v[1] for v in replay.values()), reverse=True)
-        row = {
-            "label": _season_label(other),
-            "winner": own_top[0],
-            "new_winner": replay_top[0],
-            "new_margin": (
-                replay_points[0] - replay_points[1] if len(replay_points) > 1 else None
-            ),
-            "order_changed": own_top != replay_top,
-            "new_order": replay_top,
-            "players": [],
-        }
-        # Only a season whose order changes gets the why; one that finishes
-        # the same way keeps its one-line summary.
-        if row["order_changed"]:
-            row["players"] = _replay_players(own_entries, replay_entries)
-        past.append(row)
+        players = _replay_players(own_entries, replay_entries)
+        past.append(
+            {
+                "label": _season_label(other),
+                "winner": own_top[0],
+                "new_winner": replay_top[0],
+                "new_margin": (
+                    replay_points[0] - replay_points[1]
+                    if len(replay_points) > 1
+                    else None
+                ),
+                "order_changed": own_top != replay_top,
+                "new_order": replay_top,
+                "players": players,
+                "points_changed": _points_changed(players),
+            }
+        )
 
     result = {"standings": standings, "past": past}
     if len(_changes_cache) >= _CHANGES_CACHE_MAX:
