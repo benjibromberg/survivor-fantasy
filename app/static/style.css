@@ -1244,6 +1244,130 @@ details.fold > summary .subsection-title {
     margin: 0;
 }
 
+/* --- Admin: seasons, players and picks, one card each ---------------------
+   These were tables. At 375px a table put each row's actions past the right
+   edge, reachable only by scrolling it sideways, and its fields shrank to a
+   few characters. A card stacks the title, the facts and the controls. */
+.admin-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    gap: 0.75rem;
+    margin: 0 0 1rem;
+    padding: 0;
+}
+
+/* list-style on the item, not just the list: Pico styles the li with a
+   more specific selector than a class on the ul (see .ls-card). */
+.admin-card {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0.75rem 1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+}
+
+/* The card's gap is its only spacing. :is() makes this (0,1,1), above the
+   (0,1,0) bottom margins of .admin-toolbar and .admin-fields-row. */
+.admin-card > :is(div, dl, form, p) {
+    margin: 0;
+}
+
+/* The active season, marked as .ls-proposal marks an open vote */
+.admin-card-active {
+    border-left: 3px solid var(--fire-bright);
+}
+
+.admin-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.admin-card-title {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* "Active", "Admin": a short tag beside a card's title. Sentence case, as
+   the journey badges are. */
+.admin-tag {
+    flex-shrink: 0;
+    font-size: max(var(--fs-floor), 0.75rem);
+    font-weight: 600;
+    color: var(--fire-glow);
+    background: rgba(244, 162, 97, 0.14);
+    padding: 1px 6px;
+    border-radius: 3px;
+}
+
+/* A card's facts: .ls-value pairs that size to their content and wrap,
+   because a card is too narrow for .ls-values' 10rem columns and its values
+   are a number or a name. */
+.admin-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin: 0;
+}
+
+/* One field whose button shares its line: a label above, then the input
+   and Save side by side at every width. Used inside cards, where the field
+   would otherwise take the row and push Save onto a line of its own. */
+.admin-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.admin-line > input,
+.admin-line > select {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+}
+
+.admin-line > button {
+    flex: none;
+}
+
+/* A group of picks inside the picks editor, labelled as .admin-field is */
+.admin-fieldset {
+    margin: 0 0 1rem;
+    padding: 0;
+    border: 0;
+}
+
+.admin-fieldset > legend {
+    margin-bottom: 0.4rem;
+    padding: 0;
+    font-size: max(var(--fs-floor), 0.85rem);
+    color: var(--text-dim);
+}
+
+/* A player's Sole Survivor picks in the editor, one row each */
+.admin-ss-history {
+    margin: 0 0 0.75rem;
+    padding: 0;
+}
+
+.admin-ss-history > li {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--card-border);
+}
+
 /* A castaway row. On the leaderboard it is a <details>: the summary is the
    row and opening it shows that castaway's detail. On My Team it is a plain
    link. --pick-img sizes the photo; the detail is indented to the name. */
@@ -4029,6 +4153,13 @@ section > table {
 
     /* A text link on its own line, e.g. to the proposal's votes */
     .admin-links a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.5rem;
+    }
+
+    /* A card's title is the link that opens the season or player */
+    .admin-card-title a {
         display: inline-flex;
         align-items: center;
         min-height: 2.5rem;
