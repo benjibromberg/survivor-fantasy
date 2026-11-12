@@ -88,10 +88,19 @@ class TestValidatePickFile:
         assert add_season.validate_pick_file(data, CASTAWAYS)
 
     def test_name_the_loader_would_remap_is_reported(self):
-        """seed.NICKNAME_MAP rewrites some names before lookup ("niko" -> "Sifu")."""
+        """seed.NICKNAME_MAP rewrites some names before lookup ("niko" -> "Sifu").
+
+        When the season has the mapped castaway, the loader would place them
+        instead of the name written, so the file has to say which it means.
+        """
         data = {"picks": {"PlayerA": [{"survivor": "Niko", "type": "d"}]}}
-        problems = add_season.validate_pick_file(data, CASTAWAYS + ["Niko"])
+        problems = add_season.validate_pick_file(data, CASTAWAYS + ["Niko", "Sifu"])
         assert any("remap" in p for p in problems)
+
+    def test_mapped_name_the_season_lacks_is_not_a_remap(self):
+        """Season 44 has a Danny and no Kilby: the loader keeps "Danny"."""
+        data = {"picks": {"PlayerA": [{"survivor": "Danny", "type": "d"}]}}
+        assert add_season.validate_pick_file(data, CASTAWAYS + ["Danny"]) == []
 
     def test_name_the_loader_maps_to_itself_is_fine(self):
         """Some NICKNAME_MAP entries are identities ("sol" -> "Sol")."""
