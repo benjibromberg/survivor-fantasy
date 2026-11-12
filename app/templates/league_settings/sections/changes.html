@@ -36,9 +36,11 @@
             <ul class="ls-replay-why">
                 {% for r in p.reasons %}
                 {# A lone castaway who accounts for the whole change needs no amount of their own. #}
-                {% set whole = r.castaways|length == 1 and (r.castaways[0].delta - r.delta)|abs < 0.005 %}
+                {% set whole = r.castaways|length == 1 and not r.others and (r.castaways[0].delta - r.delta)|abs < 0.005 %}
+                {# Past the named castaways, the rest as one amount, so the
+                   amounts on the line add up to the reason's. #}
                 <li><span class="ls-replay-delta {{ 'ls-replay-up' if r.delta > 0 else 'ls-replay-down' }}">{{ signed(r.delta) }}</span>
-                    <span class="ls-replay-what">{{ r.label }}{% if r.castaways %}<span class="ls-replay-who">{% for c in r.castaways %}{{ c.name }}{% if not whole %}&nbsp;{{ signed(c.delta) }}{% endif %}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}</span></li>
+                    <span class="ls-replay-what">{{ r.label }}{% if r.castaways %}<span class="ls-replay-who">{% for c in r.castaways %}{{ c.name }}{% if not whole %}&nbsp;{{ signed(c.delta) }}{% endif %}{{ ', ' if not loop.last }}{% endfor %}{% if r.others %}, and {{ r.others.count }} other{{ 's' if r.others.count != 1 }}&nbsp;{{ signed(r.others.delta) }}{% endif %}</span>{% endif %}</span></li>
                 {% endfor %}
                 {# Amounts arrive rounded so they add up (breakdowns.explain_change).
                    A remainder that rounds to nothing is dropped, unless it
