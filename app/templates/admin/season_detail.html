@@ -128,8 +128,11 @@
             <input type="checkbox" name="propose">
             Propose to the league instead of applying
         </label>
-        <label for="proposal_closes_at">Voting closes (Eastern)</label>
-        <input type="datetime-local" id="proposal_closes_at" name="proposal_closes_at">
+        <div class="admin-field">
+            <label class="admin-field-label" for="proposal_closes_at">Voting closes (Eastern)</label>
+            <input type="datetime-local" id="proposal_closes_at" name="proposal_closes_at" value="{{ proposal_closes_value }}">
+        </div>
+        <p><small>Proposing replaces any open proposal, and voting on it starts over.</small></p>
         <div class="admin-toolbar">
             <button type="submit" class="admin-btn-sm">Save Settings</button>
             <button type="button" class="outline" onclick="loadDefaults()" class="admin-btn-sm">Load Default</button>

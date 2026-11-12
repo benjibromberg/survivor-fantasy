@@ -1,5 +1,7 @@
 import json
 import logging
+import math
+import time
 from datetime import UTC, date
 
 from flask import (
@@ -923,8 +925,25 @@ def _league_time_label(naive_utc):
     return wildcards.format_league_time(naive_utc.replace(tzinfo=UTC))
 
 
-_changes_cache = {}  # {key: replays}, keyed on every involved season's state
+def _league_date_label(naive_utc):
+    """A stored naive-UTC time as an Eastern date, e.g. 'Nov 18'."""
+    local = naive_utc.replace(tzinfo=UTC).astimezone(wildcards.LEAGUE_TZ)
+    return f"{local:%b} {local.day}"
+
+
+# The Scoring changes page's replays, {key: (stored at, result)}. They expire
+# after _CHANGES_CACHE_TTL seconds rather than tracking every input (castaway
+# stats, picks, names), so a data refresh shows within that time, and a hit
+# costs no queries. The key is the season and the two configs, so adopting a
+# proposal or editing scoring shows at once.
+_changes_cache = {}
+_CHANGES_CACHE_TTL = 300
 _CHANGES_CACHE_MAX = 32
+_changes_cache_clock = time.monotonic
+
+
+def _season_label(season):
+    return season.name or f"Season {season.number}"
 
 
 def _ranked(entries):
@@ -948,11 +967,16 @@ def _names_by_rank(board):
 def _replays(season, old_config, new_config):
     """This season under both configs, and each earlier season under the new one.
 
-    Cached on _compare_cache_key of every season involved (their castaway
-    state, visible picks and stored config) plus both configs, so a refresh,
-    a pick or a config edit anywhere changes the key.
+    Holds only plain values, never ORM objects: the result outlives the
+    request whose session loaded it.
     """
     import hashlib
+
+    raw = json.dumps([season.id, old_config, new_config], sort_keys=True)
+    key = hashlib.sha256(raw.encode()).hexdigest()
+    hit = _changes_cache.get(key)
+    if hit and 0 <= _changes_cache_clock() - hit[0] < _CHANGES_CACHE_TTL:
+        return hit[1]
 
     seasons = (
         Season.query.join(Pick)
@@ -961,19 +985,6 @@ def _replays(season, old_config, new_config):
         .order_by(Season.number.desc())
         .all()
     )
-    raw = json.dumps(
-        [
-            [_compare_cache_key(s) for s in seasons],
-            season.id,
-            old_config,
-            new_config,
-        ],
-        sort_keys=True,
-    )
-    key = hashlib.sha256(raw.encode()).hexdigest()
-    if key in _changes_cache:
-        return _changes_cache[key]
-
     standings = []
     if any(s.id == season.id for s in seasons):
         old = _ranked(_build_leaderboard(season, scoring_config=old_config)[0])
@@ -998,12 +1009,11 @@ def _replays(season, old_config, new_config):
         replay = _ranked(_build_leaderboard(other, scoring_config=new_config)[0])
         if not own:
             continue
-
         own_top, replay_top = _names_by_rank(own), _names_by_rank(replay)
         replay_points = sorted((v[1] for v in replay.values()), reverse=True)
         past.append(
             {
-                "season": other,
+                "label": _season_label(other),
                 "winner": own_top[0],
                 "new_winner": replay_top[0],
                 "new_margin": (
@@ -1019,7 +1029,7 @@ def _replays(season, old_config, new_config):
     result = {"standings": standings, "past": past}
     if len(_changes_cache) >= _CHANGES_CACHE_MAX:
         _changes_cache.clear()
-    _changes_cache[key] = result
+    _changes_cache[key] = (_changes_cache_clock(), result)
     return result
 
 
@@ -1032,57 +1042,113 @@ def _labelled_diffs(diffs):
     ]
 
 
+def _period(config, until=None, tally=None):
+    version, diffs = describe_config(config)
+    return {
+        "version": version,
+        "diffs": _labelled_diffs(diffs),
+        "until": until,
+        "tally": tally,
+    }
+
+
+def _season_periods(season):
+    """The scoring a season played under, oldest first, one entry per stretch.
+
+    Each adopted proposal ends a stretch on the scoring it replaced, so
+    adopting mid-season adds to a season's history instead of rewriting it.
+    """
+    periods = []
+    for proposal in proposals.adopted_proposals(season):
+        tally = {key: 0 for key in proposals.CHOICES}
+        for v in proposal.votes:
+            tally[v.choice] = tally.get(v.choice, 0) + 1
+        periods.append(
+            _period(
+                proposal.get_replaced_config() or {},
+                until=_league_date_label(proposal.closed_at),
+                tally=tally,
+            )
+        )
+    periods.append(_period(season.get_scoring_config()))
+    return periods
+
+
+def _scoring_history():
+    """Seasons newest first, with neighbours on the same unchanged version in one row."""
+    rows = []
+    for s in Season.query.order_by(Season.number.desc()).all():
+        periods = _season_periods(s)
+        plain = len(periods) == 1 and not periods[0]["diffs"]
+        last = rows[-1] if rows else None
+        if (
+            plain
+            and last
+            and last["plain"]
+            and last["periods"][0]["version"] is periods[0]["version"]
+        ):
+            last["seasons"].append(s.number)
+            continue
+        rows.append(
+            {
+                "seasons": [s.number],
+                "label": _season_label(s),
+                "periods": periods,
+                "plain": plain,
+            }
+        )
+    for row in rows:
+        if len(row["seasons"]) > 1:
+            numbers = [str(n) for n in sorted(row["seasons"])]
+            row["label"] = "Seasons " + ", ".join(numbers[:-1]) + " and " + numbers[-1]
+    return rows
+
+
 def _changes_context(season):
     """What the Scoring changes page shows for a season.
 
     With a proposal open it compares the season's scoring with the proposal
-    and carries the vote; otherwise it compares the season with the one
-    before it, and shows how the league voted if it did.
+    and carries the ballot; otherwise it compares the season with the one
+    before it, and shows how the league voted on the last adopted proposal.
     """
     if season is None:
         return {}
     current = {**DEFAULT_CONFIG, **season.get_scoring_config()}
-    proposed = season.get_proposed_config()
-    shown = {**DEFAULT_CONFIG, **proposed} if proposed is not None else current
+    proposal = proposals.open_proposal(season)
+    shown = {**DEFAULT_CONFIG, **proposal.get_config()} if proposal else current
     version, diffs = describe_config(shown)
-    history = []
-    for s in Season.query.order_by(Season.number).all():
-        v, d = describe_config(s.get_scoring_config())
-        history.append({"season": s, "version": v, "diffs": _labelled_diffs(d)})
+    adopted = proposals.adopted_proposals(season)
+    voted_on = proposal or (adopted[-1] if adopted else None)
     context = {
         "rules": rule_readout(shown, CONFIG_LABELS),
         "version": version,
         "version_diffs": _labelled_diffs(diffs),
-        "history": history,
+        "history": _scoring_history(),
         "previous": None,
         "changes": [],
-        "proposal": proposed is not None,
-        "closes_label": _league_time_label(season.proposal_closes_at),
-        "vote": proposals.results(season, current_user),
+        "proposal": proposal is not None,
+        "closes_label": _league_time_label(proposal.closes_at) if proposal else None,
+        "vote": proposals.results(voted_on, season, current_user),
+        "choices": proposals.CHOICES,
     }
-    if proposed is not None:
-        context["changes"] = [
-            (label, current.get(k), shown.get(k))
-            for k, (label, _desc) in CONFIG_LABELS.items()
-            if current.get(k) != shown.get(k)
-        ]
-        context.update(_replays(season, current, shown))
-        return context
-    previous = (
-        Season.query.filter(Season.number < season.number)
-        .order_by(Season.number.desc())
-        .first()
-    )
-    if previous is None:
-        return context
-    old = {**DEFAULT_CONFIG, **previous.get_scoring_config()}
-    context["previous"] = previous
+    if proposal is not None:
+        old = current
+    else:
+        previous = (
+            Season.query.filter(Season.number < season.number)
+            .order_by(Season.number.desc())
+            .first()
+        )
+        if previous is None:
+            return context
+        context["previous"] = previous
+        old = {**DEFAULT_CONFIG, **previous.get_scoring_config()}
     context["changes"] = [
-        (label, old.get(k), current.get(k))
+        (label, old.get(k), shown.get(k))
         for k, (label, _desc) in CONFIG_LABELS.items()
-        if old.get(k) != current.get(k)
+        if old.get(k) != shown.get(k)
     ]
-    context.update(_replays(season, old, current))
+    context.update(_replays(season, old, shown))
     return context
 
 
@@ -2459,6 +2525,7 @@ def admin_season_detail(season_id):
         .all()
     )
     current_config = {**DEFAULT_CONFIG, **season.get_scoring_config()}
+    open_proposal = proposals.open_proposal(season)
 
     return render_template(
         "admin/season_detail.html",
@@ -2469,10 +2536,14 @@ def admin_season_detail(season_id):
         config_labels=CONFIG_LABELS,
         current_config=current_config,
         default_config=DEFAULT_CONFIG,
-        legacy_config=LEGACY_CONFIG,
         scoring_versions=SCORING_VERSIONS,
-        proposal=(proposals.results(season) if season.get_proposed_config() else None),
-        proposal_closes_label=_league_time_label(season.proposal_closes_at),
+        proposal=proposals.results(open_proposal, season),
+        proposal_closes_label=(
+            _league_time_label(open_proposal.closes_at) if open_proposal else None
+        ),
+        proposal_closes_value=(
+            wildcards.to_form_value(open_proposal.closes_at) if open_proposal else ""
+        ),
         wildcard=wildcards.admin_view(season),
         replacement=replacements.admin_view(season),
     )
@@ -2601,42 +2672,50 @@ def admin_season_settings(season_id):
 
     back = redirect(url_for("main.admin_season_detail", season_id=season.id))
 
-    # Build scoring config from individual toggle inputs
+    # Build scoring config from individual toggle inputs. Fail on the first
+    # value that is not a finite number rather than store a broken config.
     scoring_config = {}
     for key in DEFAULT_CONFIG:
         form_val = request.form.get(f"scoring_{key}", "").strip()
-        if form_val:
-            scoring_config[key] = float(form_val)
-        else:
+        if not form_val:
             scoring_config[key] = DEFAULT_CONFIG[key]
+            continue
+        try:
+            value = float(form_val)
+        except ValueError:
+            value = None
+        if value is None or not math.isfinite(value):
+            label = CONFIG_LABELS.get(key, (key,))[0]
+            flash(f"{label} has to be a number.", "error")
+            return back
+        scoring_config[key] = value
 
-    proposing = "propose" in request.form
-    if proposing:
+    if "propose" in request.form:
         # Put to the league instead of applying (app/proposals.py)
         try:
             closes = wildcards.parse_league_time(request.form.get("proposal_closes_at"))
         except ValueError:
             flash("Enter when voting closes as a date and time.", "error")
             return back
-    try:
-        if proposing:
-            season.proposed_scoring_config = json.dumps(scoring_config)
-            season.proposal_closes_at = closes
+        error = proposals.propose(season, scoring_config, closes)
+        if error:
+            flash(error, "error")
         else:
-            season.scoring_config = json.dumps(scoring_config)
+            flash(
+                "Proposal saved. Players can vote on it under League, Scoring changes.",
+                "success",
+            )
+        return back
+
+    try:
+        season.scoring_config = json.dumps(scoring_config)
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
         logger.exception("Saving scoring settings failed (season %s)", season.id)
         flash("Could not save the scoring settings.", "error")
         return back
-    if proposing:
-        flash(
-            "Proposal saved. Players can vote on it under League, Scoring changes.",
-            "success",
-        )
-    else:
-        flash("Settings updated!", "success")
+    flash("Settings updated!", "success")
     return back
 
 

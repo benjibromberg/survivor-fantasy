@@ -72,11 +72,6 @@ class Season(db.Model):
     replacement_starts_at = db.Column(db.DateTime, nullable=True)
     # True when the admin entered replacement_starts_at by hand
     replacement_manual = db.Column(db.Boolean, default=False)
-    # A scoring config put to the league for a vote (app/proposals.py), kept
-    # beside scoring_config until the admin adopts or withdraws it, and when
-    # voting on it closes (naive UTC)
-    proposed_scoring_config = db.Column(db.Text, nullable=True)
-    proposal_closes_at = db.Column(db.DateTime, nullable=True)
     # JSON: {episode: {title, date}} from the survivoR Episodes sheet, keyed by
     # episode number as a string so it lines up with Survivor.episode_stats.
     episode_info = db.Column(db.Text)
@@ -142,15 +137,6 @@ class Season(db.Model):
             return json.loads(self.scoring_config) if self.scoring_config else {}
         except json.JSONDecodeError:
             return {}
-
-    def get_proposed_config(self):
-        """The proposed scoring config, or None when nothing is proposed."""
-        if not self.proposed_scoring_config:
-            return None
-        try:
-            return json.loads(self.proposed_scoring_config)
-        except json.JSONDecodeError:
-            return None
 
     def get_episode_info(self):
         """Parsed episode_info ({episode: {title, date}}), or an empty dict.
@@ -359,16 +345,46 @@ def calculate_ss_streak(ss_picks, season):
     return streak
 
 
-class ScoringVote(db.Model):
-    """A player's vote on a season's scoring proposal (app/proposals.py).
+class ScoringProposal(db.Model):
+    """A scoring config put to the league for a vote (app/proposals.py).
 
-    One per player per season; voting again replaces it. Kept after the
-    proposal is adopted or withdrawn, as the record of how the league chose.
+    Open until the admin adopts it (it becomes the season's scoring) or
+    withdraws it; never deleted, so a season's history can say what it
+    played under before and how the league voted.
     """
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     season_id = db.Column(db.Integer, db.ForeignKey("season.id"), nullable=False)
+    config = db.Column(db.Text, nullable=False)
+    # When voting closes, naive UTC
+    closes_at = db.Column(db.DateTime, nullable=False)
+    status = db.Column(db.String(10), nullable=False, default="open")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    closed_at = db.Column(db.DateTime, nullable=True)
+    # The season's scoring_config this replaced, recorded at adoption
+    replaced_config = db.Column(db.Text, nullable=True)
+    season = db.relationship("Season")
+    votes = db.relationship(
+        "ScoringVote", backref="proposal", lazy=True, order_by="ScoringVote.id"
+    )
+
+    __table_args__ = (db.Index("ix_scoring_proposal_season_id", "season_id"),)
+
+    def get_config(self):
+        return json.loads(self.config)
+
+    def get_replaced_config(self):
+        return json.loads(self.replaced_config) if self.replaced_config else None
+
+
+class ScoringVote(db.Model):
+    """A player's vote on one scoring proposal. Voting again replaces it."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    proposal_id = db.Column(
+        db.Integer, db.ForeignKey("scoring_proposal.id"), nullable=False
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     choice = db.Column(db.String(10), nullable=False)
     comment = db.Column(db.String(500), nullable=False, default="")
     updated_at = db.Column(
@@ -379,8 +395,10 @@ class ScoringVote(db.Model):
     user = db.relationship("User")
 
     __table_args__ = (
-        db.UniqueConstraint("user_id", "season_id", name="uq_scoring_vote_user_season"),
-        db.Index("ix_scoring_vote_season_id", "season_id"),
+        db.UniqueConstraint(
+            "proposal_id", "user_id", name="uq_scoring_vote_proposal_user"
+        ),
+        db.Index("ix_scoring_vote_proposal_id", "proposal_id"),
     )
 
 
