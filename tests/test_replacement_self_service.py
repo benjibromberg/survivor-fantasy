@@ -958,7 +958,8 @@ class TestAdminReplacementWindow:
         assert resp.status_code == 200
         assert b'value="2026-11-11T20:00"' in resp.data
         assert b"Wed Nov 11, 7:45 PM ET" in resp.data
-        section = resp.data.split(b"Replacement Picks", 1)[1].split(b"</section>")[0]
+        section = resp.data.split(b'id="replacement-window"', 1)[1]
+        section = section.split(b"</section>")[0]
         assert b"1 of 3" in section
         assert b"Sam" in section and b"Lee" in section
         assert b"Kim" not in section

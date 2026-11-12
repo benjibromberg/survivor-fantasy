@@ -290,6 +290,20 @@ tap-target floor could not be met while the inline styles remained, and a broad
   accessible name.
 - `.admin-page-nav`, `.admin-page-meta` -- the back link and the dim meta line
   under an admin `h1`.
+- `.admin-fields-row` -- fields with a button or checkbox beside them,
+  bottoms aligned; on phones each field takes the row. `.admin-fields` is the
+  grid of scoring components. A label inside `.admin-field` carries a phrase,
+  so it is the League pages' dim sans label, not `.admin-field-label`'s caps.
+- `button.admin-submit` -- a form's own button at content width. Written with
+  the element because Pico widens submit buttons with `button[type="submit"]`
+  (0,1,1), which beats any lone class; Pico's `label:has([type="checkbox"])`
+  is the same trap for a label that should fill its cell (`label.survivor-card`).
+
+The season admin page is laid out by task, not by data: Scoring vote, Pick
+windows, Scoring, Season data, Danger zone. Readouts use `.ls-values`, and
+what is rarely touched (the components, the castaway table) sits in a closed
+`details.fold`. Adopt and Withdraw stay outside any fold while a proposal is
+open.
 
 Admin tables are wrapped in `.table-scroll`. They already scrolled without it,
 via `article > table, section > table`, but only `.table-scroll` paints the
@@ -333,6 +347,7 @@ renders on two lines in the nav at 700px.
 ## Decisions Log
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-11-12 | Season admin page by task | One long column of data sections made the common jobs hard to find, and opening a scoring vote took five steps. The page now leads with the vote (a starting point, a closing time, Propose), then the pick windows, the scoring readout, the season data and the danger zone, with the components and the castaway table folded away. |
 | 2026-11-11 | Scoring changes page, and the analysis keeps its history | The league needed to see what changed and why without a long message. The page compares the season's stored config with the previous season's, lists the league's rules with their values, and replays standings both ways from real picks, so it cannot disagree with the scores. Earlier analysis runs stay downloadable from the analysis page, and each season names the version it played under (`app/scoring/history.py`). Values and replays are label-above-value rows, not tables, as on every League page. A proposal put to a vote turns the page into current-versus-proposed with a ballot; names and comments show to everyone, since the league is small and the comments are the discussion. |
 | 2026-10-02 | Rules page became League settings | It was already a configuration readout wearing the wrong name: it rendered `num_players`, `tribal_base` and `finale_size` and listed which components were active, inside ten accordions. Accordions suit prose you read; that page was values you look up, which is why the sections never fit them. Hub of cards plus label-above-value detail pages instead, and the wide tables are gone. |
 | 2026-10-02 | Breakpoint order is enforced, not described | The Breakpoints section had described a structure the stylesheet did not have, was corrected once, and drifted again. `tests/test_breakpoint_order.py` now asserts the wide-to-narrow ordering and that this document names exactly the widths the sheet uses. Prose drifts; a test does not. |

@@ -196,7 +196,8 @@ activated. From then on:
   page shows who is still to pick.
 
 The admin can change any wildcard at any time under Manage Picks, including
-after the lock. Under **Wildcard Picks** on the season's admin page:
+after the lock. Under **Pick windows**, **Wildcard picks** on the season's
+admin page:
 
 - Untick **Players pick their own** to switch self-service off for the season.
   Every wildcard is shown again and the admin enters them.
@@ -218,7 +219,8 @@ replacement. The merge episode comes from survivoR's Tribe Mapping, and the
 next episode's start is looked up like Episode 2's: from TVmaze, or a week
 after the merge episode at 8 PM Eastern. The lookup runs with the daily
 refresh, the admin **Refresh** button, when a season is activated, and when the
-**Replacement Picks** form on the season's admin page is saved. From then on:
+**Replacement picks** form (under **Pick windows** on the season's admin page)
+is saved. From then on:
 
 - An eligible player chooses their replacement on **My Team**: any castaway
   still in the game who is not already on their own team. They can change it
@@ -232,7 +234,7 @@ refresh, the admin **Refresh** button, when a season is activated, and when the
 **Deploying on the day of the episode.** The daily refresh runs at 8 AM
 Eastern, so a deploy later that day has no lock time until something triggers
 the lookup. Open the season's admin page and press **Save** under Replacement
-Picks with the time field blank, or press **Refresh**. The page then shows
+picks with the time field blank, or press **Refresh**. The page then shows
 when picks lock.
 
 Type a different time to override the lookup; clear the field to go back to
@@ -284,7 +286,7 @@ docker compose restart survivor-fantasy
 
 The pick exports are the backup of everything entered through the admin panel.
 They are rewritten around each daily refresh, around each admin **Refresh**, by
-the admin **Export Picks** / **Export All Picks** buttons, and by `seed.py`
+the admin **Export picks** / **Export All Picks** buttons, and by `seed.py`
 before it drops tables. A failed export is logged as a warning (scheduler and
 refresh) or shown as an error (export buttons), so if `data/picks/` is missing
 or stale, check `docker compose logs survivor-fantasy` for
