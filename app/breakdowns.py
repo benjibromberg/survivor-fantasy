@@ -96,10 +96,11 @@ def explain_change(before, after, limit=3, castaway_limit=3):
     """Why one player's total differs between two scorings of the same picks.
 
     `before` and `after` are the same player's leaderboard entry under each
-    scoring. Returns {"delta", "reasons", "other"}: the change in total, the
-    `limit` components that moved it most (largest first, each with the
-    castaways behind it, largest first), and whatever the listed reasons do
-    not account for, so the parts always add up to the change.
+    scoring. Returns {"delta", "reasons", "other", "rest"}: the change in
+    total; the `limit` components that moved it most (largest first, each
+    with the castaways behind it, largest first); whatever those reasons do
+    not account for, so the parts always add up to the change; and the
+    components that make up that remainder, so it is not a mystery number.
     """
     old, new = _by_castaway(before), _by_castaway(after)
     reasons = []
@@ -123,7 +124,7 @@ def explain_change(before, after, limit=3, castaway_limit=3):
             }
         )
     reasons.sort(key=lambda r: (-abs(r["delta"]), r["key"]))
-    reasons = reasons[:limit]
+    reasons, rest = reasons[:limit], reasons[limit:]
 
     total = after["total_points"] - before["total_points"]
     other = total - sum(r["delta"] for r in reasons)
@@ -131,4 +132,7 @@ def explain_change(before, after, limit=3, castaway_limit=3):
         "delta": total,
         "reasons": reasons,
         "other": other if abs(other) >= _NOISE else 0,
+        "rest": [
+            {"key": r["key"], "label": r["label"], "delta": r["delta"]} for r in rest
+        ],
     }

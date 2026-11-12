@@ -177,6 +177,20 @@ class TestExplainChange:
         listed = sum(r["delta"] for r in change["reasons"])
         assert listed + change["other"] == pytest.approx(change["delta"])
 
+    def test_the_remainder_names_the_components_in_it(self):
+        old = {"jury": 1.0, "merge": 1.0, "placement": 1.0, "fire_win": 1.0}
+        new = {"jury": 5.0, "merge": 4.0, "placement": 3.0, "fire_win": 1.5}
+        before = _entry(_pick("Kyle", "Draft", old))
+        after = _entry(_pick("Kyle", "Draft", new))
+
+        change = explain_change(before, after, limit=2)
+
+        assert change["rest"] == [
+            {"key": "placement", "label": "finishing place", "delta": 2.0},
+            {"key": "fire_win", "label": "fire-making win", "delta": 0.5},
+        ]
+        assert sum(r["delta"] for r in change["rest"]) == pytest.approx(change["other"])
+
     def test_no_change_has_no_reasons(self):
         entry = _entry(_pick("Kyle", "Draft", DRAFT))
 
@@ -184,6 +198,7 @@ class TestExplainChange:
             "delta": 0,
             "reasons": [],
             "other": 0,
+            "rest": [],
         }
 
 
