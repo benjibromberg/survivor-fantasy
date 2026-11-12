@@ -283,3 +283,40 @@ class TestEarlierRunsOnTheAnalysisPage:
         link = re.search(r'href="([^"]*run-6-2026-03-13\.json[^"]*)"', runs)
         assert link, "no link to the archived run 6 data"
         assert league.c.get(link.group(1)).status_code == 200
+
+
+class TestRunSeven:
+    def test_run_7_keeps_the_league_rules(self):
+        from app.scoring.history import SCORING_VERSIONS
+        from app.scoring.rules import satisfies_orderings
+
+        run7 = next(v for v in SCORING_VERSIONS if v["key"] == "run-7")
+
+        assert satisfies_orderings(run7["config"])
+        assert run7["config"]["sole_survivor_val"] == 0
+
+    def test_run_7_matches_the_published_analysis(self):
+        """The registry's frozen config is the run's recommendation, value for value."""
+        from pathlib import Path
+
+        from app.scoring.classic import DEFAULT_CONFIG
+        from app.scoring.history import SCORING_VERSIONS
+
+        run7 = next(v for v in SCORING_VERSIONS if v["key"] == "run-7")
+        published = json.loads(
+            (
+                Path(__file__).parent.parent / "app/static/scoring_analysis.json"
+            ).read_text()
+        )
+
+        assert published["total_configs"] == run7["configs_tested"]
+        for key, value in published["recommended"].items():
+            if key in DEFAULT_CONFIG:
+                assert run7["config"][key] == value, key
+
+    def test_the_analysis_page_lists_both_runs_newest_first(self, league):
+        page = league.c.get("/scoring-analysis").data.decode()
+        runs = page.split('id="earlier-runs"', 1)[1].split("</details>")[0]
+
+        assert runs.index("Run 7") < runs.index("Run 6")
+        assert "103,179" in runs

@@ -5,7 +5,10 @@ DEFAULT_CONFIG, which changes when a new default ships. The Scoring changes
 page uses it to say which version each season played under, and the
 scoring analysis page to list the runs behind them.
 
-Add a version when a new analysis run is adopted; never edit an old one.
+Add a version when a new analysis run is adopted; never edit an old one,
+except to move its "analysis" path: the newest run's data is the page's
+scoring_analysis.json, and when a newer run replaces it, that file is
+copied to analysis/run-N-<date>.json first and the path updated here.
 """
 
 from .classic import DEFAULT_CONFIG, LEGACY_CONFIG
@@ -51,6 +54,43 @@ SCORING_VERSIONS = (
             "advantage_play_val": 0,
             "fire_win_val": 2,
             "sole_survivor_val": 1,
+            "wildcard_multiplier": 0.5,
+            "draft_replacement_multiplier": 1,
+            "wc_replacement_multiplier": 0,
+            "replacement_deduction": True,
+        },
+    },
+    {
+        "key": "run-7",
+        "name": "Run 7: league rules",
+        "date": "2026-11-11",
+        "configs_tested": 103179,
+        "analysis": "scoring_analysis.json",
+        "note": "Best of 103,179 simulated configs that keep the league's "
+        "rules: Final Tribal over jury, individual over tribal immunity, "
+        "idols over advantages, with Sole Survivor off.",
+        "config": {
+            "tribal_val": 0.5,
+            "post_merge_tribal_val": 1,
+            "tribal_base": 0.5,
+            "tribal_step": 0,
+            "post_merge_step": 0,
+            "finale_step": 0.5,
+            "finale_size": 5,
+            "jury_val": 3,
+            "merge_val": 0,
+            "final_tribal_val": 5,
+            "first_val": 5,
+            "second_val": 0,
+            "third_val": 0,
+            "individual_immunity_val": 0.5,
+            "tribal_immunity_val": 0.25,
+            "idol_found_val": 0.5,
+            "advantage_found_val": 0.1,
+            "idol_play_val": 2,
+            "advantage_play_val": 0.25,
+            "fire_win_val": 0,
+            "sole_survivor_val": 0,
             "wildcard_multiplier": 0.5,
             "draft_replacement_multiplier": 1,
             "wc_replacement_multiplier": 0,
