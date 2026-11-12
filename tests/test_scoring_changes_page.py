@@ -144,10 +144,26 @@ def _page(league, season=None):
 
 
 def _block(page, block_id):
-    """The markup of one section, whether an open <section> or a <details> fold."""
-    rest = page.split(f'id="{block_id}"', 1)[1]
-    ends = [i for i in (rest.find("</section>"), rest.find("</details>")) if i != -1]
-    return rest[: min(ends)]
+    """The markup of one section, whether an open <section> or a <details> fold.
+
+    Counts nesting, because an earlier season whose order changes holds a
+    fold of its own inside the earlier-seasons fold.
+    """
+    head, rest = page.split(f'id="{block_id}"', 1)
+    tag = re.match(r"\w+", head.rsplit("<", 1)[1]).group(0)
+    depth = 1
+    for match in re.finditer(rf"<(/?){tag}\b", rest):
+        depth += -1 if match.group(1) else 1
+        if depth == 0:
+            return rest[: match.start()]
+    raise AssertionError(f"no closing </{tag}> for #{block_id}")
+
+
+def _season_row(block, label):
+    """One earlier season's row in the earlier-seasons fold."""
+    rows = re.split(r'<div class="ls-value">\s*<dt>(?=Season \d)', block)
+    (row,) = [r for r in rows if r.startswith(label + "<")]
+    return row
 
 
 def _board(season, config=None):
@@ -216,6 +232,91 @@ class TestStandingsBothWays:
 
         assert "Season 50" in past and "Season 49" in past
         assert "Pat" in past or "Sam" in past
+
+
+def _pts(v):
+    """Points as the page writes them in a replay: two places, 44.0 not 44.00."""
+    s = f"{v:.2f}"
+    return s[:-1] if s.endswith("0") else s
+
+
+def _ranked_board(season, config=None):
+    """{username: (points, rank)}, best first, as the page ranks them."""
+    board = _board(season, config)
+    ordered = sorted(board, key=lambda u: board[u], reverse=True)
+    return {u: (board[u], rank) for rank, u in enumerate(ordered, start=1)}
+
+
+class TestReplayDetail:
+    """Season 50 finishes Pat, Sam under its own scoring and Sam, Pat under
+    Season 51's; Season 49 finishes the same way under both."""
+
+    def _rows(self, league):
+        past = _block(_page(league), "past-seasons")
+        return _season_row(past, "Season 50"), _season_row(past, "Season 49")
+
+    def test_the_fixture_has_one_season_that_changes_and_one_that_does_not(
+        self, league
+    ):
+        new = league.s51.get_scoring_config()
+        own50, new50 = _ranked_board(league.s50), _ranked_board(league.s50, new)
+        own49, new49 = _ranked_board(league.s49), _ranked_board(league.s49, new)
+
+        assert [own50[u][1] for u in ("pat", "sam")] != [
+            new50[u][1] for u in ("pat", "sam")
+        ]
+        assert [own49[u][1] for u in ("pat", "sam")] == [
+            new49[u][1] for u in ("pat", "sam")
+        ]
+
+    def test_a_changed_season_shows_every_players_totals_and_ranks_both_ways(
+        self, league
+    ):
+        changed, _ = self._rows(league)
+        own = _ranked_board(league.s50)
+        new = _ranked_board(league.s50, league.s51.get_scoring_config())
+        ordinal = {1: "1st", 2: "2nd"}
+
+        for user, name in (("pat", "Pat"), ("sam", "Sam")):
+            (old_points, old_rank), (points, rank) = own[user], new[user]
+            assert f"{ordinal[rank]} &middot; {name}</dt>" in changed
+            assert f"<dd>{_pts(points)} pts" in changed
+            assert f"was {_pts(old_points)}, {ordinal[old_rank]}" in changed
+        assert "up 1 place" in changed and "down 1 place" in changed
+
+    def test_names_the_components_that_moved_each_player_most(self, league):
+        changed, _ = self._rows(league)
+        sam, pat = changed.split("&middot; Pat</dt>")
+
+        # Sam's 2nd and 3rd place picks: placement and Final Tribal now score
+        assert sam.index("finishing place") < sam.index("reaching Final Tribal")
+        assert "+4.5" in sam and "+4.0" in sam
+        # Pat's winner gains Final Tribal and individual immunity
+        assert "reaching Final Tribal" in pat and "individual immunity" in pat
+        assert "finishing place" not in pat
+
+    def test_names_the_castaways_behind_the_changes(self, league):
+        changed, _ = self._rows(league)
+        sam, pat = changed.split("&middot; Pat</dt>")
+
+        # Two castaways share Sam's placement gain, so each carries an amount
+        assert "S50C7&nbsp;+3.0, S50C6&nbsp;+1.5" in sam
+        # One castaway is the whole of Pat's, so the amount is not repeated
+        assert '<span class="ls-replay-who">S50C8</span>' in pat
+
+    def test_the_detail_is_a_fold_closed_on_phones(self, league):
+        changed, _ = self._rows(league)
+
+        tag = re.search(r"<details[^>]*>", changed).group(0)
+        assert 'class="fold ls-replay"' in tag
+        assert " open" in tag and "data-mobile-collapsed" in tag
+
+    def test_a_season_with_the_same_order_keeps_its_one_line_summary(self, league):
+        _, same = self._rows(league)
+
+        assert "Sam still wins" in same
+        assert "Same finishing order" in same
+        assert "<details" not in same and "ls-replay" not in same
 
 
 class TestComponentTotalsOnRealEntries:
