@@ -8,7 +8,9 @@
 {% macro ordinal(n) -%}
 {{ n }}{{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n if n < 20 else n % 10, 'th') }}
 {%- endmacro %}
-{% set this_season = season.name or 'Season ' ~ season.number %}
+{# Sentences name seasons by number: a season's name ("In the Hands of the Fans")
+   does not read as one in running text. Row labels keep the name. #}
+{% set this_season = 'Season ' ~ season.number %}
 
 {% if version %}
 <p>{{ this_season }} plays under <strong>{{ version.name }}</strong>{% if version.date %} ({{ version.date }}){% endif %}{% if version_diffs %}, with {{ version_diffs|length }} value{{ 's' if version_diffs|length != 1 }} changed from it{% endif %}.
@@ -35,7 +37,7 @@
 </section>
 
 {% if previous %}
-{% set last_season = previous.name or 'Season ' ~ previous.number %}
+{% set last_season = 'Season ' ~ previous.number %}
 <section id="what-changed" aria-labelledby="what-changed-heading">
 <h2 id="what-changed-heading">What changed since {{ last_season }}</h2>
 {% if changes %}
