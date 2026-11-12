@@ -915,6 +915,41 @@ class TestAdminProposal:
 
         assert _open(league) is None
 
+    def test_proposing_starts_working_out_both_configs(self, league, clock, simulator):
+        """In one background run, the proposal first; the request does not wait."""
+        from app import league_metrics
+        from app.scoring.classic import DEFAULT_CONFIG
+
+        simulator.hold()  # the run is still going when the response returns
+        league.s51.scoring_config = json.dumps(dict(DEFAULT_CONFIG))
+        league.db.session.commit()
+
+        resp = self._settings(
+            league, propose="on", proposal_closes_at="2026-11-18T19:45"
+        )
+
+        assert resp.status_code == 302
+        ((command, _),) = simulator.commands
+        sent = [
+            json.loads(command[i + 1])
+            for i, arg in enumerate(command)
+            if arg == "--metrics-for"
+        ]
+        assert sent == [
+            league_metrics.effective_config(_open(league).get_config()),
+            league_metrics.effective_config(DEFAULT_CONFIG),
+        ]
+
+    def test_a_refused_proposal_starts_nothing(self, league, clock, simulator):
+        self._settings(league, propose="on", proposal_closes_at="")
+
+        assert simulator.commands == []
+
+    def test_saving_scoring_without_a_vote_starts_nothing(self, league, simulator):
+        self._settings(league)
+
+        assert simulator.commands == []
+
     @pytest.mark.parametrize("bad", ["abc", "nan", "inf", "-inf"])
     def test_a_value_that_is_not_a_number_is_refused(self, league, bad):
         stored = league.s51.scoring_config

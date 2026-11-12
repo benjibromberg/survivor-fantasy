@@ -17,7 +17,14 @@ from flask import (
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
-from . import breakdowns, proposals, replacements, schedule, wildcards
+from . import (
+    breakdowns,
+    league_metrics,
+    proposals,
+    replacements,
+    schedule,
+    wildcards,
+)
 from .data import (
     download_survivor_data,
     export_all_picks,
@@ -2806,6 +2813,9 @@ def admin_season_settings(season_id):
         if error:
             flash(error, "error")
         else:
+            # How the league would play under each, worked out in the
+            # background for Scoring changes; this returns at once
+            league_metrics.request_metrics(scoring_config, season.get_scoring_config())
             flash(
                 "Proposal saved. Players can vote on it under League, Scoring changes.",
                 "success",
