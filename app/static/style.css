@@ -1301,6 +1301,28 @@ details.fold > summary .subsection-title {
     margin: 0;
 }
 
+/* The active switch after its first tap: the question and its confirm
+   button take a line of their own under the season's name. The head wraps
+   only then, so an unarmed long name still wraps beside its button rather
+   than pushing the button down. */
+.admin-card-head:has(> .admin-armed) {
+    flex-wrap: wrap;
+}
+
+.admin-card-head > .admin-armed {
+    flex: 1 1 100%;
+}
+
+/* :not([hidden]) so this display does not override the hidden attribute
+   that keeps the confirm out of sight until the first tap. */
+.admin-arm-confirm:not([hidden]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.75rem;
+    color: var(--sand-light);
+}
+
 /* "Active", "Admin": a short tag beside a card's title. Sentence case, as
    the journey badges are. */
 .admin-tag {

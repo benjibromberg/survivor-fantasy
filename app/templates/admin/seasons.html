@@ -23,12 +23,23 @@
         <li class="admin-card{% if season.is_active %} admin-card-active{% endif %}">
             {# The switch sits beside the name rather than with Picks and Team
                names: at 1280px all three did not fit one line of a card, and
-               it wrapped onto a line of its own. #}
+               it wrapped onto a line of its own.
+
+               It changes the season the whole league sees, so it takes a
+               second tap (the script below): the first shows the question and
+               a confirm button in place. Not a confirm() pop-up, which blocks
+               browser automation driving these pages. Without the script the
+               first button submits on its own, and the confirm stays hidden. #}
+            {% set verb = 'Deactivate' if season.is_active else 'Make active' %}
             <div class="admin-card-head">
                 <h3 class="subsection-title admin-card-title"><a href="{{ url_for('main.admin_season_detail', season_id=season.id) }}">{{ label }}</a></h3>
-                <form method="POST" action="{{ url_for('main.admin_toggle_active', season_id=season.id) }}">
+                <form method="POST" action="{{ url_for('main.admin_toggle_active', season_id=season.id) }}" data-arm>
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="outline secondary admin-btn-sm">{{ 'Deactivate' if season.is_active else 'Make active' }}<span class="visually-hidden"> {{ label }}</span></button>
+                    <button type="submit" class="outline secondary admin-btn-sm admin-submit" data-arm-trigger>{{ verb }}<span class="visually-hidden"> {{ label }}</span></button>
+                    <span class="admin-arm-confirm" data-arm-confirm hidden>
+                        <span id="arm-prompt-{{ season.id }}">{% if season.is_active %}Deactivate {{ label }}?{% else %}Make {{ label }} active?{% endif %}</span>
+                        <button type="submit" class="secondary admin-btn-sm admin-submit" aria-describedby="arm-prompt-{{ season.id }}">Yes, {{ verb|lower }}</button>
+                    </span>
                 </form>
             </div>
             <dl class="admin-facts">
@@ -93,4 +104,41 @@
     </form>
     <p><small>Writes every season's picks, and each player's login email, to the picks folder in the data directory. A season's refresh also exports its picks, before and after.</small></p>
 </section>
+
+<script>
+(function () {
+    // The active switch's second tap. The first tap is caught here and shows
+    // the question with its confirm button; the confirm button is a plain
+    // submit, so the second tap posts the same form with the same fields.
+    // Left alone, the question goes away again.
+    var ARMED_FOR_MS = 5000;
+    document.querySelectorAll('form[data-arm]').forEach(function (form) {
+        var trigger = form.querySelector('[data-arm-trigger]');
+        var confirmBox = form.querySelector('[data-arm-confirm]');
+        var confirmButton = confirmBox.querySelector('button');
+        var timer = null;
+
+        function disarm() {
+            var hadFocus = confirmBox.contains(document.activeElement);
+            clearTimeout(timer);
+            confirmBox.hidden = true;
+            trigger.hidden = false;
+            form.classList.remove('admin-armed');
+            if (hadFocus) trigger.focus();
+        }
+
+        trigger.addEventListener('click', function (event) {
+            event.preventDefault();
+            trigger.hidden = true;
+            confirmBox.hidden = false;
+            form.classList.add('admin-armed');
+            confirmButton.focus();
+            timer = setTimeout(disarm, ARMED_FOR_MS);
+        });
+        confirmBox.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') disarm();
+        });
+    });
+})();
+</script>
 {% endblock %}

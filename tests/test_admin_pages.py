@@ -164,7 +164,7 @@ class TestSeasonsList:
 
         assert "<dd>Run 6<small>1 value changed</small></dd>" in s61
         assert "<dd>Legacy</dd>" in s60
-        assert "Default" not in page and "Custom" not in page
+        assert "<dd>Default" not in page and "<dd>Custom" not in page
 
     def test_facts_are_label_above_value_not_a_table(self, league):
         _login(league.c)
@@ -191,6 +191,54 @@ class TestSeasonsList:
             assert f'href="/admin/players/{season.id}"' in card
             assert f'action="/admin/season/{season.id}/toggle-active"' in card
             assert f">{switch}<" in card
+
+    def _switch_form(self, page, season):
+        action = f'action="/admin/season/{season.id}/toggle-active"'
+        start = page.rindex("<form", 0, page.index(action))
+        return page[start : page.index("</form>", start)]
+
+    def test_the_active_switch_asks_again_in_place(self, league):
+        """First tap: the question and a confirm button; the second submits."""
+        _login(league.c)
+        page = _page(league, "/admin/seasons")
+
+        for season, verb, question in (
+            (league.s60, "Make active", "Make Heroes v Villains active?"),
+            (league.s61, "Deactivate", "Deactivate Season 61?"),
+        ):
+            form = self._switch_form(page, season)
+            trigger = re.search(r"<button[^>]*data-arm-trigger[^>]*>(.*?)<", form)
+            confirm = form.split("data-arm-confirm", 1)[1]
+
+            assert 'method="POST"' in form and "data-arm" in form
+            assert 'type="submit"' in trigger.group(0)
+            assert trigger.group(1) == verb
+            # Hidden until the first tap, so without scripting the trigger
+            # is the only visible button and submits on its own
+            assert confirm.startswith(" hidden>")
+            assert question in confirm
+            assert re.search(
+                rf'<button type="submit"[^>]*>Yes, {verb.lower()}</button>', confirm
+            )
+
+    def test_the_switch_asks_without_a_browser_dialog(self, league):
+        """A confirm() pop-up blocks the automation that drives these pages."""
+        _login(league.c)
+
+        page = _page(league, "/admin/seasons")
+
+        assert "confirm(" not in page and "prompt(" not in page
+        assert "form[data-arm]" in page  # the script that arms it
+
+    def test_the_switch_posts_only_its_csrf_token(self, league):
+        """Both buttons submit the same form, so the POST contract is unchanged."""
+        _login(league.c)
+        page = _page(league, "/admin/seasons")
+
+        for season in (league.s60, league.s61):
+            form = self._switch_form(page, season)
+            assert re.findall(r'name="([^"]+)"', form) == ["csrf_token"]
+            assert form.count('type="submit"') == 2
 
     def test_delete_is_on_the_season_page_not_the_list(self, league):
         _login(league.c)
