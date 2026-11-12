@@ -1898,6 +1898,17 @@ a[role="button"].outline:hover {
     flex-shrink: 0;
 }
 
+/* Fill the grid cell: the card is the tap target. Pico gives any label
+   holding a checkbox `width: fit-content` through
+   `label:has([type="checkbox"], [type="radio"])`, which is (0,1,1) and beat
+   .survivor-card, so each card shrank to its name and the grid read as a
+   ragged column of different widths. Pico's label margin goes too, so the
+   grid gap is the only spacing between cards. */
+label.survivor-card {
+    width: auto;
+    margin: 0;
+}
+
 .survivor-headshot {
     width: 48px;
     height: 48px;
