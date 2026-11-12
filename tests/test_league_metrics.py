@@ -347,6 +347,94 @@ class TestTwoWorkers:
         assert _other_worker({"fire_win_val": 1}) == 1
 
 
+# ── The metrics the pages show ─────────────────────────────────────────────
+
+
+class TestMetricsList:
+    def test_every_metric_is_one_evaluate_config_returns(self):
+        """A typo in a key would show "n/a" on both pages, forever."""
+        from test_analyze_scoring import _small_scenarios
+
+        from analyze_scoring import evaluate_config
+
+        lm = _lm()
+        returned = evaluate_config(_config(), _small_scenarios())
+
+        assert [m.key for m in lm.METRICS if m.key not in returned] == []
+
+    def test_each_metric_listed_once(self):
+        lm = _lm()
+        keys = [m.key for m in lm.METRICS]
+
+        assert len(keys) == len(set(keys))
+
+    def test_only_informational_metrics_go_unmarked(self):
+        lm = _lm()
+
+        for metric in lm.METRICS:
+            assert (metric.goodness is None) == (metric.better is None), metric.key
+            assert (metric.healthy is not None) == (metric.better == "band"), metric.key
+
+    @pytest.mark.parametrize(
+        "fmt, value, text",
+        [
+            ("pct", 0.566, "57%"),
+            ("num", 6.7018, "6.70"),
+            ("share", 1.0, "yes"),
+            ("share", 0.0, "no"),
+            ("share", 4 / 9, "44% of seasons"),
+            ("pct", None, "n/a"),
+        ],
+    )
+    def test_values_read_as_the_pages_write_them(self, fmt, value, text):
+        assert _lm().format_value(fmt, value) == text
+
+    def test_the_composite_band_decides_better_for_longevity(self):
+        lm = _lm()
+        (longevity,) = [m for m in lm.METRICS if m.key == "longevity_share"]
+
+        assert lm._better_flags(longevity, [0.55, 0.75]) == [False, False]
+        assert lm._better_flags(longevity, [0.40, 0.60]) == [False, True]
+        assert lm._better_flags(longevity, [0.95, 0.70]) == [False, True]
+
+    def test_lower_is_better_marks_the_smaller(self):
+        lm = _lm()
+        (blowouts,) = [m for m in lm.METRICS if m.key == "blowout_rate"]
+
+        assert lm._better_flags(blowouts, [0.30, 0.44, 0.30]) == [True, False, True]
+
+
+class TestCompare:
+    def test_columns_on_the_same_config_merge(self, simulator):
+        lm = _lm()
+        simulator.hold()
+
+        play = lm.compare(
+            [
+                ("Today", "today", _config()),
+                ("Run 7", "run 7", {}),
+                ("X", "x", _config(jury_val=1)),
+            ]
+        )
+
+        assert [c["short"] for c in play["columns"]] == ["Today", "X"]
+        assert play["columns"][0]["also"] == ["run 7"]
+        assert play["state"] == "working"
+
+    def test_ready_once_every_column_has_its_record(self, simulator):
+        lm = _lm()
+        full = {m.key: 0.5 for m in lm.METRICS}
+        simulator.seed(_config(), full)
+        simulator.seed(_config(jury_val=1), full)
+
+        play = lm.compare([("A", "a", _config()), ("B", "b", _config(jury_val=1))])
+
+        assert play["state"] == "ready"
+        assert [g["label"] for g in play["groups"]][0] == "Overall"
+        assert "3,150 simulated drafts of Seasons 41-49" in play["basis"]
+        assert simulator.commands == []
+
+
 # ── The real simulator, against the published analysis ─────────────────────
 
 

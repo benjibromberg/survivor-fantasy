@@ -1197,6 +1197,20 @@ def _changes_context(season):
         if old.get(k) != shown.get(k)
     ]
     context.update(_replays(season, old, shown))
+    # How the league plays under each; starts the work if it is missing
+    if league_metrics.effective_config(old) != league_metrics.effective_config(shown):
+        if proposal is not None:
+            columns = [
+                ("Today", "the current scoring", old),
+                ("Proposed", "the proposed scoring", shown),
+            ]
+        else:
+            before, now = f"Season {previous.number}", f"Season {season.number}"
+            columns = [
+                (before, f"{before}'s scoring", old),
+                (now, f"{now}'s scoring", shown),
+            ]
+        context["play"] = league_metrics.compare(columns)
     return context
 
 

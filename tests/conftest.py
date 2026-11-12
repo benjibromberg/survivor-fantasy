@@ -58,6 +58,25 @@ class SimulatorRuns:
     def release(self):
         self.gate.set()
 
+    def seed(self, config, metrics):
+        """Put a config's record in the cache, as a finished run leaves it."""
+        import json
+        import os
+
+        from app import league_metrics as lm
+
+        record = {
+            "config": lm.effective_config(config),
+            **lm._standard_inputs(),
+            "n_scenarios": 3150,
+            "seconds": 4.5,
+            "metrics": metrics,
+        }
+        path = lm._path(lm.cache_key(config), ".json")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(record, f)
+
     def settle(self, timeout=5):
         """Wait for every waiting thread to finish with its run."""
         for thread in threading.enumerate():
