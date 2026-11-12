@@ -10,7 +10,9 @@ description: >-
 
 # survivor-scoring-analysis
 
-A standalone simulator: nothing in the webapp imports it. It simulates fantasy
+A simulator run from the command line. The webapp imports it only for its
+scenario constants and composite helpers (`app/league_metrics.py`), and runs it
+as a subprocess (`--metrics-for`), never inside a request. It simulates fantasy
 drafts over real seasons (`DEFAULT_SEASONS`, 41-49) with lightweight `SimSurvivor`
 / `SimSeason` objects built from `survivoR.xlsx`. The components, rules and
 versions it works with: the `survivor-scoring` skill.

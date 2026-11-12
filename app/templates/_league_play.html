@@ -1,0 +1,43 @@
+{# How the league plays under each scoring config: the simulator's metrics
+   side by side, from app/league_metrics.py compare(). One macro for the
+   Scoring changes and scoring analysis pages, so the two cannot disagree.
+
+   Label above value, as on every League page: a row per metric, a cell per
+   config, and each cell names its config, so nothing depends on a column
+   header scrolled out of view. A fold that starts closed on phones
+   (data-mobile-collapsed, base.html). #}
+{% macro league_play(play, intro, analysis_link=false) %}
+<details class="fold" open data-mobile-collapsed id="league-play">
+    <summary><h2 id="league-play-heading">How the league plays</h2></summary>
+    <div class="fold-body">
+    <p>{{ intro }}</p>
+    {% if analysis_link %}<p><a class="lp-link" href="{{ url_for('main.scoring_analysis') }}">How each one is measured</a></p>{% endif %}
+    <p class="lp-legend">{% for c in play.columns %}<strong>{{ c.short }}</strong>: {{ c.label }}{% if c.also %}, also {{ c.also|join(' and ') }}{% endif %}{{ '.' if loop.last else '; ' }}{% endfor %}</p>
+    {% if play.state == 'ready' %}
+    {% for group in play.groups %}
+    <h3 class="subsection-title">{{ group.label }}</h3>
+    <dl class="ls-values ls-values-wide">
+        {% for row in group.rows %}
+        <div class="ls-value">
+            <dt>{{ row.label }}</dt>
+            <dd>
+                <ul class="lp-cells">
+                    {% for cell in row.cells %}
+                    <li class="lp-cell{{ ' lp-better' if cell.better }}"><span class="lp-col">{{ cell.column }}</span><span class="lp-num">{{ cell.text }}</span>{% if cell.better %}<span class="lp-mark">better</span>{% endif %}</li>
+                    {% endfor %}
+                </ul>
+                <small class="lp-meaning"><span class="lp-dir">{{ row.direction }}</span> {{ row.meaning }}</small>
+            </dd>
+        </div>
+        {% endfor %}
+    </dl>
+    {% endfor %}
+    <p><small>{{ play.basis }}</small></p>
+    {% elif play.state == 'failed' %}
+    <p class="lp-pending" role="status">These numbers could not be worked out just now. The site tries again on a visit after about {{ play.retry_minutes }} minutes.</p>
+    {% else %}
+    <p class="lp-pending" role="status">These numbers are being worked out. The site simulates each scoring setup over the same few thousand drafts the scoring analysis uses, which takes about a minute; reload the page to see them.</p>
+    {% endif %}
+    </div>
+</details>
+{% endmacro %}

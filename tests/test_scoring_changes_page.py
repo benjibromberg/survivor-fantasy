@@ -1099,3 +1099,242 @@ class TestHistoryGrouping:
 
         assert "Seasons 48 and 49" in history
         assert history.count("Legacy") == 1
+
+
+# ── How the league plays: the simulator's metrics for both configs ─────────
+
+
+def _metrics(**values):
+    """A full record's metrics: every metric the pages show, then `values`."""
+    from app.league_metrics import METRICS
+
+    metrics = {m.key: 0.5 for m in METRICS}
+    metrics.update(
+        composite=6.0,
+        composite_unconstrained=6.0,
+        orderings_ok=1.0,
+        placement_order_ok=1.0,
+        third_beats_second=0.0,
+    )
+    metrics.update(values)
+    return metrics
+
+
+def _sent(simulator):
+    """The configs each background run was started for."""
+    return [
+        [json.loads(cmd[i + 1]) for i, arg in enumerate(cmd) if arg == "--metrics-for"]
+        for cmd, _ in simulator.commands
+    ]
+
+
+def _metric_row(section, label):
+    """One metric's row: its label, a cell per config, and its meaning."""
+    from markupsafe import escape
+
+    rows = section.split('<div class="ls-value">')
+    (row,) = [r for r in rows if f"<dt>{escape(label)}</dt>" in r]
+    return row
+
+
+def _cells(row):
+    """{config label: (value text, marked better)} for one row.
+
+    A cell counts as marked only if it carries both the class and the word,
+    so the mark never rests on colour alone.
+    """
+    found = re.findall(
+        r'<li class="lp-cell( lp-better)?"><span class="lp-col">([^<]+)</span>'
+        r'<span class="lp-num">([^<]+)</span>(<span class="lp-mark">better</span>)?',
+        row,
+    )
+    cells = {}
+    for better_class, column, value, better_word in found:
+        assert bool(better_class) == bool(better_word), column
+        cells[column] = (value, bool(better_class))
+    return cells
+
+
+class TestHowTheLeaguePlays:
+    def _section(self, league, season=None):
+        return _block(_page(league, season), "league-play")
+
+    def _seed_both(self, league, simulator, today, proposed):
+        simulator.seed(league.s51.get_scoring_config(), today)
+        simulator.seed(_open(league).get_config(), proposed)
+
+    def test_before_the_numbers_exist_it_says_so_and_starts_them(
+        self, proposal, simulator
+    ):
+        from app import league_metrics
+
+        simulator.hold()
+
+        section = self._section(proposal)
+
+        assert "being worked out" in section
+        assert 'class="lp-cells"' not in section
+        assert _sent(simulator) == [
+            [
+                league_metrics.effective_config(proposal.s51.get_scoring_config()),
+                league_metrics.effective_config(_open(proposal).get_config()),
+            ]
+        ]
+
+    def test_another_view_while_they_run_starts_nothing_more(self, proposal, simulator):
+        simulator.hold()
+
+        _page(proposal)
+        _page(proposal)
+
+        assert len(simulator.commands) == 1
+
+    def test_no_page_view_runs_the_simulator(self, proposal, simulator, monkeypatch):
+        import analyze_scoring
+
+        def ran(*args, **kwargs):
+            raise AssertionError("the simulator ran inside a request")
+
+        for name in ("load_all_seasons", "evaluate_config", "run_metrics_jobs"):
+            monkeypatch.setattr(analyze_scoring, name, ran)
+        simulator.hold()
+
+        assert "being worked out" in self._section(proposal)
+        self._seed_both(proposal, simulator, _metrics(), _metrics())
+        assert 'class="lp-cells"' in self._section(proposal)
+
+    def test_a_failed_run_says_so(self, proposal, simulator):
+        simulator.code = 1
+        _page(proposal)
+        simulator.settle()
+
+        section = self._section(proposal)
+
+        assert "could not be worked out" in section
+        assert len(simulator.commands) == 1
+
+    def test_every_metric_shows_for_today_and_the_proposal(self, proposal, simulator):
+        from app.league_metrics import METRICS
+
+        self._seed_both(proposal, simulator, _metrics(), _metrics())
+
+        section = self._section(proposal)
+
+        for metric in METRICS:
+            cells = _cells(_metric_row(section, metric.label))
+            assert list(cells) == ["Today", "Proposed"], metric.key
+        assert simulator.commands == []
+
+    def test_the_better_value_is_marked_by_the_metrics_direction(
+        self, proposal, simulator
+    ):
+        today = _metrics(suspense=0.50, blowout_rate=0.30)
+        proposed = _metrics(suspense=0.61, blowout_rate=0.44)
+        self._seed_both(proposal, simulator, today, proposed)
+
+        section = self._section(proposal)
+
+        suspense = _cells(
+            _metric_row(section, "Share of the season the eventual winner isn't in 1st")
+        )
+        assert suspense == {"Today": ("50%", False), "Proposed": ("61%", True)}
+        blowouts = _cells(
+            _metric_row(section, "Blowouts: 1st scores more than twice last")
+        )
+        assert blowouts == {"Today": ("30%", True), "Proposed": ("44%", False)}
+
+    def test_a_tie_at_the_precision_shown_marks_neither(self, proposal, simulator):
+        self._seed_both(
+            proposal, simulator, _metrics(suspense=0.571), _metrics(suspense=0.568)
+        )
+
+        row = _metric_row(
+            self._section(proposal),
+            "Share of the season the eventual winner isn't in 1st",
+        )
+
+        assert _cells(row) == {"Today": ("57%", False), "Proposed": ("57%", False)}
+
+    def test_inside_the_healthy_band_neither_is_better(self, proposal, simulator):
+        self._seed_both(
+            proposal,
+            simulator,
+            _metrics(longevity_share=0.55),
+            _metrics(longevity_share=0.75),
+        )
+
+        row = _metric_row(self._section(proposal), "Points from surviving tribals")
+
+        assert not any(mark for _, mark in _cells(row).values())
+        assert "Healthy from 50% to 80%." in row
+
+    def test_the_overall_score_is_shown_before_the_rule_penalty(
+        self, proposal, simulator
+    ):
+        today = _metrics(
+            composite=-192.88,
+            composite_unconstrained=7.12,
+            orderings_ok=0.0,
+            placement_order_ok=0.0,
+        )
+        self._seed_both(
+            proposal, simulator, today, _metrics(composite_unconstrained=6.72)
+        )
+
+        section = self._section(proposal)
+
+        overall = _cells(_metric_row(section, "Overall simulation score"))
+        assert overall == {"Today": ("7.12", True), "Proposed": ("6.72", False)}
+        assert "192" not in section
+        rules = _cells(_metric_row(section, "Keeps the league's point-order rules"))
+        assert rules == {"Today": ("no", False), "Proposed": ("yes", True)}
+
+    def test_a_partial_share_reads_as_seasons(self, proposal, simulator):
+        self._seed_both(
+            proposal,
+            simulator,
+            _metrics(third_beats_second=4 / 9),
+            _metrics(third_beats_second=1.0),
+        )
+
+        row = _metric_row(self._section(proposal), "3rd place can outscore 2nd")
+
+        # For information only: never marked
+        assert _cells(row) == {
+            "Today": ("44% of seasons", False),
+            "Proposed": ("yes", False),
+        }
+
+    def test_without_a_proposal_it_compares_with_the_previous_season(
+        self, league, simulator
+    ):
+        simulator.seed(league.s50.get_scoring_config(), _metrics())
+        simulator.seed(league.s51.get_scoring_config(), _metrics())
+
+        section = self._section(league)
+
+        row = _metric_row(section, "Overall simulation score")
+        assert list(_cells(row)) == ["Season 50", "Season 51"]
+
+    def test_hidden_when_both_configs_are_the_same(self, league, simulator):
+        league.s51.scoring_config = league.s50.scoring_config
+        league.db.session.commit()
+
+        page = _page(league)
+
+        assert 'id="league-play"' not in page
+        assert simulator.commands == []
+
+    def test_it_comes_after_what_changes_and_before_the_ballot(self, proposal):
+        _login(proposal.c, "pat@example.com")
+        page = _page(proposal)
+
+        at = page.index('id="league-play"')
+        assert page.index('id="what-changed"') < at
+        assert at < page.index('class="ls-vote-form"') < page.index('id="past-seasons"')
+
+    def test_it_starts_closed_on_phones(self, proposal):
+        page = _page(proposal)
+
+        tag = page.split('id="league-play"', 1)[0].rsplit("<", 1)[1]
+        assert tag.startswith("details") and "data-mobile-collapsed" in tag

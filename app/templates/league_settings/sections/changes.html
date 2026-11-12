@@ -128,6 +128,13 @@
 {% endif %}
 </section>
 {% endif %}
+
+{# The simulator's view of the two configs, before the ballot so a vote can
+   use it. Absent when the two configs are the same. #}
+{% if play %}
+{% from "_league_play.html" import league_play %}
+{{ league_play(play, "How a season plays under each, from the same simulation the scoring analysis runs: suspense, comebacks, blowouts, and how much a good draft decides the result.", analysis_link=true) }}
+{% endif %}
 {% endif %}
 
 {% if vote and (proposal or vote.voted) %}
