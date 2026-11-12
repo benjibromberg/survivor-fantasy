@@ -2517,6 +2517,67 @@ details.lb-champion[open] > summary.lb-row {
     padding-bottom: 0;
 }
 
+/* Scoring changes: an earlier season whose order changes under the new
+   scoring opens to each player's points both ways and what moved them. It is
+   a fold inside the earlier-seasons fold, so the closed-on-phones script in
+   base.html finds it (details.fold[data-mobile-collapsed]). Two classes
+   because details.fold, later in this file, would otherwise win the margin. */
+.fold.ls-replay {
+    margin: 0.75rem 0 0;
+}
+
+/* Pico recolours an open summary; the label keeps its own colour, as the
+   fold headings do. */
+.ls-replay-toggle {
+    font-weight: 650;
+    color: var(--sand-light);
+}
+
+.ls-replay-body {
+    margin: 0;
+    padding: 0.85rem 1rem;
+}
+
+.ls-replay-why {
+    margin: 0.5rem 0 0;
+    padding: 0;
+    font-weight: 400;
+    letter-spacing: 0;
+}
+
+/* The change in a fixed column, so the amounts line up down the list. A grid
+   item rather than a list item, which also drops Pico's square marker. The
+   column fits "-15.75"; at 3.25rem that wrapped onto two lines. */
+.ls-replay-why li {
+    display: grid;
+    grid-template-columns: 4rem minmax(0, 1fr);
+    gap: 0 0.6rem;
+    margin: 0 0 0.4rem;
+    color: var(--text-light);
+}
+
+.ls-replay-delta {
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.ls-replay-up {
+    color: var(--palm-light);
+}
+
+/* The light red the votes badge uses: the saturated hue fails contrast */
+.ls-replay-down {
+    color: #e88484;
+}
+
+.ls-replay-who {
+    display: block;
+    font-size: max(var(--fs-floor), 0.85em);
+    color: var(--text-dim);
+}
+
 /* Hub cards */
 .ls-cards {
     list-style: none;
@@ -3771,6 +3832,9 @@ section > table {
     /* League settings */
     .ls-values { grid-template-columns: repeat(2, 1fr); gap: 0.8rem 1rem; }
     .ls-values-wide { grid-template-columns: 1fr; }
+    /* A replayed season's fold sits two folds deep: tighten it as .fold-body
+       is tightened above, so its reasons keep their width at 375px. */
+    .ls-replay-body { padding: 0.75rem 0.85rem; }
     .ls-cards { grid-template-columns: 1fr; gap: 0.5rem; }
     .ls-card > a { padding: 0.75rem 0.85rem; }
     .ls-group-label { margin: 1.4rem 0 0.5rem; }

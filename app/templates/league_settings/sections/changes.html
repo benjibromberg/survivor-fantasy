@@ -8,6 +8,20 @@
 {% macro ordinal(n) -%}
 {{ n }}{{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n if n < 20 else n % 10, 'th') }}
 {%- endmacro %}
+{# Points to two places, so quarter points and halved wildcards are not
+   rounded away, with a whole number still reading as 44.0. #}
+{% macro pts(v) -%}
+{%- set s = '%.2f'|format(v) -%}
+{{ s[:-1] if s.endswith('0') else s }}
+{%- endmacro %}
+{% macro signed(v) -%}
+{%- if v|abs < 0.005 -%}0
+{%- else -%}{{ '+' if v > 0 else '&minus;'|safe }}{{ pts(v|abs) }}
+{%- endif -%}
+{%- endmacro %}
+{% macro places(n) -%}
+{{ n }} place{{ 's' if n != 1 }}
+{%- endmacro %}
 {% macro tally_line(tally, choices) -%}
 {%- for key, label in choices.items() %}{{ tally.get(key, 0) }} {{ {'now': 'switch now', 'next': 'next season', 'keep': 'keep'}[key] }}{{ ', ' if not loop.last }}{% endfor -%}
 {%- endmacro %}
@@ -145,13 +159,45 @@
 <details class="fold" open data-mobile-collapsed id="past-seasons">
     <summary><h2 id="past-seasons-heading">Earlier seasons under {{ new_label if proposal else this_season ~ "'s scoring" }}</h2></summary>
     <div class="fold-body">
-    <p>These seasons were played under their own scoring. This is how they would have finished under {{ new_label if proposal else this_season ~ "'s" }}, as a what-if.</p>
+    <p>These seasons were played under their own scoring. This is how they would have finished under {{ new_label if proposal else this_season ~ "'s" }}, as a what-if. Where the order changes, open the season for each player's points both ways and what moved them.</p>
     <dl class="ls-values ls-values-wide">
         {% for row in past %}
         <div class="ls-value">
             <dt>{{ row.label }}</dt>
             <dd>{% if row.new_winner == row.winner %}{{ row.winner }} still wins{% else %}{{ row.new_winner }} would win, not {{ row.winner }}{% endif %}
                 <small>{% if row.order_changed %}New order: {{ row.new_order|join(', ') }}{% else %}Same finishing order{% endif %}{% if row.new_margin is not none %}; winning margin {{ '%.1f'|format(row.new_margin) }} pts{% endif %}</small>
+                {# Only a season whose order changes has players listed. A
+                   fold of its own, closed on phones like the sections
+                   around it, so the list of seasons stays scannable. #}
+                {% if row.players %}
+                <details class="fold ls-replay" open data-mobile-collapsed>
+                    <summary><span class="ls-replay-toggle">Points both ways, and why<span class="visually-hidden"> for {{ row.label }}</span></span></summary>
+                    <dl class="ls-values ls-values-wide ls-replay-body">
+                        {% for p in row.players %}
+                        <div class="ls-value">
+                            <dt>{{ ordinal(p.rank) }} &middot; {{ p.name }}</dt>
+                            <dd>{{ pts(p.points) }} pts
+                                <small>was {{ pts(p.old_points) }}, {{ ordinal(p.old_rank) }} &middot; {% if p.delta|abs < 0.005 %}same points{% else %}{{ signed(p.delta) }} pts{% endif %}{% if p.moved > 0 %}, up {{ places(p.moved) }}{% elif p.moved < 0 %}, down {{ places(-p.moved) }}{% endif %}</small>
+                                {% if p.reasons or p.other %}
+                                <ul class="ls-replay-why">
+                                    {% for r in p.reasons %}
+                                    {# A lone castaway who accounts for the whole change needs no amount of their own. #}
+                                    {% set whole = r.castaways|length == 1 and (r.castaways[0].delta - r.delta)|abs < 0.005 %}
+                                    <li><span class="ls-replay-delta {{ 'ls-replay-up' if r.delta > 0 else 'ls-replay-down' }}">{{ signed(r.delta) }}</span>
+                                        <span class="ls-replay-what">{{ r.label }}{% if r.castaways %}<span class="ls-replay-who">{% for c in r.castaways %}{{ c.name }}{% if not whole %}&nbsp;{{ signed(c.delta) }}{% endif %}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}</span></li>
+                                    {% endfor %}
+                                    {% if p.other %}
+                                    <li><span class="ls-replay-delta {{ 'ls-replay-up' if p.other > 0 else 'ls-replay-down' }}">{{ signed(p.other) }}</span>
+                                        <span class="ls-replay-what">everything else{% if p.rest %}<span class="ls-replay-who">{% for r in p.rest %}{{ r.label }}&nbsp;{{ signed(r.delta) }}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}</span></li>
+                                    {% endif %}
+                                </ul>
+                                {% endif %}
+                            </dd>
+                        </div>
+                        {% endfor %}
+                    </dl>
+                </details>
+                {% endif %}
             </dd>
         </div>
         {% endfor %}
