@@ -3,5 +3,6 @@ __pycache__
 .git
 .env
 survivor_fantasy.db
+config-metrics
 *.xlsx
 .DS_Store

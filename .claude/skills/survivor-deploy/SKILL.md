@@ -17,7 +17,7 @@ Docker + Cloudflare Tunnel sidecar (`docker-compose.yml`), with Cloudflare Acces
 **Deployment host**: a Proxmox box reached over the tailnet. The SSH target
 and the repo path on it are in CLAUDE.md, which is not committed.
 
-**Docker permissions:** The container runs as `appuser` (UID 1000). `/app/data` is the only place it can write, so everything the app writes lives there (derived from `DATABASE_URL`): the SQLite DB, `survivoR.xlsx`, `picks/` exports, `headshots/`, and `backups/`. The volume must be owned by UID 1000 on the host. The rest of `/app` is a root-owned image layer; code that writes to a path relative to the working directory works locally and fails in the container.
+**Docker permissions:** The container runs as `appuser` (UID 1000). `/app/data` is the only place it can write, so everything the app writes lives there (derived from `DATABASE_URL`): the SQLite DB, `survivoR.xlsx`, `picks/` exports, `headshots/`, `config-metrics/` (simulator metrics the Scoring changes and analysis pages show), and `backups/`. The volume must be owned by UID 1000 on the host. The rest of `/app` is a root-owned image layer; code that writes to a path relative to the working directory works locally and fails in the container.
 
 **Update process** (no re-seed):
 

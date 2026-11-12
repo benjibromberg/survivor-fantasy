@@ -47,9 +47,11 @@ PLAYER_MESSAGE_DRAFT.md
 # macOS
 .DS_Store
 
-# Scoring analysis checkpoints and results
+# Scoring analysis checkpoints and results, and the site's cached metrics
+# for single configs (app/league_metrics.py) beside a local database
 scoring_results.json
 results/
+config-metrics/
 
 # Temp files
 tmp/

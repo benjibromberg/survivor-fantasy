@@ -272,6 +272,12 @@ The `data/` volume (mounted at `/app/data`) holds everything the app writes:
   admin **Fetch images**; existing remote `image_url` values are replaced
   one time. Safe to delete (re-fetched on demand). Override the location with
   `HEADSHOTS_DIR`.
+- `config-metrics/<key>.json`: how the league would play under each scoring
+  config the Scoring changes and analysis pages compare, worked out in the
+  background by `analyze_scoring.py --metrics-for` (`app/league_metrics.py`),
+  beside each run's `.log` and any `.lock` or `.failed` marker. One run takes
+  about 11 s and 150 MB. Safe to delete (worked out again on the next page
+  view). Override the location with `CONFIG_METRICS_DIR`.
 
 Container local disk is otherwise ephemeral; keep durable data in this volume.
 
