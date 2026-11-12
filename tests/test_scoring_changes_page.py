@@ -322,6 +322,18 @@ class TestReplayDetail:
         # Every replay fold reads the same, so a screen reader also hears which
         assert '<span class="visually-hidden"> in Season 50</span>' in summary
 
+    def test_a_named_season_is_still_read_out_by_number(self, league):
+        """A season's title is the row label, but "in In the Hands of the
+        Fans" does not read as a season; the hidden text uses the number."""
+        league.s50.name = "In the Hands of the Fans"
+        league.db.session.commit()
+
+        past = _block(_page(league), "past-seasons")
+
+        assert "<dt>In the Hands of the Fans</dt>" in past
+        assert '<span class="visually-hidden"> in Season 50</span>' in past
+        assert "in In the Hands" not in past
+
     def test_a_season_with_the_same_order_keeps_its_summary_and_gets_the_detail(
         self, league
     ):
