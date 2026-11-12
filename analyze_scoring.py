@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import contextlib
 import itertools
 import json
 import multiprocessing as mp
@@ -30,6 +31,7 @@ import pandas as pd
 
 from app.data import (
     SURVIVOR_DATA_FILE,
+    _write_atomically,
     download_survivor_data,
     get_fire_winners,
     get_idol_ids,
@@ -1196,6 +1198,24 @@ def _longevity_score(longevity):
     return 0.5 - (longevity - 0.8) * 2.0
 
 
+def _non_draft_score(non_draft):
+    """Composite credit for the share of points from wildcards and replacements.
+
+    Rises with the share up to 35% and gives nothing more beyond, so the
+    search cannot buy score by making the draft irrelevant; below 10% it is
+    penalised, so it cannot zero out the extra picks either.
+    """
+    score = min(non_draft, 0.35)
+    if non_draft < 0.10:
+        score -= (0.10 - non_draft) * 2.0
+    return score
+
+
+def _volatility_score(rank_volatility):
+    """Composite credit for rank volatility: places moved per step, capped at 2."""
+    return min(rank_volatility / 2.0, 1.0)
+
+
 def evaluate_config(config, scenarios):
     """Evaluate a scoring config across all pre-generated draft scenarios."""
     expanded = expand_config(config)
@@ -1541,19 +1561,15 @@ def evaluate_config(config, scenarios):
             result[f"{key}_std"] = 0
 
     # Composite score — balance draft skill, engagement mechanics, and game health
-    norm_volatility = min(result.get("rank_volatility", 0) / 2.0, 1.0)
-    longevity = result.get("longevity_share", 0)
-    non_draft = result.get("non_draft_pct", 0)
+    norm_volatility = _volatility_score(result.get("rank_volatility", 0))
 
     # Longevity: reward up to 50%, flat across 50-80%, penalize beyond.
     # Prevents degenerate "tribals are everything" configs
-    longevity_score = _longevity_score(longevity)
+    longevity_score = _longevity_score(result.get("longevity_share", 0))
 
-    # Non-draft floor: wildcards/SS should contribute at least ~15%
+    # Wildcards and replacements: credit up to 35%, penalised below 10%.
     # Prevents optimizer from zeroing out engagement mechanics
-    non_draft_score = min(non_draft, 0.35)  # cap benefit at 35%
-    if non_draft < 0.10:
-        non_draft_score -= (0.10 - non_draft) * 2.0  # penalize below 10%
+    non_draft_score = _non_draft_score(result.get("non_draft_pct", 0))
 
     # Consistency penalty: penalize configs with high variance across drafts.
     # A config that reliably produces good games is better than one that
@@ -1664,6 +1680,83 @@ def load_shards(shard_dir, n_shards, expected_total):
             f"shards hold {len(results)} configs, expected {expected_total}"
         )
     return results
+
+
+# ── One config's metrics, for the site ──────────────────────────────────────
+#
+# The site shows how the league would play under the configs it compares
+# (a season's scoring, an open proposal, a run's recommendation). It runs
+# this file with --metrics-for in a subprocess (app/league_metrics.py), over
+# the same scenarios as the sweep, so its numbers agree with the export.
+
+
+def parse_metrics_config(text):
+    """One --metrics-for argument: a JSON object of config values.
+
+    Raises ValueError for anything else, so a bad argument fails before the
+    data is loaded.
+    """
+    try:
+        config = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"--metrics-for expects a JSON object: {e}") from None
+    if not isinstance(config, dict):
+        raise ValueError("--metrics-for expects a JSON object")
+    return config
+
+
+def config_metrics_record(config, scenarios, season_numbers, drafts_per):
+    """What --metrics-for writes for one config: its metrics and their inputs.
+
+    `season_numbers` and `drafts_per` are what was asked for; the site checks
+    them, with the config, against the record it expected to find.
+    """
+    t0 = time.time()
+    metrics = evaluate_config(config, scenarios)
+    return {
+        "config": config,
+        "seasons": list(season_numbers),
+        "drafts_per": drafts_per,
+        "player_counts": list(PLAYER_COUNTS),
+        "n_scenarios": len(scenarios),
+        "seconds": round(time.time() - t0, 2),
+        "metrics": metrics,
+    }
+
+
+def write_metrics_record(path, record):
+    """Write one record so a reader sees the old file or the new one, never half."""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+
+    def write(tmp):
+        with open(tmp, "w") as f:
+            json.dump(record, f, indent=1, default=float)
+
+    _write_atomically(path, write)
+
+
+def run_metrics_jobs(configs, out_paths, season_numbers, drafts_per):
+    """Evaluate each config over one set of scenarios and write each record.
+
+    Records are written as each config finishes, so the first is readable
+    while the next is still running.
+    """
+    # The site's own web workers share the machine; let them go first
+    with contextlib.suppress(AttributeError, OSError):
+        os.nice(10)
+    t0 = time.time()
+    seasons = load_all_seasons(season_numbers)
+    scenarios = generate_scenarios(seasons, drafts_per=drafts_per)
+    print(
+        f"{len(seasons)} seasons, {len(scenarios)} scenarios in {time.time() - t0:.1f}s"
+    )
+    for config, path in zip(configs, out_paths, strict=True):
+        record = config_metrics_record(config, scenarios, season_numbers, drafts_per)
+        write_metrics_record(path, record)
+        print(
+            f"wrote {path}: composite {record['metrics']['composite']:.3f} "
+            f"in {record['seconds']:.1f}s"
+        )
 
 
 def _init_worker(scenarios):
@@ -2411,6 +2504,21 @@ def main():
         default="results/shards",
         help="Where slices are written and read (default: results/shards)",
     )
+    parser.add_argument(
+        "--metrics-for",
+        action="append",
+        metavar="JSON",
+        default=None,
+        help="Evaluate one config (a JSON object) over the standard scenarios, "
+        "write its metrics and stop; repeat for more configs",
+    )
+    parser.add_argument(
+        "--metrics-out",
+        action="append",
+        metavar="PATH",
+        default=None,
+        help="Where each --metrics-for record is written, in the same order",
+    )
     args = parser.parse_args()
 
     # Sanitize file path arguments
@@ -2418,6 +2526,23 @@ def main():
         args.export_json = os.path.realpath(args.export_json)
     if args.reexport:
         args.reexport = os.path.realpath(args.reexport)
+
+    # One or more configs' metrics for the site (app/league_metrics.py)
+    if args.metrics_for or args.metrics_out:
+        outs = [os.path.realpath(p) for p in args.metrics_out or []]
+        if len(outs) != len(args.metrics_for or []):
+            parser.error("give one --metrics-out for each --metrics-for")
+        try:
+            configs = [parse_metrics_config(text) for text in args.metrics_for]
+        except ValueError as e:
+            parser.error(str(e))
+        if args.seasons:
+            season_numbers = [int(s.strip()) for s in args.seasons.split(",")]
+        else:
+            season_numbers = DEFAULT_SEASONS
+        drafts_per = 3 if args.quick else DRAFTS_PER_PLAYER_COUNT
+        run_metrics_jobs(configs, outs, season_numbers, drafts_per)
+        return
 
     # Re-export mode: load saved results and jump to export
     if args.reexport:

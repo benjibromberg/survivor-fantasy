@@ -44,6 +44,11 @@ run with a job runner, for example `pueue add --label run-N -- ./run_analysis.sh
   `DEFAULT_SEASONS`.
 - A job that cannot find `survivoR.xlsx` downloads it, so stage the file before
   starting many jobs.
+- `--metrics-for JSON --metrics-out PATH` (repeatable, paired in order)
+  evaluates each config over the standard scenarios, writes one record per
+  config atomically and stops: no sweep, report or export. Honours `--seasons`
+  and `--quick`. The site runs it in the background (`app/league_metrics.py`);
+  one config takes about 11 s and 150 MB.
 
 ### Sharded runs
 
