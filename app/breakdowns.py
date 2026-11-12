@@ -15,9 +15,15 @@ group, because a scoring change spreads across sibling keys (flat versus
 progressive tribals moves all three), and ranking raw keys then lists three
 pieces of one reason while the rest piles into a remainder.
 
+An explained change is rounded to hundredths here, once, so what a player
+reads adds up: the listed reasons plus "everything else" make the change, and
+the change is the shown new total minus the shown old total.
+
 Pure functions over the plain dicts `_build_leaderboard` returns; the results
 hold only plain values, so they are safe to cache past the request.
 """
+
+from decimal import ROUND_FLOOR, ROUND_HALF_EVEN, Decimal
 
 # Plain words for the breakdown keys, for players reading the league pages.
 # Lower case, so they read inside a sentence or after a number. The keys are
@@ -152,6 +158,42 @@ def _by_castaway(entry):
     return out
 
 
+def shown_cents(points):
+    """`points` in whole hundredths, rounded the way the pages print it.
+
+    The templates print points with '%.2f', which rounds the float's exact
+    value half to even. Decimal does the same, so a change worked out from
+    these always matches the two totals on the page.
+    """
+    exact = Decimal(points).quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+    return int(exact * 100)
+
+
+def _split_cents(values, target):
+    """Round `values` to hundredths so they sum to exactly `target` hundredths.
+
+    Largest remainder: floor every value, then hand the hundredths still owed
+    to the values with the largest fractions. Rounding each on its own does
+    not keep the sum (1.875 and -0.8 round to 1.88 and -0.8, which is 1.08,
+    against a change shown as 1.07). Float noise is cleared first, so -0.8
+    counts as -80 hundredths and not as -80.000000000000004.
+    """
+    if not values:
+        return []
+    exact = [Decimal(repr(round(v, 9))) * 100 for v in values]
+    cents = [int(e.to_integral_value(rounding=ROUND_FLOOR)) for e in exact]
+    owed = target - sum(cents)
+    by_fraction = sorted(
+        range(len(values)), key=lambda i: exact[i] - cents[i], reverse=True
+    )
+    step = 1 if owed > 0 else -1
+    if owed < 0:
+        by_fraction.reverse()
+    for n in range(abs(owed)):
+        cents[by_fraction[n % len(values)]] += step
+    return [c / 100 for c in cents]
+
+
 def explain_change(before, after, limit=3, castaway_limit=3):
     """Why one player's total differs between two scorings of the same picks.
 
@@ -162,6 +204,13 @@ def explain_change(before, after, limit=3, castaway_limit=3):
     first); whatever those reasons do not account for, so the parts always
     add up to the change; and the groups that make up that remainder, so it
     is not a mystery number.
+
+    The change, the reasons and the remainder come back rounded to
+    hundredths (_split_cents), and they add up exactly: the reasons plus the
+    remainder equal the change, and the change equals the two totals as
+    printed (shown_cents). The remainder is 0 when it rounds to nothing. Ranks
+    and labels come from the unrounded amounts. Castaway amounts are a
+    capped list, not a breakdown, and are left as they are.
     """
     old, new = _by_castaway(before), _by_castaway(after)
     reasons = []
@@ -187,13 +236,27 @@ def explain_change(before, after, limit=3, castaway_limit=3):
     reasons.sort(key=lambda r: (-abs(r["delta"]), r["key"]))
     reasons, rest = reasons[:limit], reasons[limit:]
 
-    total = after["total_points"] - before["total_points"]
-    other = total - sum(r["delta"] for r in reasons)
+    # The remainder before rounding: everything the listed reasons miss,
+    # which is the rest groups plus any points no component accounts for.
+    other = after["total_points"] - before["total_points"]
+    other -= sum(r["delta"] for r in reasons)
+    change = shown_cents(after["total_points"]) - shown_cents(before["total_points"])
+    *listed, other_shown = _split_cents([r["delta"] for r in reasons] + [other], change)
+    for reason, shown in zip(reasons, listed, strict=True):
+        reason["delta"] = shown
+
+    rest_raw = [r["delta"] for r in rest]
+    if rest and abs(sum(rest_raw) - other) < _NOISE:
+        # The rest groups are the whole remainder, so they add up to it too
+        rest_shown = _split_cents(rest_raw, round(other_shown * 100))
+    else:
+        rest_shown = [round(v, 2) for v in rest_raw]
     return {
-        "delta": total,
+        "delta": change / 100,
         "reasons": reasons,
-        "other": other if abs(other) >= _NOISE else 0,
+        "other": other_shown,
         "rest": [
-            {"key": r["key"], "label": r["label"], "delta": r["delta"]} for r in rest
+            {"key": r["key"], "label": r["label"], "delta": shown}
+            for r, shown in zip(rest, rest_shown, strict=True)
         ],
     }
