@@ -8,9 +8,11 @@ Entries are built in the shape _build_leaderboard returns: each pick's
 import pytest
 
 from app.breakdowns import (
+    COMPONENT_GROUPS,
     COMPONENT_LABELS,
     component_totals,
     explain_change,
+    group_totals,
     pick_contributions,
 )
 
@@ -125,7 +127,7 @@ class TestPickContributions:
 
 
 class TestExplainChange:
-    def test_names_the_components_that_moved_most_and_who_moved_them(self):
+    def test_names_the_groups_that_moved_most_and_who_moved_them(self):
         before = _entry(
             _pick("Kyle", "Draft", {"jury": 3.0, "final_tribal": 2.0}),
             _pick("Kenzie", "Draft", {"fire_win": 2.0, "final_tribal": 2.0}),
@@ -139,22 +141,59 @@ class TestExplainChange:
 
         assert change["delta"] == pytest.approx(5.0)
         first, second = change["reasons"]
-        assert first["key"] == "final_tribal"
-        assert first["label"] == "reaching Final Tribal"
+        assert first["key"] == "final_tribal_placement"
+        assert first["label"] == "Final Tribal and placement"
         assert first["delta"] == pytest.approx(6.0)
         assert [c["name"] for c in first["castaways"]] == ["Kenzie", "Kyle"]
         assert second["key"] == "fire_win"
+        assert second["label"] == "fire-making win"
         assert second["delta"] == pytest.approx(-1.0)
         assert second["castaways"] == [{"name": "Kenzie", "delta": -1.0}]
         assert change["other"] == 0
 
-    def test_leaves_out_components_that_did_not_move(self):
+    def test_leaves_out_groups_that_did_not_move(self):
         before = _entry(_pick("Kyle", "Draft", {"jury": 3.0, "placement": 5.0}))
         after = _entry(_pick("Kyle", "Draft", {"jury": 3.0, "placement": 7.0}))
 
         change = explain_change(before, after)
 
-        assert [r["key"] for r in change["reasons"]] == ["placement"]
+        assert [r["key"] for r in change["reasons"]] == ["final_tribal_placement"]
+
+    def test_sibling_keys_that_move_together_are_one_reason(self):
+        before = _entry(_pick("Kyle", "Draft", {"final_tribal": 2.0}))
+        after = _entry(_pick("Kyle", "Draft", {"final_tribal": 5.0, "placement": 5.0}))
+
+        (reason,) = explain_change(before, after)["reasons"]
+
+        assert reason["key"] == "final_tribal_placement"
+        assert reason["delta"] == pytest.approx(8.0)
+        assert reason["castaways"] == [{"name": "Kyle", "delta": 8.0}]
+
+    def test_keys_in_one_group_moving_opposite_ways_net_out(self):
+        """Tribals lose 4 before the merge and gain 3.5 after it: a net -0.5,
+        which ranks below the jury's +1 although each tribal key moved more."""
+        before = _entry(
+            _pick(
+                "Kyle",
+                "Draft",
+                {"pre_merge_tribal": 8.0, "post_merge_tribal": 2.0, "jury": 3.0},
+            )
+        )
+        after = _entry(
+            _pick(
+                "Kyle",
+                "Draft",
+                {"pre_merge_tribal": 4.0, "post_merge_tribal": 5.5, "jury": 4.0},
+            )
+        )
+
+        change = explain_change(before, after)
+
+        assert [r["key"] for r in change["reasons"]] == ["jury", "tribals"]
+        tribals = change["reasons"][1]
+        assert tribals["label"] == "surviving tribals"
+        assert tribals["delta"] == pytest.approx(-0.5)
+        assert tribals["castaways"] == [{"name": "Kyle", "delta": -0.5}]
 
     def test_a_wildcard_moves_its_player_by_half(self):
         before = _entry(_pick("Kenzie", "Wildcard", {"idol_plays": 1.0}, 0.5))
@@ -172,12 +211,16 @@ class TestExplainChange:
 
         change = explain_change(before, after, limit=3)
 
-        assert [r["key"] for r in change["reasons"]] == ["jury", "merge", "placement"]
+        assert [r["key"] for r in change["reasons"]] == [
+            "jury",
+            "merge",
+            "final_tribal_placement",
+        ]
         assert change["other"] == pytest.approx(0.5)
         listed = sum(r["delta"] for r in change["reasons"])
         assert listed + change["other"] == pytest.approx(change["delta"])
 
-    def test_the_remainder_names_the_components_in_it(self):
+    def test_the_remainder_names_the_groups_in_it(self):
         old = {"jury": 1.0, "merge": 1.0, "placement": 1.0, "fire_win": 1.0}
         new = {"jury": 5.0, "merge": 4.0, "placement": 3.0, "fire_win": 1.5}
         before = _entry(_pick("Kyle", "Draft", old))
@@ -186,7 +229,11 @@ class TestExplainChange:
         change = explain_change(before, after, limit=2)
 
         assert change["rest"] == [
-            {"key": "placement", "label": "finishing place", "delta": 2.0},
+            {
+                "key": "final_tribal_placement",
+                "label": "Final Tribal and placement",
+                "delta": 2.0,
+            },
             {"key": "fire_win", "label": "fire-making win", "delta": 0.5},
         ]
         assert sum(r["delta"] for r in change["rest"]) == pytest.approx(change["other"])
@@ -202,7 +249,51 @@ class TestExplainChange:
         }
 
 
+class TestGroupTotals:
+    def test_components_roll_up_into_their_groups(self):
+        entry = _entry(
+            _pick("Kyle", "Draft", DRAFT),
+            _pick("Kenzie", "Wildcard", WILD, 0.5),
+            _ss("Kyle", 6.0),
+        )
+
+        totals = group_totals(entry)
+
+        assert totals == pytest.approx(
+            {
+                "tribals": 5.5,
+                "jury": 3.0,
+                "immunity": 1.0,
+                "idols": 1.0,
+                "sole_survivor": 6.0,
+            }
+        )
+        assert sum(totals.values()) == pytest.approx(entry["total_points"])
+
+    def test_a_key_no_group_lists_keeps_its_points(self):
+        totals = group_totals(_entry(_pick("Kyle", "Draft", {"jury": 3, "new": 2})))
+
+        assert totals == {"jury": 3, "new": 2}
+
+
 def test_every_breakdown_key_has_a_plain_label_and_no_label_is_spare():
     from app.routes import BREAKDOWN_LABELS
 
     assert set(COMPONENT_LABELS) == set(BREAKDOWN_LABELS)
+
+
+def test_every_breakdown_key_is_in_exactly_one_group():
+    from app.routes import BREAKDOWN_LABELS
+
+    listed = [key for spec in COMPONENT_GROUPS.values() for key in spec["keys"]]
+    for key in BREAKDOWN_LABELS:
+        assert listed.count(key) == 1, key
+
+
+def test_no_group_lists_a_key_that_is_not_a_breakdown_key():
+    from app.routes import BREAKDOWN_LABELS
+
+    for group, spec in COMPONENT_GROUPS.items():
+        assert spec["keys"], group
+        for key in spec["keys"]:
+            assert key in BREAKDOWN_LABELS, (group, key)

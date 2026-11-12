@@ -967,8 +967,8 @@ def _names_by_rank(board):
 def _replay_players(own_entries, replay_entries):
     """Each player's total and rank under a season's own scoring and the replay.
 
-    Best first under the replay, each with the components that moved their
-    total most and the castaways behind them (breakdowns.explain_change).
+    Best first under the replay, each with the component groups that moved
+    their total most and the castaways behind them (breakdowns.explain_change).
     Plain values only: this goes into _changes_cache.
     """
     own, replay = _ranked(own_entries), _ranked(replay_entries)

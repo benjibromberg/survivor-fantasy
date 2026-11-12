@@ -284,23 +284,26 @@ class TestReplayDetail:
             assert f"was {_pts(old_points)}, {ordinal[old_rank]}" in changed
         assert "up 1 place" in changed and "down 1 place" in changed
 
-    def test_names_the_components_that_moved_each_player_most(self, league):
+    def test_names_the_groups_that_moved_each_player_most(self, league):
         changed, _ = self._rows(league)
         sam, pat = changed.split("&middot; Pat</dt>")
 
-        # Sam's 2nd and 3rd place picks: placement and Final Tribal now score
-        assert sam.index("finishing place") < sam.index("reaching Final Tribal")
-        assert "+4.5" in sam and "+4.0" in sam
-        # Pat's winner gains Final Tribal and individual immunity
-        assert "reaching Final Tribal" in pat and "individual immunity" in pat
-        assert "finishing place" not in pat
+        # Sam's 2nd and 3rd place picks: placement (+4.5) and Final Tribal
+        # (+4.0) now score, and read as one reason, ahead of immunity (+1.0)
+        assert "+8.5</span>" in sam
+        assert sam.index("Final Tribal and placement") < sam.index("immunity wins")
+        assert "finishing place" not in sam and "reaching Final Tribal" not in sam
+        # Pat's winner gains Final Tribal (+2.0) and individual immunity (+0.5)
+        assert pat.index("Final Tribal and placement") < pat.index("immunity wins")
+        assert "+2.0</span>" in pat and "+0.5</span>" in pat
 
     def test_names_the_castaways_behind_the_changes(self, league):
         changed, _ = self._rows(league)
         sam, pat = changed.split("&middot; Pat</dt>")
 
-        # Two castaways share Sam's placement gain, so each carries an amount
-        assert "S50C7&nbsp;+3.0, S50C6&nbsp;+1.5" in sam
+        # Two castaways share Sam's Final Tribal and placement gain, so each
+        # carries an amount: S50C7 +3 placement +2 Final Tribal, S50C6 +1.5 +2
+        assert "S50C7&nbsp;+5.0, S50C6&nbsp;+3.5" in sam
         # One castaway is the whole of Pat's, so the amount is not repeated
         assert '<span class="ls-replay-who">S50C8</span>' in pat
 
