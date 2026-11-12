@@ -7,9 +7,9 @@ import tempfile
 import pytest
 
 from analyze_scoring import (
+    CONSTRAINT_PENALTY,
     DEFAULT_PARAMS,
     PARAM_GRID,
-    PLACEMENT_ORDER_PENALTY,
     SimPick,
     SimSeason,
     SimSurvivor,
@@ -22,11 +22,13 @@ from analyze_scoring import (
     build_chart_data,
     calculate_leaderboard,
     compute_ss_streaks,
+    constrained_sample,
     evaluate_config,
     expand_config,
     find_config_rank,
     placement_order,
     rank_users,
+    satisfies_orderings,
     snake_draft,
     stratified_random_sample,
 )
@@ -1480,16 +1482,21 @@ class TestPlacementOrderInComposite:
             season.num_players,
             len(users),
         )
-        config = {k: PARAM_GRID[k][0] for k in PARAM_GRID}
-        config.update(overrides)
+        config = {**ordered_base_config(), **overrides}
         return evaluate_config(config, [scenario])
 
     def test_failing_config_is_penalised(self):
+        """Jury 3 over FTC 0 also breaks FTC > jury: one penalty per broken rule.
+
+        Under the orderings the placement check cannot fail alone: with the
+        FTC bonus above the jury bonus a finalist always clears 4th place.
+        """
         result = self._evaluate(jury_val=3, final_tribal_val=0)
 
         assert result["placement_order_ok"] == 0.0
+        assert result["orderings_ok"] == 0.0
         assert result["composite"] == pytest.approx(
-            result["composite_unconstrained"] - PLACEMENT_ORDER_PENALTY
+            result["composite_unconstrained"] - 2 * CONSTRAINT_PENALTY
         )
 
     def test_passing_config_is_not_penalised(self):
@@ -1541,3 +1548,94 @@ class TestFindConfigRank:
         results = [({"jury_val": 0}, {"composite": 1.0})]
 
         assert find_config_rank(results, {"jury_val": 3}) is None
+
+
+# ── Benji's orderings ──────────────────────────────────────────────────────
+
+
+def ordered_base_config(**overrides):
+    """First grid values, adjusted so every ordering holds."""
+    config = {k: PARAM_GRID[k][0] for k in PARAM_GRID}
+    config.update(
+        jury_val=0,
+        final_tribal_val=1,
+        idol_found_val=0.5,
+        idol_play_val=1,
+        tribal_immunity_val=0.25,
+        individual_immunity_val=0.5,
+    )
+    config.update(overrides)
+    return config
+
+
+class TestOrderings:
+    def test_a_config_keeping_every_ordering_passes(self):
+        assert satisfies_orderings(ordered_base_config()) is True
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"final_tribal_val": 3, "jury_val": 3},  # FTC equal to jury
+            {"final_tribal_val": 2, "jury_val": 3},  # FTC below jury
+            {"idol_play_val": 0.5, "idol_found_val": 0.5},  # play equal to found
+            {"idol_found_val": 0, "idol_play_val": 1},  # finding scores nothing
+            {"individual_immunity_val": 0.5, "tribal_immunity_val": 0.5},
+            {"tribal_immunity_val": 0, "individual_immunity_val": 1},
+        ],
+    )
+    def test_each_broken_ordering_fails(self, overrides):
+        assert satisfies_orderings(ordered_base_config(**overrides)) is False
+
+    def test_the_current_default_breaks_them(self):
+        """FTC 2 < jury 3, idol found 0, tribal immunity 0."""
+        assert satisfies_orderings(dict(DEFAULT_CONFIG)) is False
+
+
+class TestConstrainedSample:
+    def test_every_sample_keeps_the_orderings(self):
+        samples = constrained_sample(PARAM_GRID, 500, seed=1)
+
+        assert len(samples) == 500
+        assert all(satisfies_orderings(c) for c in samples)
+
+    def test_samples_carry_exactly_the_grid_parameters(self):
+        samples = constrained_sample(PARAM_GRID, 20, seed=1)
+
+        assert all(set(c) == set(PARAM_GRID) for c in samples)
+
+    def test_the_valid_part_of_the_grid_is_covered(self):
+        samples = constrained_sample(PARAM_GRID, 2000, seed=1)
+
+        assert {c["final_tribal_val"] for c in samples} == {1, 2, 3, 4, 5}
+        assert {c["tribal_immunity_val"] for c in samples} == {0.25, 0.5, 1, 1.5}
+        assert {c["idol_found_val"] for c in samples} == {0.25, 0.5, 1}
+
+
+class TestOrderingsInComposite:
+    def _evaluate(self, **overrides):
+        season = make_finale_season()
+        users = [101, 102, 103, 104]
+        picks = make_picks(season.survivors, users, picks_per_user=2)
+        scenario = (
+            season,
+            season.survivors,
+            picks,
+            {uid: 0 for uid in users},
+            season.num_players,
+            len(users),
+        )
+        return evaluate_config(ordered_base_config(**overrides), [scenario])
+
+    def test_a_config_breaking_an_ordering_is_penalised(self):
+        result = self._evaluate(tribal_immunity_val=0)
+
+        assert result["orderings_ok"] == 0.0
+        assert result["composite"] == pytest.approx(
+            result["composite_unconstrained"] - CONSTRAINT_PENALTY
+        )
+
+    def test_a_config_keeping_them_is_not(self):
+        result = self._evaluate()
+
+        assert result["orderings_ok"] == 1.0
+        assert result["composite"] == pytest.approx(result["composite_unconstrained"])

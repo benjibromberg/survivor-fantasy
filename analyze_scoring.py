@@ -69,9 +69,9 @@ PARAM_GRID = {
     # Bonus categories
     "individual_immunity_val": [0, 0.5, 1, 1.5, 2],
     "tribal_immunity_val": [0, 0.25, 0.5, 1, 1.5],
-    "idol_found_val": [0, 0.5, 1],
+    "idol_found_val": [0, 0.25, 0.5, 1],
     "advantage_found_val": [0, 0.5, 1],
-    "idol_play_val": [0, 0.5, 1],
+    "idol_play_val": [0, 0.5, 1, 1.5, 2],
     "advantage_play_val": [0, 0.5, 1],
     # Pick type modifiers
     "wildcard_multiplier": [0, 0.5],
@@ -1070,15 +1070,64 @@ def stratified_random_sample(param_grid, n_samples, seed=42):
     return [{key: value_sequences[key][i] for key in keys} for i in range(n_samples)]
 
 
+# Benji's orderings (2026-11-11), each strict: reaching Final Tribal is worth
+# more than making the jury; playing an idol more than finding one, and
+# finding one more than nothing; an individual immunity win more than a
+# tribal one, and a tribal one more than nothing. (higher, lower, floor):
+# `lower` must also exceed `floor` unless it is None.
+ORDERINGS = (
+    ("final_tribal_val", "jury_val", None),
+    ("idol_play_val", "idol_found_val", 0),
+    ("individual_immunity_val", "tribal_immunity_val", 0),
+)
+
+
+def satisfies_orderings(config):
+    """True if `config` keeps every ordering in ORDERINGS."""
+    for higher, lower, floor in ORDERINGS:
+        if not config[higher] > config[lower]:
+            return False
+        if floor is not None and not config[lower] > floor:
+            return False
+    return True
+
+
+def constrained_sample(param_grid, n_samples, seed=42):
+    """stratified_random_sample over the part of the grid that keeps ORDERINGS.
+
+    Each ordered pair is drawn jointly from its valid combinations, so every
+    sample is usable; filtering free samples afterwards would discard about
+    nine in ten.
+    """
+    grid = dict(param_grid)
+    pair_keys = []
+    for higher, lower, floor in ORDERINGS:
+        highs, lows = grid.pop(higher), grid.pop(lower)
+        key = f"{higher}|{lower}"
+        grid[key] = [
+            (h, lo)
+            for h in highs
+            for lo in lows
+            if h > lo and (floor is None or lo > floor)
+        ]
+        pair_keys.append((key, higher, lower))
+    samples = stratified_random_sample(grid, n_samples, seed)
+    for sample in samples:
+        for key, higher, lower in pair_keys:
+            sample[higher], sample[lower] = sample.pop(key)
+    return samples
+
+
 # ── Evaluation ──────────────────────────────────────────────────────────────
 
 
 # ── Placement order ─────────────────────────────────────────────────────────
 
-# Subtracted from the composite of any config that lets 4th place outscore a
-# finalist in some season: large enough that no such config can rank above
-# one that passes, which makes the check a filter that still sorts.
-PLACEMENT_ORDER_PENALTY = 100.0
+# Subtracted from the composite once for each constraint a config breaks:
+# 4th place outscoring a finalist in some season (placement_order), or an
+# ordering in ORDERINGS. Large enough that no such config can rank above one
+# that passes, which makes each check a filter that still sorts.
+CONSTRAINT_PENALTY = 100.0
 
 
 def _structural_points(config, tribal_table, season, survivor, placement, won_fire):
@@ -1539,8 +1588,9 @@ def evaluate_config(config, scenarios):
     # Kept so a penalised config (the current default, say) can still be
     # compared with the passing ones on the same metrics
     result["composite_unconstrained"] = result["composite"]
-    result["composite"] -= PLACEMENT_ORDER_PENALTY * (
-        1 - result.get("placement_order_ok", 1.0)
+    result["orderings_ok"] = 1.0 if satisfies_orderings(fast_config) else 0.0
+    result["composite"] -= CONSTRAINT_PENALTY * (
+        (1 - result.get("placement_order_ok", 1.0)) + (1 - result["orderings_ok"])
     )
     return result
 
@@ -1605,6 +1655,10 @@ def print_metrics(metrics):
     print(
         f"  3rd can beat 2nd:     {metrics.get('third_beats_second', 0):.0%}"
         f"  (seasons where a fire win lifts 3rd over 2nd, reported)"
+    )
+    print(
+        f"  Orderings hold:       {'yes' if metrics.get('orderings_ok', 1) else 'NO'}"
+        f"  (FTC > jury, idol play > found > 0, indiv > tribal immunity > 0)"
     )
     if "composite_unconstrained" in metrics:
         print(
@@ -2361,7 +2415,7 @@ def main():
     )
     print(f"{'=' * 80}")
 
-    configs = stratified_random_sample(PARAM_GRID, n_samples)
+    configs = constrained_sample(PARAM_GRID, n_samples)
     # Always include the default and legacy (pre-site) configs
     configs.append(dict(DEFAULT_PARAMS))
     configs.append(dict(LEGACY_PARAMS))
@@ -2419,6 +2473,8 @@ def main():
                     neighbor_idx = idx + offset
                     if 0 <= neighbor_idx < len(values):
                         neighbor = {**config, key: values[neighbor_idx]}
+                        if not satisfies_orderings(neighbor):
+                            continue
                         sig = tuple(sorted(neighbor.items()))
                         if sig not in seen:
                             seen.add(sig)
