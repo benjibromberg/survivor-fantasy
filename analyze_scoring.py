@@ -35,6 +35,7 @@ from app.data import (
     get_idol_ids,
 )
 from app.scoring.classic import DEFAULT_CONFIG, LEGACY_CONFIG, ClassicScoring
+from app.scoring.rules import ORDERINGS, chain_holds, satisfies_orderings
 
 DEFAULT_SEASONS = list(range(41, 50))  # modern Survivor (idols, advantages, new era)
 PLAYER_COUNTS = [4, 5, 6, 7, 8, 9, 10]
@@ -1084,40 +1085,7 @@ def stratified_random_sample(param_grid, n_samples, seed=42):
     return [{key: value_sequences[key][i] for key in keys} for i in range(n_samples)]
 
 
-# Benji's orderings (2026-11-11). Each chain is strictly decreasing, and its
-# last value must exceed `floor` unless that is None:
-# - reaching Final Tribal is worth more than making the jury;
-# - an individual immunity win more than a tribal one, a tribal one more than
-#   nothing;
-# - an idol played more than an idol found, more than an advantage played,
-#   more than an advantage found, more than nothing.
-ORDERINGS = (
-    (("final_tribal_val", "jury_val"), None),
-    (("individual_immunity_val", "tribal_immunity_val"), 0),
-    (
-        (
-            "idol_play_val",
-            "idol_found_val",
-            "advantage_play_val",
-            "advantage_found_val",
-        ),
-        0,
-    ),
-)
-
-
-def _chain_holds(values, floor):
-    """True if `values` is strictly decreasing and its last exceeds `floor`."""
-    if any(a <= b for a, b in zip(values, values[1:], strict=False)):
-        return False
-    return floor is None or values[-1] > floor
-
-
-def satisfies_orderings(config):
-    """True if `config` keeps every chain in ORDERINGS."""
-    return all(
-        _chain_holds([config[k] for k in chain], floor) for chain, floor in ORDERINGS
-    )
+# The league's orderings live in app/scoring/rules.py, shared with the site.
 
 
 def constrained_sample(param_grid, n_samples, seed=42):
@@ -1133,7 +1101,7 @@ def constrained_sample(param_grid, n_samples, seed=42):
         grid[key] = [
             combo
             for combo in itertools.product(*(grid.pop(k) for k in chain))
-            if _chain_holds(combo, floor)
+            if chain_holds(combo, floor)
         ]
         chain_keys.append((key, chain))
     samples = stratified_random_sample(grid, n_samples, seed)

@@ -1718,3 +1718,12 @@ class TestImpactParams:
     def test_sole_survivor_is_not_swept(self):
         """The sweep scores every config with no Sole Survivor points."""
         assert "sole_survivor_val" not in PARAM_GRID
+
+
+def test_the_search_uses_the_sites_rules():
+    """One definition: the site's Scoring changes page shows the same rules."""
+    import analyze_scoring
+    from app.scoring import rules
+
+    assert analyze_scoring.ORDERINGS is rules.ORDERINGS
+    assert analyze_scoring.satisfies_orderings is rules.satisfies_orderings

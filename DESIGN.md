@@ -304,7 +304,7 @@ the fallback needs.
 Flex row with compare link left; Open all, Close all and the Projected switch right (`margin-left: auto`). Bebas Neue, uppercase. Projected is the only global switch, because it changes everyone's win %. On phones the link goes full width and the controls become bordered chips (fire-bright border when on).
 
 ### League Settings (`.ls-*`)
-A hub at `/league-settings` and nine detail pages. The hub opens with the values
+A hub at `/league-settings` and ten detail pages. A season hides the pages it has no use for: Sole Survivor appears only where it scores. The hub opens with the values
 that get looked up most (`.ls-glance`), then three groups of cards
 (`.ls-cards` / `.ls-card`) that each open one subject.
 
@@ -333,6 +333,7 @@ renders on two lines in the nav at 700px.
 ## Decisions Log
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-11-11 | Scoring changes page, and the analysis keeps its history | The league needed to see what changed and why without a long message. The page compares the season's stored config with the previous season's, lists the league's rules with their values, and replays standings both ways from real picks, so it cannot disagree with the scores. Earlier analysis runs stay downloadable from the analysis page, and each season names the version it played under (`app/scoring/history.py`). Values and replays are label-above-value rows, not tables, as on every League page. |
 | 2026-10-02 | Rules page became League settings | It was already a configuration readout wearing the wrong name: it rendered `num_players`, `tribal_base` and `finale_size` and listed which components were active, inside ten accordions. Accordions suit prose you read; that page was values you look up, which is why the sections never fit them. Hub of cards plus label-above-value detail pages instead, and the wide tables are gone. |
 | 2026-10-02 | Breakpoint order is enforced, not described | The Breakpoints section had described a structure the stylesheet did not have, was corrected once, and drifted again. `tests/test_breakpoint_order.py` now asserts the wide-to-narrow ordering and that this document names exactly the widths the sheet uses. Prose drifts; a test does not. |
 | 2024 | Pico CSS v2 dark theme as base | Lightweight, semantic HTML-first, good dark mode support |

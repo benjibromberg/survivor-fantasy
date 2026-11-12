@@ -203,6 +203,24 @@
 </div>
 </details>
 
+<!-- Every run behind a scoring version, newest first (app/scoring/history.py) -->
+<details class="fold" id="earlier-runs">
+    <summary><h2 id="analysis-runs">Analysis runs</h2></summary>
+    <div class="fold-body">
+    <p>Each scoring version that came out of a run of this analysis, newest first. The charts above show the newest run; the data for every run is kept. What changed between versions, and what it did to standings, is on <a href="{{ url_for('main.league_settings_detail', slug='changes') }}">Scoring changes</a>.</p>
+    <dl class="ls-values ls-values-wide">
+        {% for run in runs %}
+        <div class="ls-value">
+            <dt>{{ run.name }}{% if run.date %} <small>{{ run.date }}</small>{% endif %}</dt>
+            <dd>{{ '{:,}'.format(run.configs_tested) }} configs tested
+                <small>{{ run.note }} <a href="{{ url_for('static', filename=run.analysis) }}">Data</a></small>
+            </dd>
+        </div>
+        {% endfor %}
+    </dl>
+    </div>
+</details>
+
 <p><a href="{{ url_for('main.league_settings') }}" class="nav-link-back">&larr; League settings</a></p>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>

@@ -2444,6 +2444,20 @@ details.lb-champion[open] > summary.lb-row {
     padding-bottom: 0.85rem;
 }
 
+/* Scoring changes: whether a league rule holds for the season's values */
+.ls-rule-status {
+    margin-left: 0.5rem;
+    font-weight: 600;
+}
+
+.ls-rule-holds .ls-rule-status {
+    color: var(--palm-light);
+}
+
+.ls-rule-broken .ls-rule-status {
+    color: var(--fire-bright);
+}
+
 .ls-values-wide .ls-value:last-of-type {
     border-bottom: 0;
     padding-bottom: 0;

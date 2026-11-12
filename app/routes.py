@@ -40,6 +40,8 @@ from .models import (
 from .predictions import calculate_win_probabilities, season_structure_known
 from .scoring import SCORING_SYSTEMS, compute_stat_overrides, get_scoring_system
 from .scoring.classic import CONFIG_LABELS, DEFAULT_CONFIG, LEGACY_CONFIG
+from .scoring.history import analysis_runs, describe_config
+from .scoring.rules import rule_readout
 
 logger = logging.getLogger(__name__)
 
@@ -259,8 +261,14 @@ def _episode_rows(survivor, as_of_episode=None, episode_info=None):
     return rows
 
 
-def _build_leaderboard(season, hidden_types=None, replacement_start=None):
+def _build_leaderboard(
+    season, hidden_types=None, replacement_start=None, scoring_config=None
+):
     """Build leaderboard data for a season. Reads current state of survivor objects.
+
+    `scoring_config` scores the season with another config instead of its
+    own, without saving anything (the Scoring changes page replays seasons
+    this way).
 
     `hidden_types` (replacements.hidden_types) and `replacement_start`
     (replacements.scoring_start) are worked out here when not given. A caller
@@ -269,7 +277,9 @@ def _build_leaderboard(season, hidden_types=None, replacement_start=None):
     replacements are still hidden, depends on who is out now, not who was
     out at the step being shown.
     """
-    scoring = get_scoring_system(season.scoring_system, season.get_scoring_config())
+    if scoring_config is None:
+        scoring_config = season.get_scoring_config()
+    scoring = get_scoring_system(season.scoring_system, scoring_config)
 
     users = User.query.join(Pick).filter(Pick.season_id == season.id).distinct().all()
     team_names = TeamName.for_season(season.id)
@@ -661,7 +671,7 @@ def _apply_as_of(season, as_of):
 
 @main_bp.route("/scoring-analysis")
 def scoring_analysis():
-    return render_template("scoring_analysis.html")
+    return render_template("scoring_analysis.html", runs=analysis_runs())
 
 
 # The league-settings hub and its detail pages. Order here is the order the
@@ -672,6 +682,11 @@ LEAGUE_SETTINGS_GROUPS = (
         "Scoring",
         (
             ("scoring", "Scoring components", "What each action is worth this season"),
+            (
+                "changes",
+                "Scoring changes",
+                "What changed since last season, why, and what it does to standings",
+            ),
             (
                 "pick-types",
                 "Pick types",
@@ -744,6 +759,10 @@ def _settings_context(season):
     pages end up disagreeing about the same season.
     """
     config = {**DEFAULT_CONFIG, **(season.get_scoring_config() if season else {})}
+    # Sections a season has no use for: Sole Survivor only where it scores
+    hidden_sections = set()
+    if not config.get("sole_survivor_val"):
+        hidden_sections.add("sole-survivor")
 
     # Build list of active and inactive components
     active_rules = []
@@ -838,6 +857,7 @@ def _settings_context(season):
         "progressive": progressive,
         "examples": examples,
         "PICK_TYPE_LABELS": PICK_TYPE_LABELS,
+        "hidden_sections": hidden_sections,
         "wildcard_self_service": bool(season) and wildcards.is_self_service(season),
         "replacement_self_service": bool(season)
         and replacements.is_self_service(season),
@@ -865,13 +885,163 @@ def league_settings_detail(slug, season_id):
     if section is None:
         abort(404)
     season = _settings_season(season_id)
+    context = _settings_context(season)
+    if slug in context["hidden_sections"]:
+        abort(404)
+    if slug == "changes":
+        context.update(_changes_context(season))
     return render_template(
         "league_settings/detail.html",
         section=section,
         groups=LEAGUE_SETTINGS_GROUPS,
         season_id=season_id,
-        **_settings_context(season),
+        **context,
     )
+
+
+_changes_cache = {}  # {key: replays}, keyed on every involved season's state
+_CHANGES_CACHE_MAX = 32
+
+
+def _ranked(entries):
+    """{user id: (display name, points, rank)} from leaderboard entries."""
+    ordered = sorted(entries, key=lambda e: e["total_points"], reverse=True)
+    return {
+        e["user"].id: (
+            e["user"].display_name or e["user"].username,
+            e["total_points"],
+            rank,
+        )
+        for rank, e in enumerate(ordered, start=1)
+    }
+
+
+def _names_by_rank(board):
+    """Display names from a _ranked board, best first."""
+    return [entry[0] for entry in sorted(board.values(), key=lambda entry: entry[2])]
+
+
+def _replays(season, old_config, new_config):
+    """This season under both configs, and each earlier season under the new one.
+
+    Cached on _compare_cache_key of every season involved (their castaway
+    state, visible picks and stored config) plus both configs, so a refresh,
+    a pick or a config edit anywhere changes the key.
+    """
+    import hashlib
+
+    seasons = (
+        Season.query.join(Pick)
+        .filter(Season.number <= season.number)
+        .distinct()
+        .order_by(Season.number.desc())
+        .all()
+    )
+    raw = json.dumps(
+        [
+            [_compare_cache_key(s) for s in seasons],
+            season.id,
+            old_config,
+            new_config,
+        ],
+        sort_keys=True,
+    )
+    key = hashlib.sha256(raw.encode()).hexdigest()
+    if key in _changes_cache:
+        return _changes_cache[key]
+
+    standings = []
+    if any(s.id == season.id for s in seasons):
+        old = _ranked(_build_leaderboard(season, scoring_config=old_config)[0])
+        new = _ranked(_build_leaderboard(season, scoring_config=new_config)[0])
+        for uid, (name, points, rank) in sorted(new.items(), key=lambda kv: kv[1][2]):
+            _, old_points, old_rank = old[uid]
+            standings.append(
+                {
+                    "name": name,
+                    "old_points": old_points,
+                    "old_rank": old_rank,
+                    "points": points,
+                    "rank": rank,
+                }
+            )
+
+    past = []
+    for other in seasons:
+        if other.number >= season.number:
+            continue
+        own = _ranked(_build_leaderboard(other)[0])
+        replay = _ranked(_build_leaderboard(other, scoring_config=new_config)[0])
+        if not own:
+            continue
+
+        own_top, replay_top = _names_by_rank(own), _names_by_rank(replay)
+        replay_points = sorted((v[1] for v in replay.values()), reverse=True)
+        past.append(
+            {
+                "season": other,
+                "winner": own_top[0],
+                "new_winner": replay_top[0],
+                "new_margin": (
+                    replay_points[0] - replay_points[1]
+                    if len(replay_points) > 1
+                    else None
+                ),
+                "order_changed": own_top != replay_top,
+                "new_order": replay_top,
+            }
+        )
+
+    result = {"standings": standings, "past": past}
+    if len(_changes_cache) >= _CHANGES_CACHE_MAX:
+        _changes_cache.clear()
+    _changes_cache[key] = result
+    return result
+
+
+def _labelled_diffs(diffs):
+    """[(label, old, new)] for describe_config differences, in CONFIG_LABELS order."""
+    return [
+        (label, diffs[k][0], diffs[k][1])
+        for k, (label, _desc) in CONFIG_LABELS.items()
+        if k in diffs
+    ]
+
+
+def _changes_context(season):
+    """What the Scoring changes page shows for a season."""
+    if season is None:
+        return {}
+    current = {**DEFAULT_CONFIG, **season.get_scoring_config()}
+    version, diffs = describe_config(current)
+    history = []
+    for s in Season.query.order_by(Season.number).all():
+        v, d = describe_config(s.get_scoring_config())
+        history.append({"season": s, "version": v, "diffs": _labelled_diffs(d)})
+    context = {
+        "rules": rule_readout(current, CONFIG_LABELS),
+        "version": version,
+        "version_diffs": _labelled_diffs(diffs),
+        "history": history,
+        "previous": None,
+        "changes": [],
+    }
+    previous = (
+        Season.query.filter(Season.number < season.number)
+        .order_by(Season.number.desc())
+        .first()
+    )
+    if previous is None:
+        return context
+    old = {**DEFAULT_CONFIG, **previous.get_scoring_config()}
+    context["previous"] = previous
+    context["changes"] = [
+        (label, old.get(k), current.get(k))
+        for k, (label, _desc) in CONFIG_LABELS.items()
+        if old.get(k) != current.get(k)
+    ]
+    context.update(_replays(season, old, current))
+    return context
 
 
 @main_bp.route("/leaderboard/<int:season_id>")
