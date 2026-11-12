@@ -2562,6 +2562,19 @@ def admin_season_detail(season_id):
     )
     current_config = {**DEFAULT_CONFIG, **season.get_scoring_config()}
     open_proposal = proposals.open_proposal(season)
+    latest_proposal = proposals.latest_proposal(season)
+    starts, default_start = proposals.starting_points(season)
+    version, version_diffs = describe_config(current_config)
+
+    # Voting closes when the open proposal does. With none open, a withdrawn
+    # proposal's time is offered while it is still ahead: proposing again
+    # after a withdrawal usually keeps the deadline the league was told.
+    closes_from = open_proposal or latest_proposal
+    if (
+        closes_from is not None
+        and closes_from.closes_at.replace(tzinfo=UTC) <= wildcards.now_utc()
+    ):
+        closes_from = None
 
     return render_template(
         "admin/season_detail.html",
@@ -2573,13 +2586,28 @@ def admin_season_detail(season_id):
         current_config=current_config,
         default_config=DEFAULT_CONFIG,
         scoring_versions=SCORING_VERSIONS,
+        version=version,
+        version_diffs=[
+            (label, version_diffs[k][0], version_diffs[k][1])
+            for k, (label, _desc) in CONFIG_LABELS.items()
+            if k in version_diffs
+        ],
         proposal=proposals.results(open_proposal, season),
         proposal_closes_label=(
             _league_time_label(open_proposal.closes_at) if open_proposal else None
         ),
         proposal_closes_value=(
-            wildcards.to_form_value(open_proposal.closes_at) if open_proposal else ""
+            wildcards.to_form_value(closes_from.closes_at) if closes_from else ""
         ),
+        latest_proposal=latest_proposal,
+        latest_closed_label=(
+            _league_time_label(latest_proposal.closed_at)
+            if latest_proposal is not None and latest_proposal.closed_at
+            else None
+        ),
+        starts=starts,
+        default_start=default_start,
+        start_configs={p["key"]: p["config"] for p in starts},
         wildcard=wildcards.admin_view(season),
         replacement=replacements.admin_view(season),
     )

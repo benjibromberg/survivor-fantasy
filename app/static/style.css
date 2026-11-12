@@ -1158,6 +1158,92 @@ section > .admin-inline-form {
     color: var(--text-dim);
 }
 
+/* --- Admin: the season page, built around tasks ---------------------------
+   Label above value, as on the League pages. Field labels here carry a
+   phrase ("Voting closes (Eastern)", "Final Tribal Bonus"), so they take the
+   League pages' dt treatment in the interface sans rather than the condensed
+   caps of .admin-field-label, which is for one-word labels. */
+
+/* A wrapping row of fields with a button or checkbox beside them. Bottoms
+   align, so the button lines up with the inputs rather than their labels. */
+.admin-fields-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem 1rem;
+    margin: 0 0 0.75rem;
+}
+
+.admin-fields-row > .admin-field {
+    flex: 1 1 14rem;
+    max-width: 22rem;
+    min-width: 0;
+}
+
+.admin-fields-row > .admin-check {
+    min-height: 2.5rem;
+}
+
+.admin-field > label {
+    margin: 0;
+    font-size: max(var(--fs-floor), 0.85rem);
+    color: var(--text-dim);
+}
+
+.admin-field > input,
+.admin-field > select {
+    margin: 0;
+}
+
+.admin-field > small {
+    font-size: max(var(--fs-floor), 0.78rem);
+    color: var(--text-dim);
+}
+
+/* Every scoring component as a label-above-value field. min-width: 0 on
+   the items, because a grid item's implicit minimum is its min-content
+   width and an input has an intrinsic one. */
+.admin-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: 0.75rem 1rem;
+    margin: 0 0 1rem;
+}
+
+.admin-fields > .admin-field {
+    min-width: 0;
+}
+
+/* A form's own button: content width, and no Pico bottom margin to push it
+   off the line it shares with the fields. Written button.admin-submit
+   because Pico widens submit buttons with `button[type="submit"]`, which is
+   (0,1,1) and beats a lone class wherever it sits; measured, a .admin-submit
+   rule rendered every Save the full width of the page. */
+button.admin-submit {
+    width: auto;
+    margin: 0;
+}
+
+.admin-toolbar-label {
+    font-size: max(var(--fs-floor), 0.85rem);
+    color: var(--text-dim);
+}
+
+/* The wildcard and replacement windows, one under the other */
+.admin-window {
+    margin-bottom: 1.25rem;
+}
+
+/* A fold inside a form ("Adjust values") sits between the fields and the
+   button, so it needs room on both sides. */
+.admin-subfold {
+    margin: 0.25rem 0 1rem;
+}
+
+details.fold > summary .subsection-title {
+    margin: 0;
+}
+
 /* A castaway row. On the leaderboard it is a <details>: the summary is the
    row and opening it shows that castaway's detail. On My Team it is a plain
    link. --pick-img sizes the photo; the detail is indented to the name. */
@@ -2509,6 +2595,12 @@ details.lb-champion[open] > summary.lb-row {
     margin-bottom: 1rem;
 }
 
+/* The card ends with the link to the votes; its paragraph margin would
+   double the card's own bottom padding. */
+.admin-proposal > .admin-links {
+    margin-bottom: 0;
+}
+
 /* Scoring changes: whether a league rule holds for the season's values */
 .ls-rule-status {
     margin-left: 0.5rem;
@@ -3830,6 +3922,40 @@ section > table {
     .admin-form-row > input[type="text"],
     .admin-form-row > input[type="email"] {
         flex: 1 1 10rem;
+    }
+
+    /* Season page: each field takes the row, so the button or checkbox
+       beside it drops to the next line instead of squeezing the input. */
+    .admin-fields-row > .admin-field {
+        flex-basis: 100%;
+        max-width: none;
+    }
+
+    .admin-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+    }
+
+    .admin-submit {
+        min-height: 2.5rem;
+    }
+
+    /* Adopt and Withdraw do not fit one line inside the proposal card at
+       375px, and wrapped at their own widths they left a ragged edge. Full
+       width, one under the other, they read as the pair they are. */
+    .admin-proposal .admin-toolbar > form {
+        flex: 1 1 100%;
+    }
+
+    .admin-proposal .admin-toolbar button {
+        width: 100%;
+    }
+
+    /* A text link on its own line, e.g. to the proposal's votes */
+    .admin-links a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.5rem;
     }
 
     /* Scoring analysis */

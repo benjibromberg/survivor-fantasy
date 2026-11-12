@@ -1,242 +1,373 @@
 {% extends "base.html" %}
 {% block title %}Admin - {{ season.name or 'Season ' ~ season.number }}{% endblock %}
+{# A config value as the admin types it: booleans as 1/0 (the form's own
+   convention for Replacement Deduction), None as "none" (flat tribals). The
+   season page script formats values the same way (fmt below). #}
+{% macro num(v) -%}
+{%- if v is none -%}none
+{%- elif v is sameas true -%}1
+{%- elif v is sameas false -%}0
+{%- else -%}{{ '%g'|format(v) }}
+{%- endif -%}
+{%- endmacro %}
+{# The same, for a form value: unrounded, since %g keeps six digits and a
+   saved form would store the rounded number; None is a blank box. #}
+{% macro field_value(v) -%}
+{%- if v is none -%}
+{%- elif v is sameas true -%}1
+{%- elif v is sameas false -%}0
+{%- else -%}{{ v }}
+{%- endif -%}
+{%- endmacro %}
+{# The one form that opens a vote: a starting point, the closing time, and
+   any values typed over the starting point's. Posts propose_from, so the
+   config comes from the server's copy of the starting point rather than
+   from the boxes; blank boxes keep its values. #}
+{% macro propose_form() %}
+<form method="POST" action="{{ url_for('main.admin_season_settings', season_id=season.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="admin-fields-row">
+        <div class="admin-field">
+            <label for="propose_from">Scoring to propose</label>
+            <select id="propose_from" name="propose_from" data-configs='{{ start_configs|tojson }}'>
+                {% for p in starts %}
+                {% if loop.changed(p.group) %}{% if not loop.first %}</optgroup>{% endif %}<optgroup label="{{ p.group }}">{% endif %}
+                <option value="{{ p.key }}"{% if p.key == default_start %} selected{% endif %}>{{ p.label }} &middot; {% if p.changes %}changes {{ p.changes }} value{{ 's' if p.changes != 1 }}{% else %}same as now{% endif %}</option>
+                {% if loop.last %}</optgroup>{% endif %}
+                {% endfor %}
+            </select>
+        </div>
+        <div class="admin-field">
+            <label for="proposal_closes_at">Voting closes (Eastern)</label>
+            <input type="datetime-local" id="proposal_closes_at" name="proposal_closes_at" value="{{ proposal_closes_value }}" required>
+        </div>
+    </div>
+    <details class="fold admin-subfold">
+        <summary><span class="subsection-title">Adjust values</span></summary>
+        <div class="fold-body">
+            <p><small>Each box shows the value being proposed. Type over one to change it, or leave it blank to keep it. "Now" marks a value that differs from this season's current scoring.</small></p>
+            {% set start_cfg = start_configs[default_start] %}
+            <div class="admin-fields">
+                {% for key, (label, desc) in config_labels.items() %}
+                <div class="admin-field">
+                    <label for="adjust_{{ key }}">{{ label }}</label>
+                    <input type="number" step="any" id="adjust_{{ key }}" name="adjust_{{ key }}" data-adjust="{{ key }}" placeholder="{{ num(start_cfg[key]) }}">
+                    <small data-now-for="{{ key }}" data-current='{{ current_config[key]|tojson }}'{% if start_cfg[key] == current_config[key] %} hidden{% endif %}>Now {{ num(current_config[key]) }}</small>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </details>
+    <button type="submit" class="admin-submit">Propose to the league</button>
+</form>
+{% endmacro %}
 {% block content %}
-<p class="admin-page-nav"><a href="{{ url_for('main.admin_seasons') }}">&larr; All Seasons</a></p>
+<p class="admin-page-nav"><a href="{{ url_for('main.admin_seasons') }}">&larr; All seasons</a></p>
 <h1>{{ season.name or 'Season ' ~ season.number }} &mdash; Admin</h1>
-
-<div class="admin-toolbar">
-    <a href="{{ url_for('main.admin_picks', season_id=season.id) }}" role="button" class="admin-btn-sm">Manage Picks</a>
-    <a href="{{ url_for('main.scoring_compare', season_id=season.id) }}" role="button" class="outline admin-btn-sm">Compare Scoring</a>
-    <form method="POST" action="{{ url_for('main.admin_refresh', season_id=season.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="outline admin-btn-sm">Refresh from survivoR</button>
-    </form>
-    <form method="POST" action="{{ url_for('main.admin_export_picks', season_id=season.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="outline admin-btn-sm">Export Picks</button>
-    </form>
-</div>
-
-<!-- Season Info -->
 <p class="admin-page-meta">
-    <strong>{{ season.num_players }}</strong> players &middot;
-    <strong>{{ season.num_episodes }}</strong> episodes &middot;
-    Jury at <strong>{{ season.left_at_jury if season.left_at_jury is not none else '?' }}</strong> left &middot;
-    <strong>{{ season.survivors|length }}</strong> survivors loaded &middot;
+    <strong>{{ season.num_players if season.num_players is not none else '?' }}</strong> players &middot;
+    <strong>{{ season.num_episodes if season.num_episodes is not none else '?' }}</strong> episodes &middot;
+    jury at <strong>{{ season.left_at_jury if season.left_at_jury is not none else '?' }}</strong> left &middot;
     {{ 'Active' if season.is_active else 'Inactive' }}
 </p>
+<div class="admin-toolbar">
+    <a href="{{ url_for('main.admin_picks', season_id=season.id) }}" role="button" class="admin-btn-sm">Manage picks</a>
+</div>
 
-<!-- Wildcard self-service -->
-<section>
-    <h2 class="section-title">Wildcard Picks</h2>
-    <p><small>Players pick their own wildcard on My Team once Episode 2's start time is known. Picks lock 15 minutes before it and stay hidden until every player has picked. The time is looked up automatically for the active season; type a different one to override it, or clear the field to go back to automatic. Untick the box to keep entering wildcards yourself under Manage Picks.</small></p>
-    <form method="POST" action="{{ url_for('main.admin_wildcard_window', season_id=season.id) }}" class="admin-inline-form admin-form-wide">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label class="admin-check">
-            <input type="checkbox" name="self_service" {% if wildcard.switched_on %}checked{% endif %}>
-            Players pick their own
-        </label>
-        <label for="episode2_starts_at">Episode 2 starts (Eastern)</label>
-        <input type="datetime-local" id="episode2_starts_at" name="episode2_starts_at" value="{{ wildcard.form_value }}">
-        <button type="submit" class="outline">Save</button>
-    </form>
-    <p class="admin-page-meta">
-        {% if wildcard.manual %}
-        Episode 2 time entered by hand; the automatic lookup will not change it.
-        {% elif wildcard.known %}
-        Episode 2 time filled in automatically from the TV schedule.
-        {% elif season.is_active %}
-        Episode 2 time not known yet; it is looked up daily.
-        {% else %}
-        Episode 2 time is looked up once this season is active.
-        {% endif %}
-    </p>
-    {% if wildcard.enabled %}
-    <p class="admin-page-meta">
-        Locks <strong>{{ wildcard.lock_label }}</strong> &middot;
-        <strong>{{ wildcard.picked }} of {{ wildcard.total }}</strong> players have picked
-        {% if wildcard.waiting %}
-        &middot; waiting on {% for u in wildcard.waiting %}{{ u.display_name or u.username }}{{ ', ' if not loop.last }}{% endfor %}
-        {% elif wildcard.total %}
-        &middot; wildcards are revealed
-        {% endif %}
-    </p>
-    {% endif %}
-</section>
+{# Sections are tasks, most frequent first. Each common one is a single
+   form or button: open or settle a vote, set a lock time, refresh. #}
 
-<!-- Replacement self-service -->
-<section>
-    <h2 class="section-title">Replacement Picks</h2>
-    <p><small>Players who lost a castaway by the merge episode pick their own replacement on My Team once the next episode's start time is known. Picks lock 15 minutes before it and stay hidden until every eligible player has picked; enter any that are missing yourself under Manage Picks after the lock. The time is looked up automatically for the active season; type a different one to override it, or clear the field to go back to automatic.</small></p>
-    <form method="POST" action="{{ url_for('main.admin_replacement_window', season_id=season.id) }}" class="admin-inline-form admin-form-wide">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label for="replacement_starts_at">{% if replacement.next_episode %}Episode {{ replacement.next_episode }}{% else %}First episode after the merge{% endif %} starts (Eastern)</label>
-        <input type="datetime-local" id="replacement_starts_at" name="replacement_starts_at" value="{{ replacement.form_value }}">
-        <button type="submit" class="outline">Save</button>
-    </form>
-    <p class="admin-page-meta">
-        {% if replacement.manual %}
-        Time entered by hand; the automatic lookup will not change it.
-        {% elif replacement.enabled %}
-        Time filled in automatically from the TV schedule.
-        {% elif not replacement.merge_known %}
-        The merge episode is not known yet; the time is looked up once it is.
-        {% elif season.is_active %}
-        Time not known yet; it is looked up daily.
-        {% else %}
-        Time is looked up once this season is active.
-        {% endif %}
-    </p>
-    {% if replacement.enabled %}
-    <p class="admin-page-meta">
-        Locks <strong>{{ replacement.lock_label }}</strong> &middot;
-        <strong>{{ replacement.picked }} of {{ replacement.total }}</strong> eligible players have picked
-        {% if replacement.waiting %}
-        &middot; waiting on {% for u in replacement.waiting %}{{ u.display_name or u.username }}{{ ', ' if not loop.last }}{% endfor %}
-        {% elif replacement.total %}
-        &middot; replacements are revealed
-        {% endif %}
-    </p>
-    {% endif %}
-</section>
-
-<!-- Scoring -->
-<section>
-    <h2 class="section-title">Scoring Components</h2>
+<section id="scoring-vote" aria-labelledby="scoring-vote-heading">
+    <h2 class="section-title" id="scoring-vote-heading">Scoring vote</h2>
     {% if proposal %}
+    {# Adopt and Withdraw stay outside any fold, with this exact text: they
+       are pressed by automation on the day voting closes. #}
     <div class="admin-proposal">
-        <p><strong>A scoring proposal is open</strong>{% if proposal_closes_label %} until {{ proposal_closes_label }}{% endif %}:
-        {{ proposal.voted }} of {{ proposal.voters }} players have voted
-        ({% for key, label in proposal.choices.items() %}{{ label }}: {{ proposal.tally[key] }}{{ '; ' if not loop.last }}{% endfor %}).
-        <a href="{{ url_for('main.league_settings_detail', slug='changes', season_id=season.id) }}">See the page and the votes</a>.</p>
+        <p><strong>A proposal is open.</strong>{% if proposal_closes_label %} Voting {{ 'closes' if proposal.open else 'closed' }} {{ proposal_closes_label }}.{% endif %}</p>
+        <dl class="ls-values">
+            <div class="ls-value"><dt>Voted</dt><dd>{{ proposal.voted }} of {{ proposal.voters }}</dd></div>
+            {% for key, label in proposal.choices.items() %}
+            <div class="ls-value"><dt>{{ label }}</dt><dd>{{ proposal.tally[key] }}</dd></div>
+            {% endfor %}
+        </dl>
         <div class="admin-toolbar">
             <form method="POST" action="{{ url_for('main.admin_scoring_proposal', season_id=season.id, action='adopt') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="admin-btn-sm">Adopt proposal</button>
+                <button type="submit" class="admin-submit">Adopt proposal</button>
             </form>
             <form method="POST" action="{{ url_for('main.admin_scoring_proposal', season_id=season.id, action='withdraw') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="outline secondary admin-btn-sm">Withdraw proposal</button>
+                <button type="submit" class="outline secondary admin-submit">Withdraw proposal</button>
             </form>
         </div>
+        <p class="admin-links"><a href="{{ url_for('main.league_settings_detail', slug='changes', season_id=season.id) }}">See the proposal and every vote</a></p>
     </div>
-    {% endif %}
-    <form method="POST" action="{{ url_for('main.admin_season_settings', season_id=season.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <p><small>Set a value to 0 to disable a component. Saving applies the values to the leaderboard straight away, unless you tick Propose: then they go to the league for a vote on the Scoring changes page, and the season keeps its scoring until you adopt them.</small></p>
-        <label class="admin-check">
-            <input type="checkbox" name="propose">
-            Propose to the league instead of applying
-        </label>
-        <div class="admin-field">
-            <label class="admin-field-label" for="proposal_closes_at">Voting closes (Eastern)</label>
-            <input type="datetime-local" id="proposal_closes_at" name="proposal_closes_at" value="{{ proposal_closes_value }}">
+    <details class="fold">
+        <summary><h3 class="subsection-title">Replace it with a new proposal</h3></summary>
+        <div class="fold-body">
+            <p><small>Proposing replaces the open proposal, and voting starts over.</small></p>
+            {{ propose_form() }}
         </div>
-        <p><small>Proposing replaces any open proposal, and voting on it starts over.</small></p>
-        <div class="admin-toolbar">
-            <button type="submit" class="admin-btn-sm">Save Settings</button>
-            <button type="button" class="outline" onclick="loadDefaults()" class="admin-btn-sm">Load Default</button>
-            {% for v in scoring_versions %}
-            <button type="button" class="outline secondary admin-btn-sm" onclick='loadConfig({{ v.config | tojson }})'>Load {{ v.name }}</button>
-            {% endfor %}
-        </div>
-        <table class="scoring-table">
-            <thead><tr><th>Component</th><th>Value</th><th>Description</th></tr></thead>
-            <tbody>
-                {% for key, (label, desc) in config_labels.items() %}
-                <tr>
-                    <td><strong>{{ label }}</strong></td>
-                    <td><input type="number" name="scoring_{{ key }}" id="scoring_{{ key }}" value="{{ current_config.get(key, 0) }}" step="any"></td>
-                    <td><small>{{ desc }}</small></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <script>
-        const DEFAULTS = {{ default_config | tojson }};
-        function loadConfig(cfg) {
-            for (const [key, val] of Object.entries(cfg)) {
-                const el = document.getElementById('scoring_' + key);
-                // Booleans (replacement deduction) have no number input value
-                if (el && typeof val !== 'boolean') el.value = val;
-            }
-        }
-        function loadDefaults() { loadConfig(DEFAULTS); }
-        </script>
-    </form>
-</section>
-
-<!-- Survivors (read-only, apart from adding a cast by hand) -->
-<section>
-    <h2 class="section-title">Survivors ({{ survivors|length }})</h2>
-    <p><small>survivoR publishes a season's cast when it premieres, so before then add the castaways here: a name is all that is needed, and a headshot is optional. A hand-entered castaway can be removed until someone picks them.</small></p>
-    <p><small><strong>Matching hand-entered castaways to survivoR is not automatic yet.</strong> A refresh would add the dataset's castaways as new rows beside these rather than filling these in, so Refresh declines while this season has any hand-entered castaway, and the daily refresh skips it. Both resume once matching is built.</small></p>
-    <form method="POST" action="{{ url_for('main.admin_add_survivor', season_id=season.id) }}"
-          enctype="multipart/form-data" class="admin-inline-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label for="add-survivor-name">Castaway name</label>
-        <input type="text" id="add-survivor-name" name="name" maxlength="100" required
-               autocomplete="off" placeholder="e.g. Dee Dee">
-        <label for="add-survivor-headshot">Headshot (optional)</label>
-        <input type="file" id="add-survivor-headshot" name="headshot" accept="image/*">
-        <button type="submit" class="outline">Add Castaway</button>
-    </form>
-    {% if survivors %}
-    <div class="table-scroll">
-    <table class="admin-table admin-table-dense">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Tribe</th>
-                <th>Order</th>
-                <th>Result</th>
-                <th>Jury</th>
-                <th>Imm</th>
-                <th>Idols</th>
-                <th>Conf</th>
-                <th>Fire</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for s in survivors %}
-            <tr{% if s.voted_out_order > 0 %} class="eliminated"{% endif %}>
-                <td>{{ s.name }}{% if s.is_hand_entered %}<br><small class="admin-marker">hand-entered</small>{% endif %}</td>
-                <td>{% if s.tribe_color and s.voted_out_order == 0 %}<span style="color:{{ s.tribe_color|contrast }};">{{ s.tribe or '-' }}</span>{% else %}{{ s.tribe or '-' }}{% endif %}</td>
-                <td>{{ s.voted_out_order or '-' }}</td>
-                <td>{{ s.result or '-' }}</td>
-                <td>{{ 'Yes' if s.made_jury else '' }}</td>
-                <td>{{ s.individual_immunity_wins or '' }}</td>
-                <td>{{ s.idols_found or '' }}</td>
-                <td>{{ s.confessional_count or '' }}</td>
-                <td>{{ 'Yes' if s.won_fire else '' }}</td>
-                <td>
-                    {% if s.id in removable_ids %}
-                    <form method="POST" action="{{ url_for('main.admin_remove_survivor', season_id=season.id, survivor_id=s.id) }}"
-                          onsubmit="return confirm('Remove {{ s.name|e }} from this season?')">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="outline secondary admin-btn-sm">Remove</button>
-                    </form>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    </div>
+    </details>
     {% else %}
-    <p>No castaways yet. Add them above to draft before the premiere, or use Refresh from survivoR once the season has aired.</p>
+    <p>No vote is open.{% if latest_proposal %} The last proposal was {{ latest_proposal.status }}{% if latest_closed_label %} {{ latest_closed_label }}{% endif %}.{% endif %}
+    Players vote on the Scoring changes page, and this season keeps its scoring until you adopt the proposal.</p>
+    {{ propose_form() }}
     {% endif %}
 </section>
 
-<!-- Delete -->
-<section>
-    <h2 class="section-title">Danger Zone</h2>
+<section id="pick-windows" aria-labelledby="pick-windows-heading">
+    <h2 class="section-title" id="pick-windows-heading">Pick windows</h2>
+    <p><small>Players pick on My Team until 15 minutes before the episode below starts, and picks stay hidden until everyone has picked. Times are looked up from the TV schedule for the active season. Type a time to override it, or clear it to go back to automatic.</small></p>
+
+    <section id="wildcard-window" aria-labelledby="wildcard-window-heading" class="admin-window">
+        <h3 class="subsection-title" id="wildcard-window-heading">Wildcard picks</h3>
+        {% if wildcard.enabled %}
+        <dl class="ls-values">
+            <div class="ls-value"><dt>Locks</dt><dd>{{ wildcard.lock_label }}</dd></div>
+            <div class="ls-value"><dt>Picked</dt><dd>{{ wildcard.picked }} of {{ wildcard.total }}</dd></div>
+            <div class="ls-value"><dt>Waiting on</dt><dd>{% if wildcard.waiting %}{% for u in wildcard.waiting %}{{ u.display_name or u.username }}{{ ', ' if not loop.last }}{% endfor %}{% elif wildcard.total %}Nobody: wildcards are revealed{% else %}Nobody{% endif %}</dd></div>
+        </dl>
+        {% endif %}
+        <form method="POST" action="{{ url_for('main.admin_wildcard_window', season_id=season.id) }}" class="admin-fields-row">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="admin-field">
+                <label for="episode2_starts_at">Episode 2 starts (Eastern)</label>
+                <input type="datetime-local" id="episode2_starts_at" name="episode2_starts_at" value="{{ wildcard.form_value }}">
+            </div>
+            <label class="admin-check">
+                <input type="checkbox" name="self_service" {% if wildcard.switched_on %}checked{% endif %}>
+                Players pick their own
+            </label>
+            <button type="submit" class="outline admin-submit">Save</button>
+        </form>
+        <p class="admin-page-meta">
+            {% if wildcard.manual %}
+            Episode 2 time entered by hand; the automatic lookup will not change it.
+            {% elif wildcard.known %}
+            Episode 2 time filled in automatically from the TV schedule.
+            {% elif season.is_active %}
+            Episode 2 time not known yet; it is looked up daily.
+            {% else %}
+            Episode 2 time is looked up once this season is active.
+            {% endif %}
+            Untick the box to enter wildcards yourself under Manage picks.
+        </p>
+    </section>
+
+    <section id="replacement-window" aria-labelledby="replacement-window-heading" class="admin-window">
+        <h3 class="subsection-title" id="replacement-window-heading">Replacement picks</h3>
+        {% if replacement.enabled %}
+        <dl class="ls-values">
+            <div class="ls-value"><dt>Locks</dt><dd>{{ replacement.lock_label }}</dd></div>
+            <div class="ls-value"><dt>Picked</dt><dd>{{ replacement.picked }} of {{ replacement.total }} eligible</dd></div>
+            <div class="ls-value"><dt>Waiting on</dt><dd>{% if replacement.waiting %}{% for u in replacement.waiting %}{{ u.display_name or u.username }}{{ ', ' if not loop.last }}{% endfor %}{% elif replacement.total %}Nobody: replacements are revealed{% else %}Nobody{% endif %}</dd></div>
+        </dl>
+        {% endif %}
+        <form method="POST" action="{{ url_for('main.admin_replacement_window', season_id=season.id) }}" class="admin-fields-row">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="admin-field">
+                <label for="replacement_starts_at">{% if replacement.next_episode %}Episode {{ replacement.next_episode }}{% else %}First episode after the merge{% endif %} starts (Eastern)</label>
+                <input type="datetime-local" id="replacement_starts_at" name="replacement_starts_at" value="{{ replacement.form_value }}">
+            </div>
+            <button type="submit" class="outline admin-submit">Save</button>
+        </form>
+        <p class="admin-page-meta">
+            {% if replacement.manual %}
+            Time entered by hand; the automatic lookup will not change it.
+            {% elif replacement.enabled %}
+            Time filled in automatically from the TV schedule.
+            {% elif not replacement.merge_known %}
+            The merge episode is not known yet; the time is looked up once it is.
+            {% elif season.is_active %}
+            Time not known yet; it is looked up daily.
+            {% else %}
+            Time is looked up once this season is active.
+            {% endif %}
+            Open to players who lost a castaway by the merge episode. Enter any missing after the lock under Manage picks.
+        </p>
+    </section>
+</section>
+
+<section id="scoring" aria-labelledby="scoring-heading">
+    <h2 class="section-title" id="scoring-heading">Scoring</h2>
+    {% if version %}
+    <p>This season plays under <strong>{{ version.name }}</strong>{% if version_diffs %}, with {{ version_diffs|length }} value{{ 's' if version_diffs|length != 1 }} changed from it{% endif %}.</p>
+    {% endif %}
+    {% if version_diffs %}
+    <dl class="ls-values ls-values-wide">
+        {% for label, was, now in version_diffs %}
+        <div class="ls-value">
+            <dt>{{ label }}</dt>
+            <dd>{{ num(now) }} <small>{{ version.name }}: {{ num(was) }}</small></dd>
+        </div>
+        {% endfor %}
+    </dl>
+    {% endif %}
+    <div class="admin-toolbar">
+        <a href="{{ url_for('main.scoring_compare', season_id=season.id) }}" role="button" class="outline admin-btn-sm">Compare scoring</a>
+    </div>
+    <details class="fold">
+        <summary><h3 class="subsection-title">Change values without a vote</h3></summary>
+        <div class="fold-body">
+            <form method="POST" action="{{ url_for('main.admin_season_settings', season_id=season.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <p><small>Saving applies these values to the leaderboard straight away. Set a value to 0 to turn a component off. To ask the league first, use Scoring vote above.</small></p>
+                <div class="admin-toolbar">
+                    <span class="admin-toolbar-label">Fill in</span>
+                    <button type="button" class="outline secondary admin-btn-sm" data-fill='{{ default_config|tojson }}'>Default</button>
+                    {% for v in scoring_versions %}
+                    <button type="button" class="outline secondary admin-btn-sm" data-fill='{{ v.config|tojson }}'>{{ v.name }}</button>
+                    {% endfor %}
+                </div>
+                <div class="admin-fields">
+                    {% for key, (label, desc) in config_labels.items() %}
+                    <div class="admin-field">
+                        <label for="scoring_{{ key }}">{{ label }}</label>
+                        <input type="number" name="scoring_{{ key }}" id="scoring_{{ key }}" value="{{ field_value(current_config.get(key, 0)) }}" step="any">
+                        <small>{{ desc }}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="admin-submit">Save scoring</button>
+            </form>
+        </div>
+    </details>
+</section>
+
+<section id="season-data" aria-labelledby="season-data-heading">
+    <h2 class="section-title" id="season-data-heading">Season data</h2>
+    <div class="admin-toolbar">
+        <form method="POST" action="{{ url_for('main.admin_refresh', season_id=season.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="admin-submit">Refresh from survivoR</button>
+        </form>
+        <form method="POST" action="{{ url_for('main.admin_export_picks', season_id=season.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="outline admin-submit">Export picks</button>
+        </form>
+    </div>
+    <p><small>Refresh downloads the latest survivoR data, updates every castaway and looks up the pick window times again; it runs daily for the active season. Picks are exported before and after.</small></p>
+    {% set hand_entered = survivors|selectattr('is_hand_entered')|list %}
+    <details class="fold"{% if not survivors or hand_entered %} open{% endif %}>
+        <summary><h3 class="subsection-title">Castaways ({{ survivors|length }})</h3></summary>
+        <div class="fold-body">
+            {% if not survivors or hand_entered %}
+            <p><small>survivoR publishes a season's cast when it premieres, so before then add the castaways here: a name is all that is needed, and a headshot is optional. A hand-entered castaway can be removed until someone picks them.</small></p>
+            <p><small><strong>Matching hand-entered castaways to survivoR is not automatic yet.</strong> A refresh would add the dataset's castaways as new rows beside these rather than filling these in, so Refresh declines while this season has any hand-entered castaway, and the daily refresh skips it. Both resume once matching is built.</small></p>
+            {% endif %}
+            <form method="POST" action="{{ url_for('main.admin_add_survivor', season_id=season.id) }}"
+                  enctype="multipart/form-data" class="admin-fields-row">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="admin-field">
+                    <label for="add-survivor-name">Castaway name</label>
+                    <input type="text" id="add-survivor-name" name="name" maxlength="100" required
+                           autocomplete="off" placeholder="e.g. Dee Dee">
+                </div>
+                <div class="admin-field">
+                    <label for="add-survivor-headshot">Headshot (optional)</label>
+                    <input type="file" id="add-survivor-headshot" name="headshot" accept="image/*">
+                </div>
+                <button type="submit" class="outline admin-submit">Add castaway</button>
+            </form>
+            {% if survivors %}
+            <div class="table-scroll">
+            <table class="admin-table admin-table-dense">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Tribe</th>
+                        <th>Order</th>
+                        <th>Result</th>
+                        <th>Jury</th>
+                        <th>Imm</th>
+                        <th>Idols</th>
+                        <th>Conf</th>
+                        <th>Fire</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in survivors %}
+                    <tr{% if s.voted_out_order > 0 %} class="eliminated"{% endif %}>
+                        <td>{{ s.name }}{% if s.is_hand_entered %}<br><small class="admin-marker">hand-entered</small>{% endif %}</td>
+                        <td>{% if s.tribe_color and s.voted_out_order == 0 %}<span style="color:{{ s.tribe_color|contrast }};">{{ s.tribe or '-' }}</span>{% else %}{{ s.tribe or '-' }}{% endif %}</td>
+                        <td>{{ s.voted_out_order or '-' }}</td>
+                        <td>{{ s.result or '-' }}</td>
+                        <td>{{ 'Yes' if s.made_jury else '' }}</td>
+                        <td>{{ s.individual_immunity_wins or '' }}</td>
+                        <td>{{ s.idols_found or '' }}</td>
+                        <td>{{ s.confessional_count or '' }}</td>
+                        <td>{{ 'Yes' if s.won_fire else '' }}</td>
+                        <td>
+                            {% if s.id in removable_ids %}
+                            <form method="POST" action="{{ url_for('main.admin_remove_survivor', season_id=season.id, survivor_id=s.id) }}"
+                                  onsubmit="return confirm('Remove {{ s.name|e }} from this season?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="outline secondary admin-btn-sm">Remove</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% else %}
+            <p>No castaways yet. Add them above to draft before the premiere, or use Refresh from survivoR once the season has aired.</p>
+            {% endif %}
+        </div>
+    </details>
+</section>
+
+<section id="danger-zone" aria-labelledby="danger-zone-heading">
+    <h2 class="section-title" id="danger-zone-heading">Danger zone</h2>
     <form method="POST" action="{{ url_for('main.admin_delete_season', season_id=season.id) }}"
           onsubmit="var c = prompt('This will permanently delete {{ season.name or 'Season ' ~ season.number }} and all its survivors and picks.\n\nType \'delete season\' to confirm:'); return c &amp;&amp; c.trim().toLowerCase() === 'delete season';">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="secondary admin-btn-sm">Delete Season</button>
+        <button type="submit" class="secondary admin-submit">Delete season</button>
     </form>
 </section>
+
+<script>
+(function () {
+    // Same formatting as the num() macro, so a placeholder reads the same
+    // whether the server or this script wrote it.
+    function fmt(v) {
+        if (v === null || v === undefined) return 'none';
+        if (v === true) return '1';
+        if (v === false) return '0';
+        return String(v);
+    }
+
+    // Choosing what to propose shows its values in the Adjust boxes and
+    // marks the ones that differ from the current scoring.
+    var select = document.getElementById('propose_from');
+    if (select) {
+        var configs = JSON.parse(select.dataset.configs);
+        select.addEventListener('change', function () {
+            var cfg = configs[select.value] || {};
+            document.querySelectorAll('[data-adjust]').forEach(function (input) {
+                var key = input.dataset.adjust;
+                input.placeholder = fmt(cfg[key]);
+                var now = document.querySelector('[data-now-for="' + key + '"]');
+                if (now) now.hidden = fmt(cfg[key]) === fmt(JSON.parse(now.dataset.current));
+            });
+        });
+    }
+
+    // Fill in the direct form from a recorded config. Flat tribals (null)
+    // become a blank box, which saves as the default: the direct form has
+    // no way to store "none".
+    document.querySelectorAll('[data-fill]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var cfg = JSON.parse(button.dataset.fill);
+            Object.keys(cfg).forEach(function (key) {
+                var el = document.getElementById('scoring_' + key);
+                if (el) el.value = cfg[key] === null ? '' : fmt(cfg[key]);
+            });
+        });
+    });
+})();
+</script>
 {% endblock %}

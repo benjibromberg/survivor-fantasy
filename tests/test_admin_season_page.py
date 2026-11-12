@@ -9,6 +9,7 @@ league exactly as recorded.
 
 import importlib
 import json
+import re
 import sys
 from datetime import UTC, datetime, timedelta
 
@@ -142,6 +143,13 @@ def _open(season):
     from app import proposals
 
     return proposals.open_proposal(season)
+
+
+def _page(league, season=None):
+    season = season or league.s51
+    resp = league.c.get(f"/admin/season/{season.id}")
+    assert resp.status_code == 200
+    return resp.get_data(as_text=True)
 
 
 # ── Proposing from a starting point ──────────────────────────────────────
@@ -337,3 +345,182 @@ class TestStartingPoints:
         assert by_key["version:run-6"]["changes"] == 0  # what 51 plays under
         assert by_key["current"]["changes"] == 0
         assert by_key["version:run-7"]["changes"] > 0
+
+
+# ── The page ─────────────────────────────────────────────────────────────
+
+
+class TestTaskSections:
+    def test_sections_come_in_task_order(self, league):
+        _login(league.c)
+
+        page = _page(league)
+
+        ids = ["scoring-vote", "pick-windows", "scoring", "season-data", "danger-zone"]
+        found = [page.index(f'<section id="{i}"') for i in ids]
+        assert found == sorted(found)
+
+    def test_one_h1_and_no_skipped_heading_levels(self, league):
+        _login(league.c)
+
+        levels = [int(n) for n in re.findall(r"<h([1-6])[ >]", _page(league))]
+
+        assert levels.count(1) == 1
+        assert all(b - a <= 1 for a, b in zip(levels, levels[1:], strict=False))
+
+    def test_every_post_form_carries_a_csrf_token(self, league):
+        from app import proposals
+
+        proposals.propose(league.s51, _effective(_version("run-7")), CLOSES)
+        _login(league.c)
+
+        forms = re.findall(r"<form[^>]*>.*?</form>", _page(league), re.S)
+
+        posts = [f for f in forms if 'method="POST"' in f]
+        assert len(posts) >= 8
+        assert all('name="csrf_token"' in f for f in posts)
+
+    def test_the_page_is_for_the_admin_only(self, league):
+        _login(league.c, PAT_EMAIL)
+
+        resp = league.c.get(f"/admin/season/{league.s51.id}")
+
+        assert resp.status_code == 302
+        assert "propose_from" not in resp.get_data(as_text=True)
+
+
+class TestScoringVoteSection:
+    def _vote_section(self, page):
+        return page.split('<section id="scoring-vote"', 1)[1].split(
+            '<section id="pick-windows"', 1
+        )[0]
+
+    def test_without_a_proposal_it_offers_the_form_and_no_adopt(self, league):
+        _login(league.c)
+
+        section = self._vote_section(_page(league))
+
+        assert "No vote is open." in section
+        assert 'name="propose_from"' in section
+        assert 'value="version:run-7" selected' in section
+        assert "Adopt proposal" not in section
+        assert "Withdraw proposal" not in section
+
+    def test_an_open_proposal_shows_its_tally_and_both_buttons(self, league):
+        from app import proposals
+
+        proposals.propose(league.s51, _effective(_version("run-7")), CLOSES)
+        _login(league.c)
+
+        section = self._vote_section(_page(league))
+
+        assert "Wed Nov 18, 7:45 PM ET" in section
+        assert "0 of 1" in section  # Pat is the one voter
+        adopt = f"/admin/season/{league.s51.id}/proposal/adopt"
+        withdraw = f"/admin/season/{league.s51.id}/proposal/withdraw"
+        assert adopt in section and withdraw in section
+        assert ">Adopt proposal</button>" in section
+        assert ">Withdraw proposal</button>" in section
+
+    def test_adopt_and_withdraw_are_not_inside_a_fold(self, league):
+        """They are pressed by automation, which cannot open a fold first."""
+        from app import proposals
+
+        proposals.propose(league.s51, _effective(_version("run-7")), CLOSES)
+        _login(league.c)
+        page = _page(league)
+
+        for text in (">Adopt proposal<", ">Withdraw proposal<"):
+            before = page[: page.index(text)]
+            assert before.count("<details") == before.count("</details>"), text
+
+    def test_the_form_is_folded_away_while_a_proposal_is_open(self, league):
+        from app import proposals
+
+        proposals.propose(league.s51, _effective(_version("run-7")), CLOSES)
+        _login(league.c)
+        section = self._vote_section(_page(league))
+
+        before = section[: section.index('name="propose_from"')]
+        assert before.count("<details") > before.count("</details>")
+        assert "Replace it with a new proposal" in section
+
+    def test_a_withdrawn_proposals_future_deadline_is_offered(self, league):
+        from app import proposals
+
+        proposals.propose(league.s51, _effective(_version("run-7")), CLOSES)
+        proposals.withdraw(league.s51)
+        _login(league.c)
+
+        section = self._vote_section(_page(league))
+
+        assert f'value="{CLOSES_FORM}"' in section
+        assert "The last proposal was withdrawn" in section
+
+    def test_a_past_deadline_is_not_offered(self, league):
+        from app import proposals
+
+        proposals.propose(league.s51, _effective(_version("run-7")), CLOSES)
+        proposals.withdraw(league.s51)
+        league.at(CLOSES.replace(tzinfo=UTC) + timedelta(hours=1))
+        _login(league.c)
+
+        section = self._vote_section(_page(league))
+
+        assert f'value="{CLOSES_FORM}"' not in section
+
+    def test_adjust_boxes_show_the_starting_points_values(self, league):
+        _login(league.c)
+        page = _page(league)
+
+        box = re.search(r'<input[^>]*id="adjust_final_tribal_val"[^>]*>', page)
+        assert box and 'placeholder="5"' in box.group(0)  # Run 7's value
+        assert 'value="' not in box.group(0)  # blank: keeps the start's value
+        # Season 51 plays Run 6 (2): the difference is marked, and the box for
+        # a value both share is not
+        assert re.search(r'data-now-for="final_tribal_val"[^>]*>Now 2<', page)
+        assert re.search(r'data-now-for="jury_val"[^>]* hidden>', page)
+
+
+class TestOtherSections:
+    def test_scoring_names_the_version_and_its_differences(self, league):
+        cfg = {**_version("run-6"), "jury_val": 4}
+        league.s51.scoring_config = json.dumps(cfg)
+        league.db.session.commit()
+        _login(league.c)
+
+        section = _page(league).split('<section id="scoring"', 1)[1]
+        section = section.split('<section id="season-data"', 1)[0]
+
+        assert "<strong>Run 6</strong>, with 1 value changed" in section
+        assert "Jury Bonus" in section
+
+    def test_the_direct_form_writes_switches_as_numbers(self, league):
+        """True in a number box renders empty and saves as the default."""
+        cfg = {**_version("run-6"), "replacement_deduction": False}
+        league.s51.scoring_config = json.dumps(cfg)
+        league.db.session.commit()
+        _login(league.c)
+
+        box = re.search(
+            r'<input[^>]*id="scoring_replacement_deduction"[^>]*>', _page(league)
+        )
+
+        assert 'value="0"' in box.group(0)
+
+    def test_a_published_cast_starts_folded(self, league):
+        _login(league.c)
+        page = _page(league)
+
+        fold = page.split('<section id="season-data"', 1)[1].split("<summary>", 1)[0]
+        assert "<details" in fold and " open" not in fold
+        assert "not automatic yet" not in page  # only relevant to a hand cast
+
+    def test_an_empty_season_opens_the_cast_form(self, league):
+        _login(league.c)
+
+        page = _page(league, league.s50)
+
+        fold = page.split('<section id="season-data"', 1)[1].split("<summary>", 1)[0]
+        assert "<details" in fold and " open" in fold
+        assert "not automatic yet" in page
