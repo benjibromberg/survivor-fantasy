@@ -4,8 +4,12 @@ import json
 import random
 import tempfile
 
+import pytest
+
 from analyze_scoring import (
+    DEFAULT_PARAMS,
     PARAM_GRID,
+    PLACEMENT_ORDER_PENALTY,
     SimPick,
     SimSeason,
     SimSurvivor,
@@ -13,12 +17,15 @@ from analyze_scoring import (
     _build_tribal_table,
     _compute_sim_stat_overrides,
     _fast_score_total,
+    _longevity_score,
     assign_extra_picks,
     build_chart_data,
     calculate_leaderboard,
     compute_ss_streaks,
     evaluate_config,
     expand_config,
+    find_config_rank,
+    placement_order,
     rank_users,
     snake_draft,
     stratified_random_sample,
@@ -1369,6 +1376,15 @@ class TestCheckpointAndExport:
         assert "recommended" in export
         assert "param_impact" in export
 
+    def test_build_chart_data_finds_the_current_default(self):
+        results = self._make_results()
+        results.append((dict(DEFAULT_PARAMS), {**results[0][1], "composite": -1.0}))
+
+        export = build_chart_data(results, timelines=[])
+
+        assert export["default_rank"] == len(results)
+        assert export["default_composite"] == -1.0
+
     def test_build_chart_data_structure(self):
         """Export JSON has expected top-level keys."""
         results = self._make_results()
@@ -1382,3 +1398,146 @@ class TestCheckpointAndExport:
             "timelines",
         ]:
             assert key in export
+
+
+# ── Placement order: no finalist below 4th place ───────────────────────────
+
+
+def make_finale_season():
+    """Ten castaways; the three finalists leave on the same final day.
+
+    Orders 1-7 go out on days 1-7 (order 7 is 4th place, a juror who lost
+    fire); orders 8-10 are the finalists, all on day 8. So 4th place survived
+    6 tribals and each finalist 7, as in a real season.
+    """
+    season = make_season(num_players=10, left_at_jury=5, n_finalists=3)
+    for s in season.survivors:
+        s.day_voted_out = s.voted_out_order if s.voted_out_order <= 7 else 8
+    return season
+
+
+class TestPlacementOrder:
+    def test_current_default_lets_fourth_outscore_a_finalist(self):
+        """Jury 3 beats final tribal 2 plus one more 0.5 tribal."""
+        ok, _ = placement_order(dict(DEFAULT_CONFIG), make_finale_season())
+
+        assert ok is False
+
+    def test_a_final_tribal_bonus_above_the_jury_bonus_passes(self):
+        config = {**DEFAULT_CONFIG, "final_tribal_val": 4}
+
+        ok, _ = placement_order(config, make_finale_season())
+
+        assert ok is True
+
+    def test_must_hold_whichever_finalist_wins_fire(self):
+        """2nd clears 4th on its own; 3rd only does when 3rd wins fire."""
+        config = {**DEFAULT_CONFIG, "second_val": 1}
+
+        ok, _ = placement_order(config, make_finale_season())
+
+        assert ok is False
+
+    def test_performance_stats_are_left_out(self):
+        season = make_finale_season()
+        fourth = next(s for s in season.survivors if s.voted_out_order == 7)
+        fourth.idols_played = 5
+        for s in season.survivors:
+            if s.voted_out_order >= 8:
+                s.individual_immunity_wins = 4
+        passing = {**DEFAULT_CONFIG, "final_tribal_val": 4, "idol_play_val": 1}
+        failing = {**DEFAULT_CONFIG, "individual_immunity_val": 1}
+
+        assert placement_order(passing, season)[0] is True
+        assert placement_order(failing, season)[0] is False
+
+    def test_third_beating_second_is_reported_not_required(self):
+        fire_lifts_third = {**DEFAULT_CONFIG, "final_tribal_val": 4}
+        runner_up_bonus = {**fire_lifts_third, "second_val": 3}
+
+        assert placement_order(fire_lifts_third, make_finale_season()) == (True, True)
+        assert placement_order(runner_up_bonus, make_finale_season()) == (True, False)
+
+    def test_a_season_without_a_full_final_four_is_not_judged(self):
+        season = make_finale_season()
+        for s in season.survivors:
+            if s.voted_out_order >= 7:
+                s.voted_out_order = 0
+
+        assert placement_order(dict(DEFAULT_CONFIG), season) == (True, False)
+
+
+class TestPlacementOrderInComposite:
+    def _evaluate(self, season=None, **overrides):
+        season = season or make_finale_season()
+        users = [101, 102, 103, 104]
+        picks = make_picks(season.survivors, users, picks_per_user=2)
+        scenario = (
+            season,
+            season.survivors,
+            picks,
+            {uid: 0 for uid in users},
+            season.num_players,
+            len(users),
+        )
+        config = {k: PARAM_GRID[k][0] for k in PARAM_GRID}
+        config.update(overrides)
+        return evaluate_config(config, [scenario])
+
+    def test_failing_config_is_penalised(self):
+        result = self._evaluate(jury_val=3, final_tribal_val=0)
+
+        assert result["placement_order_ok"] == 0.0
+        assert result["composite"] == pytest.approx(
+            result["composite_unconstrained"] - PLACEMENT_ORDER_PENALTY
+        )
+
+    def test_passing_config_is_not_penalised(self):
+        result = self._evaluate(jury_val=3, final_tribal_val=4)
+
+        assert result["placement_order_ok"] == 1.0
+        assert result["composite"] == pytest.approx(result["composite_unconstrained"])
+
+    def test_check_runs_on_real_state_not_the_reset_timeline(self):
+        """evaluate_config zeroes castaways to replay the season; the check must not."""
+        season = make_finale_season()
+        result = self._evaluate(season, jury_val=3, final_tribal_val=0)
+
+        # A check run on the zeroed state would see no final four and pass
+        assert result["placement_order_ok"] == 0.0
+        assert [s.voted_out_order for s in season.survivors] == list(range(1, 11))
+
+
+class TestLongevityScore:
+    @pytest.mark.parametrize(
+        ("share", "score"),
+        [(0.3, 0.3), (0.5, 0.5), (0.65, 0.5), (0.8, 0.5), (0.9, 0.3)],
+    )
+    def test_flat_inside_the_healthy_band(self, share, score):
+        """Inside 50-80% a point from immunity costs nothing against a tribal point."""
+        assert _longevity_score(share) == pytest.approx(score)
+
+
+class TestSearchRanges:
+    def test_final_tribal_bonus_can_clear_the_jury_bonus(self):
+        assert max(PARAM_GRID["final_tribal_val"]) >= max(PARAM_GRID["jury_val"]) + 1
+
+    def test_immunity_values_reach_beyond_one(self):
+        assert max(PARAM_GRID["individual_immunity_val"]) >= 1.5
+        assert max(PARAM_GRID["tribal_immunity_val"]) >= 1.5
+
+
+class TestFindConfigRank:
+    def test_finds_the_baseline_by_its_swept_parameters(self):
+        baseline = {"jury_val": 3, "final_tribal_val": 2}
+        results = [
+            ({"jury_val": 0, "final_tribal_val": 4}, {"composite": 3.0}),
+            (dict(baseline), {"composite": 2.0}),
+        ]
+
+        assert find_config_rank(results, baseline) == (2, results[1][1])
+
+    def test_returns_none_when_absent(self):
+        results = [({"jury_val": 0}, {"composite": 1.0})]
+
+        assert find_config_rank(results, {"jury_val": 3}) is None
