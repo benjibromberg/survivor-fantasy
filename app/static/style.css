@@ -2620,10 +2620,9 @@ details.lb-champion[open] > summary.lb-row {
     padding-bottom: 0;
 }
 
-/* Scoring changes: an earlier season whose order changes under the new
-   scoring opens to each player's points both ways and what moved them. It is
-   a fold inside the earlier-seasons fold, so the closed-on-phones script in
-   base.html finds it (details.fold[data-mobile-collapsed]). Two classes
+/* Scoring changes: each earlier season, and the current season's standings,
+   open to every player's points both ways and what moved them. A .fold for
+   the fold styling, closed on every screen until tapped. Two classes
    because details.fold, later in this file, would otherwise win the margin. */
 .fold.ls-replay {
     margin: 0.75rem 0 0;

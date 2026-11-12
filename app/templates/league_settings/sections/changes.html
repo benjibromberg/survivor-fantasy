@@ -110,14 +110,15 @@
     {% for row in standings %}
     <div class="ls-value">
         <dt>{{ ordinal(row.rank) }} &middot; {{ row.name }}</dt>
-        <dd>{{ '%.1f'|format(row.points) }} pts <small>{% if proposal %}currently{% else %}was{% endif %} {{ '%.1f'|format(row.old_points) }}, {{ ordinal(row.old_rank) }}</small></dd>
+        <dd>{{ pts(row.points) }} pts <small>{% if proposal %}currently{% else %}was{% endif %} {{ pts(row.old_points) }}, {{ ordinal(row.old_rank) }}</small></dd>
     </div>
     {% endfor %}
 </dl>
 {# The same breakdown the earlier seasons get, under the standings rather
-   than in place of them: the list above is the quick read. #}
+   than in place of them: the list above is the quick read. Closed on
+   every screen, like the earlier seasons' detail folds. #}
 {% if standings_changed %}
-<details class="fold ls-replay" open data-mobile-collapsed>
+<details class="fold ls-replay">
     <summary><span class="ls-replay-toggle">Why the points change<span class="visually-hidden"> in {{ this_season }}</span></span></summary>
     {{ replay_players(standings, 'currently' if proposal else 'was') }}
 </details>
@@ -203,11 +204,12 @@
             <dt>{{ row.label }}</dt>
             <dd>{% if row.new_winner == row.winner %}{{ row.winner }} still wins{% else %}{{ row.new_winner }} would win, not {{ row.winner }}{% endif %}
                 <small>{% if row.order_changed %}New order: {{ row.new_order|join(', ') }}{% else %}Same finishing order{% endif %}{% if row.new_margin is not none %}; winning margin {{ '%.1f'|format(row.new_margin) }} pts{% endif %}</small>
-                {# Every season gets its players, in a fold of its own, closed
-                   on phones like the sections around it, so the list of
-                   seasons stays scannable. Labelled by what it answers. #}
+                {# Every season gets its players, in a fold of its own that
+                   starts closed on every screen, so the section reads as a
+                   short list of seasons and you open the one you want.
+                   Labelled by what it answers. #}
                 {% if row.points_changed %}
-                <details class="fold ls-replay" open data-mobile-collapsed>
+                <details class="fold ls-replay">
                     <summary><span class="ls-replay-toggle">{{ 'Why the order changes' if row.order_changed else 'How the points change' }}<span class="visually-hidden"> in Season {{ row.number }}</span></span></summary>
                     {{ replay_players(row.players) }}
                 </details>

@@ -215,16 +215,36 @@ class TestWhatChanged:
         assert "ls-rule-broken" in rules
 
 
+def _standings_list(page):
+    """The current season's standings list, without the reasons fold under it."""
+    return _block(page, "standings").split("<details", 1)[0]
+
+
 class TestStandingsBothWays:
     def test_current_standings_under_old_and_new_scoring(self, league):
-        page = _page(league)
-        table = _block(page, "standings")
+        """In the fold's number format (_pts), so the list and the fold under
+        it never show one total two ways. It used to assert one decimal."""
+        listed = _standings_list(_page(league))
         old = _board(league.s51, league.s50.get_scoring_config())
         new = _board(league.s51)
 
         for user in ("pat", "sam"):
-            assert f"{old[user]:.1f}" in table
-            assert f"{new[user]:.1f}" in table
+            assert f"<dd>{_pts(new[user])} pts" in listed
+            assert f"was {_pts(old[user])}," in listed
+
+    def test_the_list_keeps_quarter_points(self, league):
+        """One advantage: 0.25 under Season 51's scoring, 0.5 under Run 6.
+        One decimal would show 2.75 as 2.8, beside 2.75 in the fold."""
+        from app.models import Survivor
+
+        star = Survivor.query.filter_by(season_id=league.s51.id, name="S51C8").one()
+        star.advantages_found = 1
+        league.db.session.commit()
+
+        listed = _standings_list(_page(league))
+
+        assert "<dd>2.75 pts <small>was 2.5, 2nd</small>" in listed
+        assert "2.8 pts" not in listed
 
     def test_past_seasons_are_replayed_under_the_new_scoring(self, league):
         page = _page(league)
@@ -307,12 +327,14 @@ class TestReplayDetail:
         # One castaway is the whole of Pat's, so the amount is not repeated
         assert '<span class="ls-replay-who">S50C8</span>' in pat
 
-    def test_the_detail_is_a_fold_closed_on_phones(self, league):
+    def test_the_detail_is_a_fold_that_starts_closed_everywhere(self, league):
+        """It used to start open on wider screens; closed on every screen, the
+        section is a short list of seasons and you open the one you want."""
         changed, _ = self._rows(league)
 
         tag = re.search(r"<details[^>]*>", changed).group(0)
         assert 'class="fold ls-replay"' in tag
-        assert " open" in tag and "data-mobile-collapsed" in tag
+        assert " open" not in tag and "data-mobile-collapsed" not in tag
 
     def test_the_fold_is_labelled_by_what_it_answers(self, league):
         changed, _ = self._rows(league)
@@ -345,7 +367,7 @@ class TestReplayDetail:
         assert "Same finishing order" in same
         tag = re.search(r"<details[^>]*>", same).group(0)
         assert 'class="fold ls-replay"' in tag
-        assert " open" in tag and "data-mobile-collapsed" in tag
+        assert " open" not in tag and "data-mobile-collapsed" not in tag
         summary = re.search(r"<summary>(.*?)</summary>", same, re.S).group(1)
         assert "How the points change" in summary
         assert "Why the order changes" not in summary
@@ -394,15 +416,33 @@ class TestCurrentSeasonReasons:
     """Season 51, on Season 50's Run 6 and then its own scoring: immunity
     wins now score, so both players gain and the order holds."""
 
-    def test_the_standings_get_a_fold_of_reasons_closed_on_phones(self, league):
+    def test_the_standings_get_a_fold_of_reasons_that_starts_closed(self, league):
         fold = _standings_fold(_page(league))
 
         tag = fold.split(">", 1)[0]
         assert 'class="fold ls-replay"' in tag
-        assert " open" in tag and "data-mobile-collapsed" in tag
+        assert " open" not in tag and "data-mobile-collapsed" not in tag
         summary = re.search(r"<summary>(.*?)</summary>", fold, re.S).group(1)
         assert "Why the points change" in summary
         assert '<span class="visually-hidden"> in Season 51</span>' in summary
+
+    def test_every_detail_fold_starts_closed_and_the_sections_keep_theirs(self, league):
+        """Only the inner .ls-replay folds changed: the section folds still
+        start open, and closed on phones."""
+        tags = re.findall(r"<details[^>]*>", _page(league))
+        inner = [t for t in tags if "ls-replay" in t]
+        outer = [t for t in tags if "ls-replay" not in t and 'class="fold"' in t]
+
+        assert len(inner) == 3  # Season 51's standings, Seasons 50 and 49
+        for tag in inner:
+            assert " open" not in tag and "data-mobile-collapsed" not in tag, tag
+        assert {re.search(r'id="([^"]+)"', t).group(1) for t in outer} >= {
+            "rules",
+            "past-seasons",
+            "history",
+        }
+        for tag in outer:
+            assert " open" in tag and "data-mobile-collapsed" in tag, tag
 
     def test_names_the_groups_and_castaways_behind_each_change(self, league):
         sam, pat = _standings_fold(_page(league)).split("&middot; Pat</dt>")
@@ -631,14 +671,13 @@ class TestProposalPage:
         assert "Final Tribal Bonus" in _block(page, "what-changed")
 
     def test_standings_are_current_against_proposed(self, proposal):
-        page = _page(proposal)
-        table = _block(page, "standings")
+        listed = _standings_list(_page(proposal))
         current = _board(proposal.s51)
         proposed = _board(proposal.s51, _open(proposal).get_config())
 
         for user in ("pat", "sam"):
-            assert f"{current[user]:.1f}" in table
-            assert f"{proposed[user]:.1f}" in table
+            assert f"currently {_pts(current[user])}," in listed
+            assert f"<dd>{_pts(proposed[user])} pts" in listed
 
     def test_the_season_keeps_its_own_scoring_until_adopted(self, proposal):
         from app.scoring.classic import DEFAULT_CONFIG
