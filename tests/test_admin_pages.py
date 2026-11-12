@@ -746,6 +746,91 @@ class TestPlayerPage:
         assert "cannot be merged away or deleted" in page
 
 
+class TestPlayerPagePicks:
+    """Each season card names the castaways, by kind of pick."""
+
+    def _add(self, league, user, season, name, kind, order=None):
+        from app.models import Pick
+
+        league.db.session.add(
+            Pick(
+                user_id=user.id,
+                season_id=season.id,
+                survivor_id=league.cast[(season.number, name)].id,
+                pick_type=kind,
+                pick_order=order,
+            )
+        )
+        league.db.session.commit()
+
+    def _ss(self, league, user, season, name, episode):
+        from app.models import SoleSurvivorPick
+
+        league.db.session.add(
+            SoleSurvivorPick(
+                user_id=user.id,
+                season_id=season.id,
+                survivor_id=league.cast[(season.number, name)].id,
+                episode=episode,
+            )
+        )
+        league.db.session.commit()
+
+    def _season_card(self, league, user, season):
+        _login(league.c)
+        page = _page(league, f"/admin/player/{user.id}")
+        return _card(page, f'href="/admin/season/{season.id}"')
+
+    def test_draft_and_wildcard_are_named_in_draft_order(self, league):
+        self._add(league, league.pat, league.s61, "Di", "draft", order=2)
+
+        card = self._season_card(league, league.pat, league.s61)
+
+        assert '<dd data-draft="2">Ada, Di</dd>' in card
+        assert '<dd data-wildcard="1">Bo</dd>' in card
+        assert '<dd data-replacement="0">None</dd>' in card
+
+    def test_a_replacement_is_named_with_its_kind(self, league):
+        self._add(league, league.pat, league.s61, "Cy", "pmr_d")
+        self._add(league, league.pat, league.s61, "Di", "pmr_w")
+
+        card = self._season_card(league, league.pat, league.s61)
+
+        assert (
+            '<dd data-replacement="2">Cy<small>draft replacement</small>'
+            "Di<small>wildcard replacement</small></dd>"
+        ) in card
+
+    def test_sole_survivor_picks_are_named_with_their_episodes(self, league):
+        self._ss(league, league.sam, league.s61, "Bo", 1)
+        self._ss(league, league.sam, league.s61, "Di", 4)
+
+        card = self._season_card(league, league.sam, league.s61)
+
+        assert (
+            '<dd data-sole-survivor="2">Bo<small>from episode 1</small>'
+            "Di<small>from episode 4</small></dd>"
+        ) in card
+
+    def test_a_season_scoring_sole_survivor_shows_none_when_missing(self, league):
+        card = self._season_card(league, league.sam, league.s61)  # Run 6
+
+        assert '<dd data-sole-survivor="0">None</dd>' in card
+
+    def test_a_season_without_sole_survivor_leaves_it_out(self, league):
+        card = self._season_card(league, league.sam, league.s60)  # Legacy
+
+        assert "<dt>Sole Survivor</dt>" not in card
+        assert '<dd data-draft="1">Ada</dd>' in card
+
+    def test_a_pick_shows_even_where_sole_survivor_scores_nothing(self, league):
+        self._ss(league, league.sam, league.s60, "Cy", 2)
+
+        card = self._season_card(league, league.sam, league.s60)
+
+        assert '<dd data-sole-survivor="1">Cy<small>from episode 2</small></dd>' in card
+
+
 # ── Every page ───────────────────────────────────────────────────────────
 
 
