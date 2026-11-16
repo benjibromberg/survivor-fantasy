@@ -75,8 +75,20 @@ copy with `score_pick`.
   - Each phase is a closed-form arithmetic sum, with no loops.
 - **Flat** when `tribal_base` is `None` (`LEGACY_CONFIG`): `tribal_val` per
   pre-merge tribal, `post_merge_tribal_val` per post-merge one.
-- With `merge_threshold` `None` (merge not reached), every tribal counts as
-  pre-merge.
+- Pre-merge tribals end at `Season.merge_tribals`, counted in elimination days
+  like `compute_tribals_survived`. It is the first value of
+  `Season.merge_point`, which `replacements.scoring_start` also returns, so a
+  replacement starts counting at the same tribal its post-merge tribals start.
+  It needs only the merge episode while the jury size is unknown. With neither
+  known (`None`), every tribal counts as pre-merge.
+- Merge bonus (`merge_val`): a castaway who is out, with the jury size known,
+  is past the merge when their boot order is above `merge_threshold` (boots,
+  since a same-day pair can straddle the jury). Any other castaway is past it
+  once they have more tribals than `merge_tribals` (days).
+- The simulator's `SimSeason.merge_tribals` is `merge_threshold` (boots), as
+  its copy of the arithmetic and every published run use. Seasons 41 and 42
+  open with a same-day pair, so moving the simulator to days changes its
+  metrics (Run 7's composite by about +0.016) and needs a new run.
 
 ## League rules (`rules.py`)
 
