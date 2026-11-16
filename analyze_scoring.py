@@ -197,6 +197,19 @@ class SimSeason:
         return self.num_players - self.left_at_jury
 
     @property
+    def merge_tribals(self):
+        """Where ClassicScoring splits pre- from post-merge tribals here.
+
+        merge_threshold, in boots, as every published run split them, and as
+        this file's own copy of the arithmetic (_build_tribal_table) does.
+        The site's Season.merge_tribals counts elimination days instead; a
+        season with a same-day pair before the merge (41 and 42 open with
+        one) would score differently under it, so the simulator keeps boots
+        until a run is made to change that.
+        """
+        return self.merge_threshold
+
+    @property
     def current_tribal_count(self):
         days = {
             s.day_voted_out

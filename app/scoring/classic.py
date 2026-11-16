@@ -153,28 +153,36 @@ class ClassicScoring(ScoringSystem):
     def description(self):
         return "Configurable scoring with toggleable components"
 
-    def _compute_tribal_points(self, tribals_survived, season):
+    @staticmethod
+    def _split_point(season, merge_tribals):
+        """Tribals counted as pre-merge: Season.merge_tribals, in elimination days.
+
+        While the merge is unknown (None) every tribal is pre-merge, so the
+        split goes past any count the season can reach.
+        """
+        return season.num_players if merge_tribals is None else merge_tribals
+
+    def _compute_tribal_points(self, tribals_survived, season, merge=None):
         """Compute tribal survival points using flat or progressive mode.
 
-        Returns dict of breakdown items.
+        `merge` is how many tribals count as pre-merge, in the same unit as
+        `tribals_survived`; by default the season's merge point
+        (Season.merge_tribals, elimination days). Returns dict of breakdown
+        items.
         """
         c = self.config
-        # None means merge hasn't happened yet — treat all tribals as pre-merge
-        merge_threshold = (
-            season.merge_threshold
-            if season.merge_threshold is not None
-            else season.num_players
-        )
+        if merge is None:
+            merge = self._split_point(season, season.merge_tribals)
 
         if c.get("tribal_base") is not None:
-            return self._progressive_tribal_points(tribals_survived, season)
+            return self._progressive_tribal_points(tribals_survived, season, merge)
 
         # Flat mode (backward compatible)
         items = {}
         pre_merge_rate = c["tribal_val"]
         post_merge_rate = c.get("post_merge_tribal_val", pre_merge_rate)
-        pre_merge_count = min(tribals_survived, merge_threshold)
-        post_merge_count = max(0, tribals_survived - merge_threshold)
+        pre_merge_count = min(tribals_survived, merge)
+        post_merge_count = max(0, tribals_survived - merge)
 
         if pre_merge_rate and pre_merge_count:
             items["pre_merge_tribal"] = pre_merge_count * pre_merge_rate
@@ -182,12 +190,15 @@ class ClassicScoring(ScoringSystem):
             items["post_merge_tribal"] = post_merge_count * post_merge_rate
         return items
 
-    def _progressive_tribal_points(self, tribals_survived, season):
+    def _progressive_tribal_points(self, tribals_survived, season, merge):
         """Compute progressive tribal points with per-phase growth slopes.
 
         Pre-merge: tribal N = base + (N-1) * step
         Post-merge: continues from last pre-merge value, grows by post_merge_step
         Finale: continues from last post-merge value, grows by finale_step
+
+        `merge` is how many tribals count as pre-merge (see
+        _compute_tribal_points).
         """
         c = self.config
         base = c["tribal_base"]
@@ -195,19 +206,13 @@ class ClassicScoring(ScoringSystem):
         pm_step = c.get("post_merge_step", 0)
         f_step = c.get("finale_step", 0)
 
-        # None means merge hasn't happened yet — treat all tribals as pre-merge
-        merge_threshold = (
-            season.merge_threshold
-            if season.merge_threshold is not None
-            else season.num_players
-        )
         finale_size = c.get("finale_size", 5)
-        finale_threshold = max(merge_threshold, season.num_players - finale_size)
+        finale_threshold = max(merge, season.num_players - finale_size)
 
-        pre_count = min(tribals_survived, merge_threshold)
+        pre_count = min(tribals_survived, merge)
         post_count = min(
-            max(0, tribals_survived - merge_threshold),
-            max(0, finale_threshold - merge_threshold),
+            max(0, tribals_survived - merge),
+            max(0, finale_threshold - merge),
         )
         finale_count = max(0, tribals_survived - finale_threshold)
 
@@ -221,21 +226,17 @@ class ClassicScoring(ScoringSystem):
                 items["pre_merge_tribal"] = total
 
         # Post-merge: each tribal = last_pre_merge_value + n * pm_step (n=1,2,...)
-        # last_pre_merge = base + (merge_threshold - 1) * step
+        # last_pre_merge = base + (merge - 1) * step
         if post_count > 0:
-            last_pre = (
-                base + (merge_threshold - 1) * step if merge_threshold > 0 else base
-            )
+            last_pre = base + (merge - 1) * step if merge > 0 else base
             total = post_count * last_pre + pm_step * post_count * (post_count + 1) / 2
             if total:
                 items["post_merge_tribal"] = total
 
         # Finale: each tribal = last_post_merge_value + n * f_step (n=1,2,...)
         if finale_count > 0:
-            last_pre = (
-                base + (merge_threshold - 1) * step if merge_threshold > 0 else base
-            )
-            pm_count_full = max(0, finale_threshold - merge_threshold)
+            last_pre = base + (merge - 1) * step if merge > 0 else base
+            pm_count_full = max(0, finale_threshold - merge)
             last_post = last_pre + pm_count_full * pm_step
             total = (
                 finale_count * last_post
@@ -250,23 +251,28 @@ class ClassicScoring(ScoringSystem):
         c = self.config
         breakdown = PointBreakdown()
 
-        # None means merge hasn't happened yet — treat all tribals as pre-merge
-        merge_threshold = (
-            season.merge_threshold
-            if season.merge_threshold is not None
-            else season.num_players
-        )
-
+        # Elimination days, like `tribals`; None until the merge is known
+        merge_tribals = season.merge_tribals
         tribals = season.compute_tribals_survived(survivor)
 
         # Tribal survival points (flat or progressive)
-        breakdown.items.update(self._compute_tribal_points(tribals, season))
-
-        # Milestones based on how far they got
-        elim_order = survivor.voted_out_order or 0
-        past_merge = (
-            elim_order > merge_threshold if elim_order else tribals > merge_threshold
+        breakdown.items.update(
+            self._compute_tribal_points(
+                tribals, season, self._split_point(season, merge_tribals)
+            )
         )
+
+        # Milestones based on how far they got. Past the merge: for a castaway
+        # who is out, while the jury size is known, boot order against
+        # merge_threshold, both in boots (a same-day pair can straddle the
+        # merge, one boot pre-jury and one a juror, and days cannot tell them
+        # apart); otherwise the tribal split, both in days, so the bonus comes
+        # with the first post-merge tribal.
+        elim_order = survivor.voted_out_order or 0
+        if elim_order and season.merge_threshold is not None:
+            past_merge = elim_order > season.merge_threshold
+        else:
+            past_merge = merge_tribals is not None and tribals > merge_tribals
 
         if c["jury_val"] and survivor.made_jury:
             breakdown.items["jury"] = c["jury_val"]
@@ -329,8 +335,10 @@ class ClassicScoring(ScoringSystem):
 
         For replacement picks (pmr_w, pmr_d) with stat_overrides, temporarily
         applies post-merge-only stat values, recalculates, and removes pre-merge
-        tribal and merge bonuses from the breakdown. Falls back to flat deduction
-        when stat_overrides is not available.
+        tribal and merge bonuses from the breakdown. Pre-merge tribals end at
+        Season.merge_tribals, where a replacement starts counting
+        (replacements.scoring_start), so it keeps every tribal after that.
+        Falls back to flat deduction when stat_overrides is not available.
 
         Returns (modified_points, breakdown).
         """
