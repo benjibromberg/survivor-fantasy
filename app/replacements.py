@@ -28,7 +28,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
 from . import wildcards
-from .models import Pick, Survivor, User, count_tribals, db
+from .models import Pick, Survivor, User, db, out_by_episode
 
 logger = logging.getLogger(__name__)
 
@@ -40,15 +40,6 @@ KIND_LABELS = {"pmr_d": "draft replacement", "pmr_w": "wildcard replacement"}
 # ── Eligibility ───────────────────────────────────────────────────────────
 
 
-def _lost_by_merge(survivor, merge_episode):
-    """True if the castaway's game ended in or before the merge episode."""
-    return bool(
-        survivor.voted_out_order
-        and survivor.elimination_episode is not None
-        and survivor.elimination_episode <= merge_episode
-    )
-
-
 def entitlement(season, picks):
     """The replacement a player's picks earn: 'pmr_d', 'pmr_w', or None.
 
@@ -58,7 +49,7 @@ def entitlement(season, picks):
     merge_episode = season.merge_episode_num
     if merge_episode is None:
         return None
-    lost = {p.pick_type for p in picks if _lost_by_merge(p.survivor, merge_episode)}
+    lost = {p.pick_type for p in picks if out_by_episode(p.survivor, merge_episode)}
     if "draft" in lost:
         return "pmr_d"
     if "wildcard" in lost:
@@ -93,40 +84,12 @@ def scoring_start(season):
     A replacement is left off the scores until the season's tribal count
     (Season.current_tribal_count, distinct elimination days) reaches the
     first value, and then scores only what happens after the baseline
-    episode. Both branches count the merge point the same way (count_tribals),
-    so it is in the unit every page compares it with.
-
-    A season in replacement self-service counts from the merge episode in
-    Tribe Mapping: picks lock before the next episode, so that is exactly
-    "from the moment you pick them", whenever survivoR publishes the jury
-    size. Other seasons, every finished one included, keep the jury-based
-    merge point, falling back to the merge episode only while the jury size
-    is unknown. (None, None) when neither is known.
+    episode. This is Season.merge_point, the same point ClassicScoring
+    splits pre- from post-merge tribals at, so a replacement scores every
+    tribal from the moment it starts counting. (None, None) while neither
+    the jury size nor the merge episode is known.
     """
-    merge_elim = season.merge_threshold
-    merge_episode = season.merge_episode_num
-    if merge_elim is not None and not (
-        is_self_service(season) and merge_episode is not None
-    ):
-        episode = next(
-            (
-                s.elimination_episode
-                for s in season.survivors
-                if s.voted_out_order == merge_elim and s.elimination_episode
-            ),
-            None,
-        )
-        # merge_threshold counts boots; a same-day pair before the merge is
-        # two boots but one tribal. Until that many are out, each boot still
-        # to come adds at least a day, so the count is not reached early.
-        by_merge = [
-            s for s in season.survivors if 0 < (s.voted_out_order or 0) <= merge_elim
-        ]
-        return count_tribals(by_merge) + max(0, merge_elim - len(by_merge)), episode
-    if merge_episode is None:
-        return None, None
-    out = [s for s in season.survivors if _lost_by_merge(s, merge_episode)]
-    return count_tribals(out), merge_episode
+    return season.merge_point
 
 
 def counts_yet(pick_type, tribals, merge_elim):
@@ -153,7 +116,7 @@ def counts_yet(pick_type, tribals, merge_elim):
 
 
 def is_self_service(season):
-    return season.replacement_starts_at is not None
+    return season.replacement_self_service
 
 
 def lock_at(season):
