@@ -33,6 +33,15 @@ def count_tribals(castaways):
     return max((s.voted_out_order for s in out), default=0)
 
 
+def out_by_episode(survivor, episode):
+    """True if the castaway's game ended in or before `episode`."""
+    return bool(
+        survivor.voted_out_order
+        and survivor.elimination_episode is not None
+        and survivor.elimination_episode <= episode
+    )
+
+
 class User(UserMixin, db.Model):
     """A fantasy player, created by the admin.
 
@@ -111,6 +120,60 @@ class Season(db.Model):
         if self.left_at_jury is None:
             return None
         return self.num_players - self.left_at_jury
+
+    @property
+    def replacement_self_service(self):
+        """True once the replacement lock time is known (app/replacements.py)."""
+        return self.replacement_starts_at is not None
+
+    @property
+    def merge_point(self):
+        """Where the merge falls: (tribal count, baseline episode).
+
+        The one merge point. The tribal count is in elimination days
+        (count_tribals), the unit of compute_tribals_survived and
+        current_tribal_count. A replacement starts scoring once the season's
+        tribal count reaches it (replacements.counts_yet), and ClassicScoring
+        counts a castaway's tribals beyond it as post-merge, so a replacement
+        scores every tribal from the moment it counts. A replacement scores
+        only the stats it earns after the baseline episode.
+
+        A season in replacement self-service counts from the merge episode
+        in Tribe Mapping: picks lock before the next episode, so that is
+        exactly "from the moment you pick them", whenever survivoR publishes
+        the jury size. Other seasons, every finished one included, keep the
+        jury-based merge point, falling back to the merge episode only while
+        the jury size is unknown. (None, None) when neither is known.
+        """
+        merge_elim = self.merge_threshold
+        merge_episode = self.merge_episode_num
+        if merge_elim is not None and not (
+            self.replacement_self_service and merge_episode is not None
+        ):
+            episode = next(
+                (
+                    s.elimination_episode
+                    for s in self.survivors
+                    if s.voted_out_order == merge_elim and s.elimination_episode
+                ),
+                None,
+            )
+            # merge_threshold counts boots; a same-day pair before the merge is
+            # two boots but one tribal. Until that many are out, each boot still
+            # to come adds at least a day, so the count is not reached early.
+            by_merge = [
+                s for s in self.survivors if 0 < (s.voted_out_order or 0) <= merge_elim
+            ]
+            return count_tribals(by_merge) + max(0, merge_elim - len(by_merge)), episode
+        if merge_episode is None:
+            return None, None
+        out = [s for s in self.survivors if out_by_episode(s, merge_episode)]
+        return count_tribals(out), merge_episode
+
+    @property
+    def merge_tribals(self):
+        """Pre-merge tribals in elimination days (merge_point), or None if unknown."""
+        return self.merge_point[0]
 
     @property
     def current_tribal_count(self):
