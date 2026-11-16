@@ -851,9 +851,12 @@ def _settings_context(season):
             )
             examples["finale_threshold"] = finale_threshold
 
-            # Winner total tribals (survived all)
+            # Winner total tribals (survived all). These examples count one
+            # tribal per boot, so the merge falls at merge_threshold here.
             winner_tribals = season.num_players - 1
-            winner_tribal_items = scoring._compute_tribal_points(winner_tribals, season)
+            winner_tribal_items = scoring._compute_tribal_points(
+                winner_tribals, season, mt
+            )
             examples["winner_tribal_pts"] = sum(winner_tribal_items.values())
             examples["winner_total"] = (
                 examples["winner_tribal_pts"]
@@ -864,7 +867,9 @@ def _settings_context(season):
 
             # First juror
             juror_tribals = mt
-            juror_tribal_items = scoring._compute_tribal_points(juror_tribals, season)
+            juror_tribal_items = scoring._compute_tribal_points(
+                juror_tribals, season, mt
+            )
             examples["juror_tribal_pts"] = sum(juror_tribal_items.values())
             examples["juror_total"] = (
                 examples["juror_tribal_pts"]

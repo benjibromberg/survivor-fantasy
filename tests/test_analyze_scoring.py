@@ -812,6 +812,48 @@ class TestFastScoreTotal:
         official_d, _ = scoring.score_pick(surv, season, "pmr_d", stat_ov)
         assert abs(fast_d - official_d) < 1e-9
 
+    def test_premiere_double_boot_matches_score_pick(self):
+        """A same-day pair before the merge, as Seasons 41 and 42 open.
+
+        The simulator splits tribals at merge_threshold (boots) in its own
+        copy of the arithmetic and in ClassicScoring alike (SimSeason's
+        merge_tribals), so the two agree here even though the site's
+        Season.merge_tribals would put this merge a day earlier.
+        """
+        config, season, table = self._make_config_and_table(
+            tribal_base=1,
+            tribal_step=0.5,
+            post_merge_step=1,
+            finale_step=2,
+            merge_val=3,
+        )
+        for s in season.survivors:
+            s.day_voted_out = max(1, s.voted_out_order - 1)  # orders 1 and 2: day 1
+        table = _build_tribal_table(config, season)
+        scoring = ClassicScoring(**config)
+        no_stats = dict.fromkeys(
+            (
+                "individual_immunity_wins",
+                "tribal_immunity_wins",
+                "idols_found",
+                "idols_played",
+                "advantages_found",
+                "advantages_played",
+            ),
+            0,
+        )
+
+        assert season.merge_tribals == season.merge_threshold == 10
+        for s in season.survivors:
+            fast = _fast_score_total(s, config, season, table)
+            official, _ = scoring.score_pick(s, season, "draft")
+            assert abs(fast - official) < 1e-9, s.name
+            fast_repl = _fast_score_total(
+                s, config, season, table, stat_overrides=no_stats, is_replacement=True
+            )
+            official_repl, _ = scoring.score_pick(s, season, "pmr_d", no_stats)
+            assert abs(fast_repl - official_repl) < 1e-9, s.name
+
 
 # ── Timeline fidelity ──────────────────────────────────────────────────────
 

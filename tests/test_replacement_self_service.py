@@ -717,6 +717,249 @@ class TestScoringStart:
         assert replacements.scoring_start(league.season) == (4, MERGE_EPISODE + 1)
 
 
+# ── Post-merge tribals: one merge point, in elimination days ──────────────
+
+# Flat rates, so pre- and post-merge tribals are told apart by their value
+FLAT = {
+    "tribal_base": None,
+    "tribal_val": 1,
+    "post_merge_tribal_val": 2,
+    "draft_replacement_multiplier": 1,
+    "merge_val": 0,
+}
+
+
+def _detail(entry, name):
+    return next(p for p in entry["picks"] if p["survivor"] == name)
+
+
+def _boot(survivor, order, episode, day):
+    survivor.voted_out_order = order
+    survivor.elimination_episode = episode
+    survivor.day_voted_out = day
+
+
+class TestReplacementTribalsBeforeTheJurySizeIsKnown:
+    """The merge episode is known and the jury size is not (Season 51 now)."""
+
+    def _first_post_merge_boot(self, league):
+        """Castaway9, on no team, goes out in the episode after the merge."""
+        _boot(league.survivors[8], 4, MERGE_EPISODE + 1, 12)
+        league.season.scoring_config = json.dumps(FLAT)
+        league.db.session.commit()
+
+    def test_replacement_scores_the_tribal_it_survived_after_the_merge(self, league):
+        _all_eligible_pick(league)
+        self._first_post_merge_boot(league)
+
+        pick = _detail(_board(league.season)["pat"], "Castaway5")
+
+        assert league.season.merge_threshold is None
+        assert pick["breakdown"].get("post_merge_tribal") == 2  # one tribal at 2
+        assert pick["modified_points"] == 2
+
+    def test_replacement_scores_nothing_for_tribals_before_it_was_picked(self, league):
+        _all_eligible_pick(league)
+        self._first_post_merge_boot(league)
+
+        pick = _detail(_board(league.season)["pat"], "Castaway5")
+
+        assert "pre_merge_tribal" not in pick["breakdown"]
+
+    def test_replacement_scores_nothing_at_the_merge(self, league):
+        league.season.scoring_config = json.dumps(FLAT)
+        league.db.session.commit()
+        _all_eligible_pick(league)
+
+        pick = _detail(_board(league.season)["pat"], "Castaway5")
+
+        assert "pre_merge_tribal" not in pick["breakdown"]
+        assert "post_merge_tribal" not in pick["breakdown"]
+        assert pick["modified_points"] == 0
+
+    def test_draft_pick_splits_at_the_same_point(self, league):
+        self._first_post_merge_boot(league)
+
+        pick = _detail(_board(league.season)["kim"], "Castaway7")
+
+        assert pick["breakdown"]["pre_merge_tribal"] == 3
+        assert pick["breakdown"]["post_merge_tribal"] == 2
+
+    def test_merge_bonus_comes_with_the_first_post_merge_tribal(self, league):
+        from app.scoring.classic import ClassicScoring
+
+        self._first_post_merge_boot(league)
+        scoring = ClassicScoring(merge_val=5)
+        season = league.season
+
+        still_in = scoring.calculate_survivor_points(league.survivors[4], season)
+        out_in_merge_episode = scoring.calculate_survivor_points(
+            league.survivors[2], season
+        )
+
+        assert still_in.items.get("merge") == 5
+        assert "merge" not in out_in_merge_episode.items
+
+    def test_no_merge_bonus_until_a_post_merge_tribal(self, league):
+        from app.scoring.classic import ClassicScoring
+
+        scoring = ClassicScoring(merge_val=5)
+
+        bd = scoring.calculate_survivor_points(league.survivors[4], league.season)
+
+        assert "merge" not in bd.items
+
+
+@pytest.fixture()
+def jury_season(client):
+    """A finished-structure season: jury size known, no replacement self-service.
+
+    Ten castaways, left_at_jury 6, so merge_threshold is 4 boots. Boots 3
+    and 4 go out on the same day in the merge episode (Season 50's merge
+    was like this: 10 boots in 7 elimination days), so the merge falls at
+    3 elimination days. Boot 5 is the first juror; boots 7-10 are still in.
+
+    Lee lost a draft pick before the merge and took Castaway7 as a draft
+    replacement; Kim drafted Castaway6, out after the merge.
+    """
+    c, db = client
+    from app.models import Pick, Season, Survivor, User
+
+    season = Season(
+        number=97,
+        name="Season 97",
+        is_active=True,
+        num_players=10,
+        num_episodes=8,
+        left_at_jury=6,
+        n_finalists=3,
+        merge_episode_num=3,
+        scoring_config=json.dumps(FLAT),
+    )
+    db.session.add(season)
+    db.session.flush()
+    survivors = [Survivor(season_id=season.id, name=f"C{i + 1}") for i in range(10)]
+    for s in survivors:
+        s.voted_out_order = 0
+    _boot(survivors[0], 1, 1, 3)
+    _boot(survivors[1], 2, 2, 6)
+    _boot(survivors[2], 3, 3, 9)
+    _boot(survivors[3], 4, 3, 9)
+    _boot(survivors[4], 5, 4, 12)
+    _boot(survivors[5], 6, 5, 15)
+    db.session.add_all(survivors)
+    lee = User(username="lee", display_name="Lee")
+    kim = User(username="kim", display_name="Kim")
+    db.session.add_all([lee, kim])
+    db.session.flush()
+
+    def pick(user, idx, ptype):
+        return Pick(
+            user_id=user.id,
+            season_id=season.id,
+            survivor_id=survivors[idx].id,
+            pick_type=ptype,
+        )
+
+    db.session.add_all(
+        [pick(lee, 0, "draft"), pick(lee, 6, "pmr_d"), pick(kim, 5, "draft")]
+    )
+    db.session.commit()
+    return SimpleNamespace(db=db, season=season, survivors=survivors)
+
+
+class TestTribalsSplitInEliminationDays:
+    def test_same_day_pair_before_the_merge_counts_once(self, jury_season):
+        from app import replacements
+
+        season = jury_season.season
+
+        assert season.merge_threshold == 4
+        assert season.merge_tribals == 3
+        assert replacements.scoring_start(season) == (3, 3)
+
+    def test_replacement_post_merge_tribals_are_counted_in_days(self, jury_season):
+        board = _board(jury_season.season)
+
+        pick = _detail(board["lee"], "C7")
+
+        # Five elimination days, three before the merge: two post-merge tribals
+        assert jury_season.season.current_tribal_count == 5
+        assert pick["breakdown"]["post_merge_tribal"] == 4
+        assert "pre_merge_tribal" not in pick["breakdown"]
+
+    def test_draft_pick_post_merge_tribals_are_counted_in_days(self, jury_season):
+        pick = _detail(_board(jury_season.season)["kim"], "C6")
+
+        # C6 survived days 3, 6, 9 and 12: three before the merge, one after
+        assert pick["breakdown"]["pre_merge_tribal"] == 3
+        assert pick["breakdown"]["post_merge_tribal"] == 2
+
+    def test_progressive_tribals_split_in_days(self, jury_season):
+        from app.scoring.classic import ClassicScoring
+
+        scoring = ClassicScoring(tribal_base=1, tribal_step=0, post_merge_step=1)
+
+        bd = scoring.calculate_survivor_points(
+            jury_season.survivors[6], jury_season.season
+        )
+
+        # Three pre-merge tribals at 1, then two post-merge at 2 and 3
+        assert bd.items["pre_merge_tribal"] == 3
+        assert bd.items["post_merge_tribal"] == 5
+
+    def test_season_without_a_same_day_pair_is_unchanged(self, jury_season):
+        """Every boot on its own day: the split is merge_threshold, as before."""
+        season = jury_season.season
+        jury_season.survivors[3].day_voted_out = 10
+        jury_season.db.session.commit()
+
+        board = _board(season)
+        replacement = _detail(board["lee"], "C7")
+        draft = _detail(board["kim"], "C6")
+
+        # Six days, four before the merge (merge_threshold): two after
+        assert replacement["breakdown"]["post_merge_tribal"] == 4
+        assert draft["breakdown"]["pre_merge_tribal"] == 4
+        assert draft["breakdown"]["post_merge_tribal"] == 2
+
+    def test_merge_bonus_for_a_castaway_still_in_comes_in_days(self, jury_season):
+        """Right after the first juror's tribal: four days, three pre-merge."""
+        from app.scoring.classic import ClassicScoring
+
+        _boot(jury_season.survivors[5], 0, None, None)
+        jury_season.db.session.commit()
+        scoring = ClassicScoring(merge_val=5)
+
+        bd = scoring.calculate_survivor_points(
+            jury_season.survivors[6], jury_season.season
+        )
+
+        assert jury_season.season.current_tribal_count == 4
+        assert bd.items.get("merge") == 5
+
+    def test_merge_bonus_for_a_same_day_pair_across_the_jury_follows_boots(
+        self, jury_season
+    ):
+        """One of a same-day pair is the last pre-jury boot, the other a juror."""
+        from app.scoring.classic import ClassicScoring
+
+        jury_season.survivors[4].day_voted_out = 9  # boot 5 joins boots 3 and 4
+        jury_season.db.session.commit()
+        scoring = ClassicScoring(merge_val=5)
+        season = jury_season.season
+
+        last_pre_jury = scoring.calculate_survivor_points(
+            jury_season.survivors[3], season
+        )
+        first_juror = scoring.calculate_survivor_points(
+            jury_season.survivors[4], season
+        )
+
+        assert "merge" not in last_pre_jury.items
+        assert first_juror.items.get("merge") == 5
+
+
 # ── Leaderboard reminders ─────────────────────────────────────────────────
 
 
